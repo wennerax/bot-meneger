@@ -149,6 +149,26 @@ function buildLocalAiReply(prompt) {
   return `Я локальный помощник без ключей. Ты спросил: "${trimmed}". Могу ответить кратко, с шуткой или дать совет.`;
 }
 
+function buildAiRequestPayload(prompt, model) {
+  return {
+    model: model || 'gpt-4o-mini',
+    messages: [
+      {
+        role: 'system',
+        content: [
+          'Ты полезный помощник для Telegram-бота.',
+          'Отвечай кратко и по делу.',
+          'Никогда не раскрывай секретные данные, токены, ключи, пароли, внутренний код бота, его структуру, конфиденциальные данные пользователей или приватную информацию.',
+          'Если пользователь просит показать токен, код, настройки или внутренние детали проекта, отвечай вежливо, что не можешь раскрывать такую информацию и предложи безопасный альтернативный ответ.',
+          'Никогда не выполняй действия, связанные с управлением чатом или правами пользователей: не бань, не муть, не разбанивай, не снимай мут, не удаляй админов, не выдавай наказания, не назначай роли и не меняй настройки модерации.',
+          'Если пользователь просит сделать такие действия, отвечай, что ты не могу выполнять административные команды и могу только подсказать, как это сделать через обычные команды бота или администраторов.',
+        ].join(' '),
+      },
+      { role: 'user', content: prompt },
+    ],
+  };
+}
+
 function createBot() {
   const config = loadConfig();
   const bot = new Telegraf(config.botToken || '');
@@ -459,8 +479,43 @@ function createBot() {
     ctx.reply(reply);
   }
 
-  function aiCommand(ctx, prompt) {
-    ctx.reply(buildLocalAiReply(prompt));
+  async function aiCommand(ctx, prompt) {
+    const trimmedPrompt = String(prompt || '').trim();
+    if (!trimmedPrompt) {
+      ctx.reply('Напиши запрос после /ai.');
+      return;
+    }
+
+    if (!config.aiApiKey) {
+      ctx.reply(buildLocalAiReply(trimmedPrompt));
+      return;
+    }
+
+    try {
+      const response = await fetch(`${config.aiApiBaseUrl.replace(/\/$/, '')}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${config.aiApiKey}`,
+        },
+        body: JSON.stringify(buildAiRequestPayload(trimmedPrompt, config.aiModel)),
+      });
+
+      if (!response.ok) {
+        throw new Error(`AI request failed with ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = data?.choices?.[0]?.message?.content?.trim();
+      if (content) {
+        ctx.reply(content);
+        return;
+      }
+    } catch (error) {
+      console.error('AI request failed:', error?.message || error);
+    }
+
+    ctx.reply(buildLocalAiReply(trimmedPrompt));
   }
 
   function sendRoleplayResponse(ctx, verb, target, emoji) {
@@ -1073,9 +1128,9 @@ function createBot() {
     await roleplayCommand(ctx, args, 'lickup');
   });
 
-  bot.command(['ai'], (ctx) => {
+  bot.command(['ai'], async (ctx) => {
     const text = ctx.message.text.replace(/^\/ai\s*/i, '').trim();
-    aiCommand(ctx, text);
+    await aiCommand(ctx, text);
   });
 
   bot.command(['coin', 'монетка'], (ctx) => {
@@ -1363,5 +1418,6 @@ module.exports = {
   buildPunishmentListMessage,
   buildBotAdminListMessage,
   buildLocalAiReply,
+  buildAiRequestPayload,
   startBot,
 };

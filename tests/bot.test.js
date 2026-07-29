@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parsePunishmentDetails, buildPunishmentNotification, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, buildLocalAiReply } = require('../app/bot');
+const { parsePunishmentDetails, buildPunishmentNotification, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, buildLocalAiReply, buildAiRequestPayload } = require('../app/bot');
 
 test('parsePunishmentDetails extracts duration and reason', () => {
   const result = parsePunishmentDetails('1d реклама', false);
@@ -66,4 +66,12 @@ test('buildLocalAiReply returns a helpful offline answer', () => {
   const reply = buildLocalAiReply('привет');
 
   assert.match(reply, /привет|локальный помощник/i);
+});
+
+test('buildAiRequestPayload builds an OpenAI-compatible request body', () => {
+  const payload = buildAiRequestPayload('привет', 'gpt-4o-mini');
+
+  assert.equal(payload.model, 'gpt-4o-mini');
+  assert.equal(payload.messages[1].role, 'user');
+  assert.match(payload.messages[1].content, /привет/);
 });
