@@ -58,6 +58,96 @@ function createBot() {
   const userService = new UserService();
   const moderationService = new ModerationService();
   const database = new Database(config.databasePath);
+  const punishmentTimers = new Map();
+
+  function getPunishmentTimerKey(chatId, userId, action) {
+    return `${chatId}:${userId}:${action}`;
+  }
+
+  function clearScheduledPunishment(chatId, userId, action) {
+    const key = getPunishmentTimerKey(chatId, userId, action);
+    const timer = punishmentTimers.get(key);
+    if (timer) {
+      clearTimeout(timer);
+      punishmentTimers.delete(key);
+    }
+  }
+
+  function buildMutePermissions(enabled = true) {
+    return {
+      can_send_messages: enabled,
+      can_send_media_messages: enabled,
+      can_send_polls: enabled,
+      can_send_other_messages: enabled,
+      can_add_web_page_previews: enabled,
+      can_change_info: false,
+      can_invite_users: false,
+      can_pin_messages: false,
+      can_manage_topics: false,
+    };
+  }
+
+  async function expirePunishment(punishment) {
+    const { chatId, userId, action } = punishment;
+    clearScheduledPunishment(chatId, userId, action);
+
+    const active = database.findActivePunishment(chatId, userId, action);
+    if (!active) {
+      return;
+    }
+
+    try {
+      if (action === 'mute') {
+        await bot.telegram.restrictChatMember(chatId, userId, buildMutePermissions(true));
+      } else if (action === 'ban') {
+        await bot.telegram.unbanChatMember(chatId, userId, true);
+      }
+      database.removeActivePunishment(chatId, userId, action);
+      database.addPunishment(chatId, userId, `expire_${action}`, `Автоматическое снятие ${action}`);
+
+      try {
+        await bot.telegram.sendMessage(userId, `Ваше автоматическое ограничение (${action}) в чате было снято.`);
+      } catch (notifyError) {
+        // ignore private message failures due to privacy settings
+      }
+    } catch (error) {
+      console.error(`Не удалось автоматически снять ${action} для ${userId} в чате ${chatId}:`, error?.message || error);
+    }
+  }
+
+  function schedulePunishmentExpiry(punishment) {
+    if (!punishment?.untilAt) {
+      return;
+    }
+
+    const delay = punishment.untilAt * 1000 - Date.now();
+    if (delay <= 0) {
+      void expirePunishment(punishment);
+      return;
+    }
+
+    const key = getPunishmentTimerKey(punishment.chatId, punishment.userId, punishment.action);
+    clearScheduledPunishment(punishment.chatId, punishment.userId, punishment.action);
+    const timer = setTimeout(() => {
+      void expirePunishment(punishment);
+    }, delay);
+    punishmentTimers.set(key, timer);
+  }
+
+  async function initializeScheduledPunishments() {
+    const activePunishments = database.getAllActivePunishments();
+    for (const punishment of activePunishments) {
+      if (punishment.untilAt) {
+        if (punishment.untilAt <= Math.floor(Date.now() / 1000)) {
+          await expirePunishment(punishment);
+        } else {
+          schedulePunishmentExpiry(punishment);
+        }
+      }
+    }
+  }
+
+  void initializeScheduledPunishments();
 
   function isBotAdmin(ctx) {
     const userId = ctx.from?.id;
@@ -290,14 +380,14 @@ function createBot() {
     ctx.reply(`Предупреждений: ${moderationService.getWarnings(ctx.chat.id, target.id)}/3`);
   }
 
-  async function unwarnCommand(ctx) {
+  async function unwarnCommand(ctx, args) {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
 
-    const targetData = await resolveCommandTarget(ctx, '', '/unwarn @username');
+    const targetData = await resolveCommandTarget(ctx, args, '/unwarn @username');
     if (!targetData) {
       return;
     }
@@ -322,23 +412,23 @@ function createBot() {
     const untilDate = details.durationHours ? Math.floor(Date.now() / 1000) + Math.round(details.durationHours * 3600) : undefined;
 
     try {
-      await ctx.telegram.restrictChatMember(ctx.chat.id, targetData.target.id, {
-        can_send_messages: false,
-        can_send_media_messages: false,
-        can_send_polls: false,
-        can_send_other_messages: false,
-        can_add_web_page_previews: false,
-        can_change_info: false,
-        can_invite_users: false,
-        can_pin_messages: false,
-        can_manage_topics: false,
-      }, untilDate);
+      await ctx.telegram.restrictChatMember(ctx.chat.id, targetData.target.id, buildMutePermissions(false), untilDate);
     } catch (error) {
       ctx.reply('Не удалось применить mute: у бота нет прав администратора или запрет не поддерживается в этом чате.');
       return;
     }
 
     database.addPunishment(ctx.chat.id, targetData.target.id, 'mute', details.reason, untilDate || null);
+    database.addActivePunishment(ctx.chat.id, targetData.target.id, 'mute', details.reason, untilDate || null);
+    if (untilDate) {
+      schedulePunishmentExpiry({
+        chatId: ctx.chat.id,
+        userId: targetData.target.id,
+        action: 'mute',
+        untilAt: untilDate,
+      });
+    }
+
     const targetLabel = getMentionText(targetData.target);
     const durationLabel = formatDurationLabel(details.durationHours);
     ctx.reply(`🔒 ${targetLabel} получил mute на ${durationLabel}. Причина: ${details.reason}`);
@@ -353,30 +443,22 @@ function createBot() {
     }
   }
 
-  async function unmuteCommand(ctx) {
+  async function unmuteCommand(ctx, args) {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
 
-    const targetData = await resolveCommandTarget(ctx, '', '/unmute @username');
+    const targetData = await resolveCommandTarget(ctx, args, '/unmute @username');
     if (!targetData) {
       return;
     }
 
     try {
-      await ctx.telegram.restrictChatMember(ctx.chat.id, targetData.target.id, {
-        can_send_messages: true,
-        can_send_media_messages: true,
-        can_send_polls: true,
-        can_send_other_messages: true,
-        can_add_web_page_previews: true,
-        can_change_info: false,
-        can_invite_users: false,
-        can_pin_messages: false,
-        can_manage_topics: false,
-      });
+      await ctx.telegram.restrictChatMember(ctx.chat.id, targetData.target.id, buildMutePermissions(true));
+      database.removeActivePunishment(ctx.chat.id, targetData.target.id, 'mute');
+      clearScheduledPunishment(ctx.chat.id, targetData.target.id, 'mute');
     } catch (error) {
       ctx.reply('Не удалось снять mute: у бота нет прав администратора.');
       return;
@@ -408,6 +490,16 @@ function createBot() {
     }
 
     database.addPunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, untilDate || null);
+    database.addActivePunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, untilDate || null);
+    if (untilDate) {
+      schedulePunishmentExpiry({
+        chatId: ctx.chat.id,
+        userId: targetData.target.id,
+        action: 'ban',
+        untilAt: untilDate,
+      });
+    }
+
     const targetLabel = getMentionText(targetData.target);
     const durationLabel = formatDurationLabel(details.durationHours);
     ctx.reply(`⛔ ${targetLabel} получил ban на ${durationLabel}. Причина: ${details.reason}`);
@@ -422,20 +514,22 @@ function createBot() {
     }
   }
 
-  async function unbanCommand(ctx) {
+  async function unbanCommand(ctx, args) {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
 
-    const targetData = await resolveCommandTarget(ctx, '', '/unban @username');
+    const targetData = await resolveCommandTarget(ctx, args, '/unban @username');
     if (!targetData) {
       return;
     }
 
     try {
       await ctx.telegram.unbanChatMember(ctx.chat.id, targetData.target.id, true);
+      database.removeActivePunishment(ctx.chat.id, targetData.target.id, 'ban');
+      clearScheduledPunishment(ctx.chat.id, targetData.target.id, 'ban');
     } catch (error) {
       ctx.reply('Не удалось снять ban: у бота нет прав администратора.');
       return;
@@ -519,19 +613,19 @@ function createBot() {
         warningsCommand(ctx);
         return true;
       case 'снять_предупреждение':
-        await unwarnCommand(ctx);
+        await unwarnCommand(ctx, args);
         return true;
       case 'мут':
         await muteCommand(ctx, args);
         return true;
       case 'размут':
-        await unmuteCommand(ctx);
+        await unmuteCommand(ctx, args);
         return true;
       case 'бан':
         await banCommand(ctx, args);
         return true;
       case 'разбан':
-        await unbanCommand(ctx);
+        await unbanCommand(ctx, args);
         return true;
       case 'установить_приветствие':
         setGreetingCommand(ctx, args);
@@ -632,21 +726,7 @@ function createBot() {
   });
 
   bot.command(['warn', 'предупреждение'], async (ctx) => {
-    ensureGroup(ctx);
-    if (!isBotAdmin(ctx)) {
-      ctx.reply('Эта команда доступна только администраторам.');
-      return;
-    }
-
-    const targetData = await resolveCommandTarget(ctx, ctx.message.text.replace(/^\/warn\s*/i, ''), '/warn @username причина');
-    if (!targetData) {
-      return;
-    }
-
-    const details = parsePunishmentDetails(targetData.remainingArgs, Boolean(ctx.message.reply_to_message));
-    moderationService.addWarning(ctx.chat.id, targetData.target.id);
-    database.addPunishment(ctx.chat.id, targetData.target.id, 'warn', details.reason, null);
-    ctx.reply(`Предупреждение для ${targetData.target.first_name || targetData.target.username || targetData.target.id}: ${moderationService.getWarnings(ctx.chat.id, targetData.target.id)}/3. Причина: ${details.reason}`);
+    await warnCommand(ctx, ctx.message.text.replace(/^\/(?:warn|предупреждение)\s*/i, ''));
   });
 
   bot.command(['warnings', 'варны'], (ctx) => {
@@ -656,83 +736,23 @@ function createBot() {
   });
 
   bot.command(['unwarn', 'снять_предупреждение'], async (ctx) => {
-    ensureGroup(ctx);
-    if (!isBotAdmin(ctx)) {
-      ctx.reply('Эта команда доступна только администраторам.');
-      return;
-    }
-
-    const targetData = await resolveCommandTarget(ctx, ctx.message.text.replace(/^\/unwarn\s*/i, ''), '/unwarn @username');
-    if (!targetData) {
-      return;
-    }
-
-    moderationService.resetWarnings(ctx.chat.id, targetData.target.id);
-    ctx.reply(`Предупреждения пользователя ${targetData.target.first_name || targetData.target.username || targetData.target.id} сброшены.`);
+    await unwarnCommand(ctx, ctx.message.text.replace(/^\/(?:unwarn|снять_предупреждение)\s*/i, ''));
   });
 
   bot.command(['mute', 'мут'], async (ctx) => {
-    ensureGroup(ctx);
-    if (!isBotAdmin(ctx)) {
-      ctx.reply('Эта команда доступна только администраторам.');
-      return;
-    }
-
-    const targetData = await resolveCommandTarget(ctx, ctx.message.text.replace(/^\/mute\s*/i, ''), '/mute @username <время> <причина>');
-    if (!targetData) {
-      return;
-    }
-
-    const details = parsePunishmentDetails(targetData.remainingArgs, Boolean(ctx.message.reply_to_message));
-    database.addPunishment(ctx.chat.id, targetData.target.id, 'mute', details.reason, null);
-    ctx.reply(`Пользователь ${targetData.target.first_name || targetData.target.username || targetData.target.id} ограничен. Причина: ${details.reason}`);
+    await muteCommand(ctx, ctx.message.text.replace(/^\/(?:mute|мут)\s*/i, ''));
   });
 
   bot.command(['unmute', 'размут'], async (ctx) => {
-    ensureGroup(ctx);
-    if (!isBotAdmin(ctx)) {
-      ctx.reply('Эта команда доступна только администраторам.');
-      return;
-    }
-
-    const targetData = await resolveCommandTarget(ctx, ctx.message.text.replace(/^\/unmute\s*/i, ''), '/unmute @username');
-    if (!targetData) {
-      return;
-    }
-
-    ctx.reply(`Ограничения с пользователя ${targetData.target.first_name || targetData.target.username || targetData.target.id} сняты.`);
+    await unmuteCommand(ctx, ctx.message.text.replace(/^\/(?:unmute|размут)\s*/i, ''));
   });
 
   bot.command(['ban', 'бан'], async (ctx) => {
-    ensureGroup(ctx);
-    if (!isBotAdmin(ctx)) {
-      ctx.reply('Эта команда доступна только администраторам.');
-      return;
-    }
-
-    const targetData = await resolveCommandTarget(ctx, ctx.message.text.replace(/^\/ban\s*/i, ''), '/ban @username <время> <причина>');
-    if (!targetData) {
-      return;
-    }
-
-    const details = parsePunishmentDetails(targetData.remainingArgs, Boolean(ctx.message.reply_to_message));
-    database.addPunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, null);
-    ctx.reply(`Пользователь ${targetData.target.first_name || targetData.target.username || targetData.target.id} заблокирован. Причина: ${details.reason}`);
+    await banCommand(ctx, ctx.message.text.replace(/^\/(?:ban|бан)\s*/i, ''));
   });
 
   bot.command(['unban', 'разбан'], async (ctx) => {
-    ensureGroup(ctx);
-    if (!isBotAdmin(ctx)) {
-      ctx.reply('Эта команда доступна только администраторам.');
-      return;
-    }
-
-    const targetData = await resolveCommandTarget(ctx, ctx.message.text.replace(/^\/unban\s*/i, ''), '/unban @username');
-    if (!targetData) {
-      return;
-    }
-
-    ctx.reply(`Пользователь ${targetData.target.first_name || targetData.target.username || targetData.target.id} разблокирован.`);
+    await unbanCommand(ctx, ctx.message.text.replace(/^\/(?:unban|разбан)\s*/i, ''));
   });
 
   bot.command(['setgreeting', 'установить_приветствие'], (ctx) => {

@@ -51,3 +51,25 @@ test('owner becomes primary bot admin and can add auxiliary bot admins', () => {
 
   db.close();
 });
+
+test('active punishments persist and can be removed manually', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-meneger-'));
+  const db = new Database(path.join(dir, 'bot.json'));
+
+  db.ensureGroup(400, 'Punish', 99);
+  db.addActivePunishment(400, 101, 'mute', 'тест', 1700000000);
+
+  assert.deepEqual(db.findActivePunishment(400, 101, 'mute'), {
+    chatId: 400,
+    userId: 101,
+    action: 'mute',
+    reason: 'тест',
+    untilAt: 1700000000,
+    createdAt: db.findActivePunishment(400, 101, 'mute').createdAt,
+  });
+
+  db.removeActivePunishment(400, 101, 'mute');
+  assert.equal(db.findActivePunishment(400, 101, 'mute'), null);
+
+  db.close();
+});

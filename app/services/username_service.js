@@ -56,13 +56,6 @@ async function resolveUsernameTarget(ctx, input, usage, database) {
     return null;
   }
 
-  if (/^\d+$/.test(first)) {
-    return {
-      target: { id: Number(first), first_name: `Пользователь ${first}`, username: null },
-      remainingArgs: parts.slice(1).join(' '),
-    };
-  }
-
   ctx.reply(`Используйте ${usage}`);
   return null;
 }

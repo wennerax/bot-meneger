@@ -44,6 +44,7 @@ class Database {
       groupAdmins: {},
       botAdmins: {},
       punishments: [],
+      activePunishments: [],
       blacklist: [],
       messageCounts: {},
       groupUsers: {},
@@ -236,10 +237,66 @@ class Database {
     this._save();
   }
 
+  removeBlacklist(chatId, userId) {
+    const id = Number(chatId);
+    const user = Number(userId);
+    this.data.blacklist = this.data.blacklist.filter((item) => item.chatId !== id || item.userId !== user);
+    this._save();
+  }
+
   isBlacklisted(chatId, userId) {
     const id = Number(chatId);
     const user = Number(userId);
     return this.data.blacklist.some((item) => item.chatId === id && item.userId === user);
+  }
+
+  addActivePunishment(chatId, userId, action, reason, untilAt = null) {
+    const id = Number(chatId);
+    const user = Number(userId);
+    const existingIndex = this.data.activePunishments.findIndex(
+      (item) => item.chatId === id && item.userId === user && item.action === action
+    );
+    const entry = {
+      chatId: id,
+      userId: user,
+      action,
+      reason,
+      untilAt: untilAt === null || untilAt === undefined ? null : Number(untilAt),
+      createdAt: this._now(),
+    };
+
+    if (existingIndex >= 0) {
+      this.data.activePunishments[existingIndex] = entry;
+    } else {
+      this.data.activePunishments.push(entry);
+    }
+    this._save();
+  }
+
+  removeActivePunishment(chatId, userId, action) {
+    const id = Number(chatId);
+    const user = Number(userId);
+    this.data.activePunishments = this.data.activePunishments.filter(
+      (item) => item.chatId !== id || item.userId !== user || item.action !== action
+    );
+    this._save();
+  }
+
+  getActivePunishments(chatId) {
+    const id = Number(chatId);
+    return this.data.activePunishments.filter((item) => item.chatId === id);
+  }
+
+  getAllActivePunishments() {
+    return [...this.data.activePunishments];
+  }
+
+  findActivePunishment(chatId, userId, action) {
+    const id = Number(chatId);
+    const user = Number(userId);
+    return this.data.activePunishments.find(
+      (item) => item.chatId === id && item.userId === user && item.action === action
+    ) || null;
   }
 
   close() {
