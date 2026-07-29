@@ -56,6 +56,34 @@ function createBot() {
     database.ensureGroup(ctx.chat.id, ctx.chat.title || String(ctx.chat.id), ctx.chat?.owner_id || null);
   }
 
+  async function ensureGroupOwner(ctx) {
+    if (!isGroupChat(ctx)) {
+      return;
+    }
+
+    let ownerId = ctx.chat?.owner_id ?? null;
+    if (!ownerId) {
+      try {
+        const chat = await ctx.telegram.getChat(ctx.chat.id);
+        ownerId = chat?.owner_id ?? null;
+      } catch (error) {
+        ownerId = null;
+      }
+    }
+
+    if (!ownerId) {
+      try {
+        const admins = await ctx.telegram.getChatAdministrators(ctx.chat.id);
+        const creator = admins.find((member) => member.status === 'creator');
+        ownerId = creator?.user?.id ?? null;
+      } catch (error) {
+        ownerId = null;
+      }
+    }
+
+    database.ensureGroup(ctx.chat.id, ctx.chat.title || String(ctx.chat.id), ownerId);
+  }
+
   function getDisplayName(ctx) {
     return ctx.from?.first_name || ctx.from?.username || String(ctx.from?.id);
   }
@@ -360,6 +388,13 @@ function createBot() {
   });
 
   bot.command(['top', 'топ'], topCommand);
+
+  bot.on('my_chat_member', async (ctx) => {
+    const newStatus = ctx.update.my_chat_member.new_chat_member.status;
+    if (newStatus === 'member' || newStatus === 'administrator') {
+      await ensureGroupOwner(ctx);
+    }
+  });
 
   bot.command(['setrules', 'установить_правила'], (ctx) => {
     ensureGroup(ctx);
