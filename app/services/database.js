@@ -29,6 +29,7 @@ class Database {
         groupAdmins: parsed.groupAdmins || {},
         botAdmins: parsed.botAdmins || {},
         punishments: parsed.punishments || [],
+        activePunishments: parsed.activePunishments || [],
         blacklist: parsed.blacklist || [],
         messageCounts: parsed.messageCounts || {},
         groupUsers: parsed.groupUsers || {},
@@ -288,7 +289,7 @@ class Database {
   }
 
   getAllActivePunishments() {
-    return [...this.data.activePunishments];
+    return [...(this.data.activePunishments || [])];
   }
 
   findActivePunishment(chatId, userId, action) {
