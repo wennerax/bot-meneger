@@ -300,7 +300,26 @@ function createBot() {
     }
 
     const details = parsePunishmentDetails(targetData.remainingArgs, !!ctx.message.reply_to_message);
-    database.addPunishment(ctx.chat.id, targetData.target.id, 'mute', details.reason, null);
+    const untilDate = details.durationHours ? Math.floor(Date.now() / 1000) + Math.round(details.durationHours * 3600) : null;
+
+    try {
+      await ctx.telegram.restrictChatMember(ctx.chat.id, targetData.target.id, {
+        can_send_messages: false,
+        can_send_media_messages: false,
+        can_send_polls: false,
+        can_send_other_messages: false,
+        can_add_web_page_previews: false,
+        can_change_info: false,
+        can_invite_users: false,
+        can_pin_messages: false,
+        can_manage_topics: false,
+      }, untilDate);
+    } catch (error) {
+      ctx.reply('Не удалось применить mute: у бота нет прав администратора или запрет не поддерживается в этом чате.');
+      return;
+    }
+
+    database.addPunishment(ctx.chat.id, targetData.target.id, 'mute', details.reason, untilDate);
     ctx.reply(`Пользователь ${targetData.target.first_name || targetData.target.username || targetData.target.id} ограничен. Причина: ${details.reason}`);
   }
 
@@ -313,6 +332,23 @@ function createBot() {
 
     const targetData = await resolveCommandTarget(ctx, '', '/unmute @username');
     if (!targetData) {
+      return;
+    }
+
+    try {
+      await ctx.telegram.restrictChatMember(ctx.chat.id, targetData.target.id, {
+        can_send_messages: true,
+        can_send_media_messages: true,
+        can_send_polls: true,
+        can_send_other_messages: true,
+        can_add_web_page_previews: true,
+        can_change_info: false,
+        can_invite_users: false,
+        can_pin_messages: false,
+        can_manage_topics: false,
+      });
+    } catch (error) {
+      ctx.reply('Не удалось снять mute: у бота нет прав администратора.');
       return;
     }
 
@@ -332,19 +368,35 @@ function createBot() {
     }
 
     const details = parsePunishmentDetails(targetData.remainingArgs, !!ctx.message.reply_to_message);
-    database.addPunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, null);
+    const untilDate = details.durationHours ? Math.floor(Date.now() / 1000) + Math.round(details.durationHours * 3600) : null;
+
+    try {
+      await ctx.telegram.banChatMember(ctx.chat.id, targetData.target.id, untilDate);
+    } catch (error) {
+      ctx.reply('Не удалось выполнить ban: у бота нет прав администратора или пользователь не может быть заблокирован.');
+      return;
+    }
+
+    database.addPunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, untilDate);
     ctx.reply(`Пользователь ${targetData.target.first_name || targetData.target.username || targetData.target.id} заблокирован. Причина: ${details.reason}`);
   }
 
   async function unbanCommand(ctx) {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
-      ctx.reply('Эта команда доступна только администраторами.');
+      ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
 
     const targetData = await resolveCommandTarget(ctx, '', '/unban @username');
     if (!targetData) {
+      return;
+    }
+
+    try {
+      await ctx.telegram.unbanChatMember(ctx.chat.id, targetData.target.id, true);
+    } catch (error) {
+      ctx.reply('Не удалось снять ban: у бота нет прав администратора.');
       return;
     }
 
