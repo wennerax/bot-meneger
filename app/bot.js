@@ -57,14 +57,25 @@ function createBot() {
   }
 
   async function ensureGroupOwner(ctx) {
-    if (!isGroupChat(ctx)) {
+    const chatData = ctx.chat || ctx.update?.my_chat_member?.chat;
+    if (!chatData) {
       return;
     }
 
-    let ownerId = ctx.chat?.owner_id ?? null;
+    const chatId = chatData.id;
+    const title = chatData.title || String(chatId);
+    if (!chatId) {
+      return;
+    }
+
+    if (!isGroupChat({ chat: chatData })) {
+      return;
+    }
+
+    let ownerId = chatData.owner_id ?? null;
     if (!ownerId) {
       try {
-        const chat = await ctx.telegram.getChat(ctx.chat.id);
+        const chat = await ctx.telegram.getChat(chatId);
         ownerId = chat?.owner_id ?? null;
       } catch (error) {
         ownerId = null;
@@ -73,7 +84,7 @@ function createBot() {
 
     if (!ownerId) {
       try {
-        const admins = await ctx.telegram.getChatAdministrators(ctx.chat.id);
+        const admins = await ctx.telegram.getChatAdministrators(chatId);
         const creator = admins.find((member) => member.status === 'creator');
         ownerId = creator?.user?.id ?? null;
       } catch (error) {
@@ -81,7 +92,7 @@ function createBot() {
       }
     }
 
-    database.ensureGroup(ctx.chat.id, ctx.chat.title || String(ctx.chat.id), ownerId);
+    database.ensureGroup(chatId, title, ownerId);
   }
 
   function getDisplayName(ctx) {
