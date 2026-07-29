@@ -99,10 +99,15 @@ function createBot() {
     return ctx.from?.first_name || ctx.from?.username || String(ctx.from?.id);
   }
 
-  function resolveCommandTarget(ctx, args, usage) {
+  async function resolveCommandTarget(ctx, args, usage) {
     const replyTarget = ctx.message.reply_to_message?.from;
     if (replyTarget) {
       return { target: replyTarget, remainingArgs: args.trim() };
+    }
+
+    const textMention = ctx.message.entities?.find((entity) => entity.type === 'text_mention' && entity.user);
+    if (textMention) {
+      return { target: textMention.user, remainingArgs: args.trim() };
     }
 
     const parts = args.trim().split(/\s+/).filter(Boolean);
@@ -114,14 +119,28 @@ function createBot() {
     const first = parts[0];
     if (first.startsWith('@')) {
       const resolved = database.resolveUsername(ctx.chat.id, first);
-      if (!resolved) {
-        ctx.reply(`Не удалось найти пользователя ${first} в этой группе. Используйте ${usage}`);
-        return null;
+      if (resolved) {
+        return {
+          target: { id: Number(resolved.userId), first_name: resolved.displayName, username: first },
+          remainingArgs: parts.slice(1).join(' '),
+        };
       }
-      return {
-        target: { id: Number(resolved.userId), first_name: resolved.displayName, username: first },
-        remainingArgs: parts.slice(1).join(' '),
-      };
+
+      const username = first.replace(/^@/, '');
+      try {
+        const member = await ctx.telegram.getChatMember(ctx.chat.id, username);
+        if (member?.user) {
+          return {
+            target: { id: member.user.id, first_name: member.user.first_name || member.user.username || String(member.user.id), username: first },
+            remainingArgs: parts.slice(1).join(' '),
+          };
+        }
+      } catch (error) {
+        // ignore and fallback to usage message
+      }
+
+      ctx.reply(`Не удалось найти пользователя ${first} в этой группе. Используйте ${usage}`);
+      return null;
     }
 
     if (/^\d+$/.test(first)) {
@@ -168,7 +187,10 @@ function createBot() {
       '/top, !топ - топ пользователей по сообщениям в группе',
       '',
       '🎉 *РАЗВЛЕЧЕНИЯ*',
-      '/whoami, !кто_я - узнать, кто ты',
+      '/hug @username, !обнять @username - обнять пользователя',
+      '/kiss @username, !поцеловать @username - поцеловать пользователя',
+      '/slap @username, !шлепнуть @username - шлёпнуть пользователя',
+      '/poke @username, !тыкнуть @username - ткнуть пользователя',
       '',
       '_Используйте русские команды с ! и английские с /_',
     ].join('\n'), { parse_mode: 'Markdown' });
@@ -184,6 +206,52 @@ function createBot() {
 
   function whoamiCommand(ctx) {
     ctx.reply(`${ctx.from.first_name || 'Пользователь'}, ${getFunnyDescription()}`);
+  }
+
+  function getMentionText(user) {
+    if (!user) {
+      return 'пользователь';
+    }
+    if (user.username) {
+      return `@${user.username}`;
+    }
+    return user.first_name || 'пользователь';
+  }
+
+  function sendRoleplayResponse(ctx, verb, target, emoji) {
+    const fromText = getMentionText(ctx.from);
+    const targetText = getMentionText(target);
+    ctx.reply(`${fromText} ${verb} ${targetText} ${emoji}`);
+  }
+
+  async function roleplayCommand(ctx, args, action) {
+    const target = await resolveRoleplayTarget(ctx, args, `/${action} @username`);
+    if (!target) {
+      return;
+    }
+
+    switch (action) {
+      case 'hug':
+        sendRoleplayResponse(ctx, 'обнял', target, '🤗');
+        break;
+      case 'kiss':
+        sendRoleplayResponse(ctx, 'поцеловал', target, '😘');
+        break;
+      case 'slap':
+        sendRoleplayResponse(ctx, 'шлёпнул', target, '👋');
+        break;
+      case 'poke':
+        sendRoleplayResponse(ctx, 'тыкнул', target, '👉');
+        break;
+      default:
+        ctx.reply('Неизвестное действие.');
+        break;
+    }
+  }
+
+  async function resolveRoleplayTarget(ctx, args, usage) {
+    const targetData = await resolveCommandTarget(ctx, args, usage);
+    return targetData?.target || null;
   }
 
   function statsCommand(ctx) {
@@ -229,14 +297,14 @@ function createBot() {
     ctx.reply('Правила чата обновлены.');
   }
 
-  function warnCommand(ctx, args) {
+  async function warnCommand(ctx, args) {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
 
-    const targetData = resolveCommandTarget(ctx, args, '/warn @username причина');
+    const targetData = await resolveCommandTarget(ctx, args, '/warn @username причина');
     if (!targetData) {
       return;
     }
@@ -253,14 +321,14 @@ function createBot() {
     ctx.reply(`Предупреждений: ${moderationService.getWarnings(ctx.chat.id, target.id)}/3`);
   }
 
-  function unwarnCommand(ctx) {
+  async function unwarnCommand(ctx) {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
 
-    const targetData = resolveCommandTarget(ctx, '', '/unwarn @username');
+    const targetData = await resolveCommandTarget(ctx, '', '/unwarn @username');
     if (!targetData) {
       return;
     }
@@ -269,14 +337,14 @@ function createBot() {
     ctx.reply(`Предупреждения пользователя ${targetData.target.first_name || targetData.target.username || targetData.target.id} сброшены.`);
   }
 
-  function muteCommand(ctx, args) {
+  async function muteCommand(ctx, args) {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
 
-    const targetData = resolveCommandTarget(ctx, args, '/mute @username <время> <причина>');
+    const targetData = await resolveCommandTarget(ctx, args, '/mute @username <время> <причина>');
     if (!targetData) {
       return;
     }
@@ -286,14 +354,14 @@ function createBot() {
     ctx.reply(`Пользователь ${targetData.target.first_name || targetData.target.username || targetData.target.id} ограничен. Причина: ${details.reason}`);
   }
 
-  function unmuteCommand(ctx) {
+  async function unmuteCommand(ctx) {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
 
-    const targetData = resolveCommandTarget(ctx, '', '/unmute @username');
+    const targetData = await resolveCommandTarget(ctx, '', '/unmute @username');
     if (!targetData) {
       return;
     }
@@ -301,14 +369,14 @@ function createBot() {
     ctx.reply(`Ограничения с пользователя ${targetData.target.first_name || targetData.target.username || targetData.target.id} сняты.`);
   }
 
-  function banCommand(ctx, args) {
+  async function banCommand(ctx, args) {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
 
-    const targetData = resolveCommandTarget(ctx, args, '/ban @username <время> <причина>');
+    const targetData = await resolveCommandTarget(ctx, args, '/ban @username <время> <причина>');
     if (!targetData) {
       return;
     }
@@ -318,14 +386,14 @@ function createBot() {
     ctx.reply(`Пользователь ${targetData.target.first_name || targetData.target.username || targetData.target.id} заблокирован. Причина: ${details.reason}`);
   }
 
-  function unbanCommand(ctx) {
+  async function unbanCommand(ctx) {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
-      ctx.reply('Эта команда доступна только администраторам.');
+      ctx.reply('Эта команда доступна только администраторами.');
       return;
     }
 
-    const targetData = resolveCommandTarget(ctx, '', '/unban @username');
+    const targetData = await resolveCommandTarget(ctx, '', '/unban @username');
     if (!targetData) {
       return;
     }
@@ -371,7 +439,7 @@ function createBot() {
     ctx.reply(`Пользователь ${target.first_name || target.username || target.id} добавлен как вспомогательный администратор бота.`);
   }
 
-  function handleRussianCommand(ctx, text) {
+  async function handleRussianCommand(ctx, text) {
     const [commandWithBot, ...parts] = text.slice(1).split(/\s+/);
     const command = commandWithBot.split('@')[0].toLowerCase();
     const args = parts.join(' ');
@@ -402,25 +470,25 @@ function createBot() {
         setRulesCommand(ctx, args);
         return true;
       case 'предупреждение':
-        warnCommand(ctx, args);
+        await warnCommand(ctx, args);
         return true;
       case 'варны':
         warningsCommand(ctx);
         return true;
       case 'снять_предупреждение':
-        unwarnCommand(ctx);
+        await unwarnCommand(ctx);
         return true;
       case 'мут':
-        muteCommand(ctx, args);
+        await muteCommand(ctx, args);
         return true;
       case 'размут':
-        unmuteCommand(ctx);
+        await unmuteCommand(ctx);
         return true;
       case 'бан':
-        banCommand(ctx, args);
+        await banCommand(ctx, args);
         return true;
       case 'разбан':
-        unbanCommand(ctx);
+        await unbanCommand(ctx);
         return true;
       case 'установить_приветствие':
         setGreetingCommand(ctx, args);
@@ -430,6 +498,18 @@ function createBot() {
         return true;
       case 'топ':
         topCommand(ctx);
+        return true;
+      case 'обнять':
+        await roleplayCommand(ctx, args, 'hug');
+        return true;
+      case 'поцеловать':
+        await roleplayCommand(ctx, args, 'kiss');
+        return true;
+      case 'шлепнуть':
+        await roleplayCommand(ctx, args, 'slap');
+        return true;
+      case 'тыкнуть':
+        await roleplayCommand(ctx, args, 'poke');
         return true;
       default:
         return false;
@@ -464,6 +544,26 @@ function createBot() {
     ctx.reply(moderationService.getRules(ctx.chat.id));
   });
 
+  bot.command(['hug', 'обнять'], async (ctx) => {
+    const args = ctx.message.text.replace(/^\/(?:hug|обнять)\s*/i, '');
+    await roleplayCommand(ctx, args, 'hug');
+  });
+
+  bot.command(['kiss', 'поцеловать'], async (ctx) => {
+    const args = ctx.message.text.replace(/^\/(?:kiss|поцеловать)\s*/i, '');
+    await roleplayCommand(ctx, args, 'kiss');
+  });
+
+  bot.command(['slap', 'шлепнуть'], async (ctx) => {
+    const args = ctx.message.text.replace(/^\/(?:slap|шлепнуть)\s*/i, '');
+    await roleplayCommand(ctx, args, 'slap');
+  });
+
+  bot.command(['poke', 'тыкнуть'], async (ctx) => {
+    const args = ctx.message.text.replace(/^\/(?:poke|тыкнуть)\s*/i, '');
+    await roleplayCommand(ctx, args, 'poke');
+  });
+
   bot.command(['top', 'топ'], topCommand);
 
   bot.on('my_chat_member', async (ctx) => {
@@ -488,14 +588,14 @@ function createBot() {
     ctx.reply('Правила чата обновлены.');
   });
 
-  bot.command(['warn', 'предупреждение'], (ctx) => {
+  bot.command(['warn', 'предупреждение'], async (ctx) => {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
 
-    const targetData = resolveCommandTarget(ctx, ctx.message.text.replace(/^\/warn\s*/i, ''), '/warn @username причина');
+    const targetData = await resolveCommandTarget(ctx, ctx.message.text.replace(/^\/warn\s*/i, ''), '/warn @username причина');
     if (!targetData) {
       return;
     }
@@ -512,14 +612,14 @@ function createBot() {
     ctx.reply(`Предупреждений: ${moderationService.getWarnings(ctx.chat.id, target.id)}/3`);
   });
 
-  bot.command(['unwarn', 'снять_предупреждение'], (ctx) => {
+  bot.command(['unwarn', 'снять_предупреждение'], async (ctx) => {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
 
-    const targetData = resolveCommandTarget(ctx, ctx.message.text.replace(/^\/unwarn\s*/i, ''), '/unwarn @username');
+    const targetData = await resolveCommandTarget(ctx, ctx.message.text.replace(/^\/unwarn\s*/i, ''), '/unwarn @username');
     if (!targetData) {
       return;
     }
@@ -528,14 +628,14 @@ function createBot() {
     ctx.reply(`Предупреждения пользователя ${targetData.target.first_name || targetData.target.username || targetData.target.id} сброшены.`);
   });
 
-  bot.command(['mute', 'мут'], (ctx) => {
+  bot.command(['mute', 'мут'], async (ctx) => {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
 
-    const targetData = resolveCommandTarget(ctx, ctx.message.text.replace(/^\/mute\s*/i, ''), '/mute @username <время> <причина>');
+    const targetData = await resolveCommandTarget(ctx, ctx.message.text.replace(/^\/mute\s*/i, ''), '/mute @username <время> <причина>');
     if (!targetData) {
       return;
     }
@@ -545,14 +645,14 @@ function createBot() {
     ctx.reply(`Пользователь ${targetData.target.first_name || targetData.target.username || targetData.target.id} ограничен. Причина: ${details.reason}`);
   });
 
-  bot.command(['unmute', 'размут'], (ctx) => {
+  bot.command(['unmute', 'размут'], async (ctx) => {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
 
-    const targetData = resolveCommandTarget(ctx, ctx.message.text.replace(/^\/unmute\s*/i, ''), '/unmute @username');
+    const targetData = await resolveCommandTarget(ctx, ctx.message.text.replace(/^\/unmute\s*/i, ''), '/unmute @username');
     if (!targetData) {
       return;
     }
@@ -560,14 +660,14 @@ function createBot() {
     ctx.reply(`Ограничения с пользователя ${targetData.target.first_name || targetData.target.username || targetData.target.id} сняты.`);
   });
 
-  bot.command(['ban', 'бан'], (ctx) => {
+  bot.command(['ban', 'бан'], async (ctx) => {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
 
-    const targetData = resolveCommandTarget(ctx, ctx.message.text.replace(/^\/ban\s*/i, ''), '/ban @username <время> <причина>');
+    const targetData = await resolveCommandTarget(ctx, ctx.message.text.replace(/^\/ban\s*/i, ''), '/ban @username <время> <причина>');
     if (!targetData) {
       return;
     }
@@ -577,14 +677,14 @@ function createBot() {
     ctx.reply(`Пользователь ${targetData.target.first_name || targetData.target.username || targetData.target.id} заблокирован. Причина: ${details.reason}`);
   });
 
-  bot.command(['unban', 'разбан'], (ctx) => {
+  bot.command(['unban', 'разбан'], async (ctx) => {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
 
-    const targetData = resolveCommandTarget(ctx, ctx.message.text.replace(/^\/unban\s*/i, ''), '/unban @username');
+    const targetData = await resolveCommandTarget(ctx, ctx.message.text.replace(/^\/unban\s*/i, ''), '/unban @username');
     if (!targetData) {
       return;
     }
@@ -630,7 +730,7 @@ function createBot() {
     ctx.reply(`Пользователь ${target.first_name || target.username || target.id} добавлен как вспомогательный администратор бота.`);
   });
 
-  bot.on('text', (ctx) => {
+  bot.on('text', async (ctx) => {
     if (!ctx.message.text) {
       return;
     }
@@ -641,7 +741,7 @@ function createBot() {
     }
 
     if (text.startsWith('!')) {
-      if (handleRussianCommand(ctx, text)) {
+      if (await handleRussianCommand(ctx, text)) {
         return;
       }
     }
