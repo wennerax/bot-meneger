@@ -27,6 +27,7 @@ class Database {
       return {
         groups: parsed.groups || {},
         groupAdmins: parsed.groupAdmins || {},
+        botAdmins: parsed.botAdmins || {},
         punishments: parsed.punishments || [],
         blacklist: parsed.blacklist || [],
         messageCounts: parsed.messageCounts || {},
@@ -41,6 +42,7 @@ class Database {
     return {
       groups: {},
       groupAdmins: {},
+      botAdmins: {},
       punishments: [],
       blacklist: [],
       messageCounts: {},
@@ -76,6 +78,7 @@ class Database {
 
     if (ownerId !== null) {
       this.addAdmin(id, Number(ownerId));
+      this.addBotAdmin(id, Number(ownerId));
     }
 
     this._save();
@@ -100,6 +103,40 @@ class Database {
     }
 
     return Boolean(this.data.groupAdmins[id]?.[user]);
+  }
+
+  addBotAdmin(chatId, userId) {
+    const id = Number(chatId);
+    const user = Number(userId);
+    if (!this.data.botAdmins[id]) {
+      this.data.botAdmins[id] = [];
+    }
+    if (!this.data.botAdmins[id].includes(user)) {
+      this.data.botAdmins[id].push(user);
+    }
+    this._save();
+  }
+
+  isPrimaryBotAdmin(chatId, userId) {
+    const id = Number(chatId);
+    const ownerId = this.data.groups[id]?.ownerId;
+    return ownerId !== undefined && ownerId !== null && Number(ownerId) === Number(userId);
+  }
+
+  isBotAdmin(chatId, userId) {
+    const id = Number(chatId);
+    const user = Number(userId);
+    return this.isPrimaryBotAdmin(chatId, user) || Boolean(this.data.botAdmins[id]?.includes(user));
+  }
+
+  getBotAdmins(chatId) {
+    const id = Number(chatId);
+    const ownerId = this.data.groups[id]?.ownerId;
+    const admins = [...(this.data.botAdmins[id] || [])];
+    if (ownerId !== undefined && ownerId !== null && !admins.includes(Number(ownerId))) {
+      admins.unshift(Number(ownerId));
+    }
+    return admins;
   }
 
   recordMessage(chatId, userId, displayName, username = null) {

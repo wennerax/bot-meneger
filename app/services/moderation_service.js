@@ -8,6 +8,7 @@ class ModerationService {
     if (!this.chats.has(id)) {
       this.chats.set(id, {
         rules: 'Правила чата пока не настроены.',
+        greeting: 'Добро пожаловать в чат! Ознакомьтесь с правилами через /rules.',
         warnings: {},
         filters: {},
       });
@@ -21,6 +22,14 @@ class ModerationService {
 
   setRules(chatId, rules) {
     this._getChat(chatId).rules = rules;
+  }
+
+  getGreeting(chatId) {
+    return this._getChat(chatId).greeting;
+  }
+
+  setGreeting(chatId, greeting) {
+    this._getChat(chatId).greeting = greeting;
   }
 
   addWarning(chatId, userId) {
@@ -65,3 +74,25 @@ class ModerationService {
 }
 
 module.exports = ModerationService;
+
+const FUNNY_DESCRIPTIONS = [
+  'Вы - живой мем',
+  'Вы - босс переговоров',
+  'Вы - мастер спама',
+  'Вы - король копипасты',
+  'Вы - легенда чата',
+  'Вы - рассеянный профессор',
+  'Вы - проводник мудрости',
+  'Вы - живая энциклопедия',
+  'Вы - боевой товарищ',
+  'Вы - инженер хаоса',
+  'Вы - архитектор проблем',
+  'Вы - мастер вопросов',
+  'Вы - ценитель юмора',
+  'Вы - душа компании',
+  'Вы - король острот',
+];
+
+module.exports.getFunnyDescription = () => {
+  return FUNNY_DESCRIPTIONS[Math.floor(Math.random() * FUNNY_DESCRIPTIONS.length)];
+};

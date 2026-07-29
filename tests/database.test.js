@@ -36,3 +36,18 @@ test('message top is separate for each group and username resolves inside its gr
 
   db.close();
 });
+
+test('owner becomes primary bot admin and can add auxiliary bot admins', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-meneger-'));
+  const db = new Database(path.join(dir, 'bot.json'));
+
+  db.ensureGroup(300, 'Team', 77);
+  db.addBotAdmin(300, 88);
+
+  assert.equal(db.isPrimaryBotAdmin(300, 77), true);
+  assert.equal(db.isBotAdmin(300, 77, []), true);
+  assert.equal(db.isBotAdmin(300, 88, []), true);
+  assert.deepEqual(db.getBotAdmins(300), [77, 88]);
+
+  db.close();
+});

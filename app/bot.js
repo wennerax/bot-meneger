@@ -3,6 +3,7 @@ const { loadConfig } = require('./config');
 const UserService = require('./services/user_service');
 const ModerationService = require('./services/moderation_service');
 const Database = require('./services/database');
+const { getFunnyDescription } = require('./services/moderation_service');
 
 function parsePunishmentDetails(args, hasReply) {
   const parts = args ? args.trim().split(/\s+/).filter(Boolean) : [];
@@ -38,49 +39,84 @@ function createBot() {
   const moderationService = new ModerationService();
   const database = new Database(config.databasePath);
 
-  bot.start((ctx) => {
+  function isBotAdmin(ctx) {
+    const userId = ctx.from?.id;
+    if (!userId) {
+      return false;
+    }
+    return database.isBotAdmin(ctx.chat.id, userId) || config.adminIds.includes(userId);
+  }
+
+  function ensureGroup(ctx) {
+    database.ensureGroup(ctx.chat.id, ctx.chat.title || String(ctx.chat.id), ctx.chat?.owner_id || null);
+  }
+
+  bot.command(['start', 'начало'], (ctx) => {
     const isNew = userService.register(ctx.from.id);
     const status = isNew ? 'Рад знакомству' : 'С возвращением';
     ctx.reply(`${status}, ${ctx.from.first_name || 'пользователь'}!\n\nИспользуйте /help, чтобы увидеть команды.`);
   });
 
-  bot.command('help', (ctx) => {
+  bot.command(['help', 'помощь'], (ctx) => {
     ctx.reply([
-      'Доступные команды:',
-      '/start - начать работу',
-      '/help - показать эту справку',
-      '/id - показать ваши ID',
-      '/about - информация о боте',
-      '/stats - статистика для администратора',
-      '/rules - показать правила чата',
-      '/warn - предупреждение',
-      '/mute - ограничение сообщений',
-      '/ban - блокировка пользователя',
-    ].join('\n'));
+      '📋 *СПРАВКА ПО КОМАНДАМ*',
+      '',
+      '👤 *ПОЛЬЗОВАТЕЛЬСКИЕ КОМАНДЫ*',
+      '/start, /начало - начать работу',
+      '/help, /помощь - показать эту справку',
+      '/id, /айди - показать ваши ID',
+      '/about, /информация - информация о боте',
+      '/whoami, /кто_я - забавное описание вас',
+      '',
+      '👮 *МОДЕРСКИЕ КОМАНДЫ*',
+      '/rules, /правила - показать правила чата',
+      '/setrules, /установить_правила <текст> - установить правила',
+      '/setgreeting, /установить_приветствие <текст> - установить приветствие',
+      '/warn, /предупреждение - выдать предупреждение',
+      '/warnings, /варны - показать варны пользователя',
+      '/unwarn, /снять_предупреждение - снять предупреждения',
+      '/mute, /мут <время> <причина> - ограничить сообщения',
+      '/unmute, /размут - снять ограничение',
+      '/ban, /бан <время> <причина> - заблокировать пользователя',
+      '/unban, /разбан - разблокировать пользователя',
+      '/addbotadmin, /добавить_админа - назначить админа бота (ответом на сообщение)',
+      '/stats, /статистика - статистика пользователей',
+      '',
+      '🎉 *РАЗВЛЕЧЕНИЯ*',
+      '/whoami, /кто_я - узнать, кто ты',
+      '',
+      '_Используйте русские или английские версии команд_',
+    ].join('\n'), { parse_mode: 'Markdown' });
   });
 
-  bot.command('id', (ctx) => {
+  bot.command(['id', 'айди'], (ctx) => {
     ctx.reply(`Ваш Telegram ID: ${ctx.from.id}\nID чата: ${ctx.chat.id}`);
   });
 
-  bot.command('about', (ctx) => {
+  bot.command(['about', 'информация'], (ctx) => {
     ctx.reply(`${config.botName}\nПолноценный бот на Node.js.`);
   });
 
-  bot.command('stats', (ctx) => {
-    if (!config.adminIds.includes(ctx.from.id)) {
+  bot.command(['whoami', 'кто_я'], (ctx) => {
+    ctx.reply(`${ctx.from.first_name || 'Пользователь'}, ${getFunnyDescription()}`);
+  });
+
+  bot.command(['stats', 'статистика'], (ctx) => {
+    ensureGroup(ctx);
+    if (!isBotAdmin(ctx)) {
       ctx.reply('Команда доступна только администраторам.');
       return;
     }
     ctx.reply(`Зарегистрировано пользователей: ${userService.count}`);
   });
 
-  bot.command('rules', (ctx) => {
+  bot.command(['rules', 'правила'], (ctx) => {
     ctx.reply(moderationService.getRules(ctx.chat.id));
   });
 
-  bot.command('setrules', (ctx) => {
-    if (!config.adminIds.includes(ctx.from.id)) {
+  bot.command(['setrules', 'установить_правила'], (ctx) => {
+    ensureGroup(ctx);
+    if (!isBotAdmin(ctx)) {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
@@ -93,8 +129,9 @@ function createBot() {
     ctx.reply('Правила чата обновлены.');
   });
 
-  bot.command('warn', (ctx) => {
-    if (!config.adminIds.includes(ctx.from.id)) {
+  bot.command(['warn', 'предупреждение'], (ctx) => {
+    ensureGroup(ctx);
+    if (!isBotAdmin(ctx)) {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
@@ -105,8 +142,27 @@ function createBot() {
     ctx.reply(`Предупреждение для ${target.first_name || target.username || target.id}: ${moderationService.getWarnings(ctx.chat.id, target.id)}/3. Причина: ${details.reason}`);
   });
 
-  bot.command('mute', (ctx) => {
-    if (!config.adminIds.includes(ctx.from.id)) {
+  bot.command(['warnings', 'варны'], (ctx) => {
+    ensureGroup(ctx);
+    const target = ctx.message.reply_to_message?.from || ctx.from;
+    ctx.reply(`Предупреждений: ${moderationService.getWarnings(ctx.chat.id, target.id)}/3`);
+  });
+
+  bot.command(['unwarn', 'снять_предупреждение'], (ctx) => {
+    ensureGroup(ctx);
+    if (!isBotAdmin(ctx)) {
+      ctx.reply('Эта команда доступна только администраторам.');
+      return;
+    }
+    const target = ctx.message.reply_to_message?.from || ctx.from;
+    moderationService.resetWarnings(ctx.chat.id, target.id);
+    ctx.reply(`Предупреждения пользователя ${target.first_name || target.username || target.id} сброшены.`);
+  });
+
+  bot.command(['mute', 'мут'], (ctx) => {
+
+    ensureGroup(ctx);
+    if (!isBotAdmin(ctx)) {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
@@ -116,8 +172,19 @@ function createBot() {
     ctx.reply(`Пользователь ${target.first_name || target.username || target.id} ограничен. Причина: ${details.reason}`);
   });
 
-  bot.command('ban', (ctx) => {
-    if (!config.adminIds.includes(ctx.from.id)) {
+  bot.command(['unmute', 'размут'], (ctx) => {
+    ensureGroup(ctx);
+    if (!isBotAdmin(ctx)) {
+      ctx.reply('Эта команда доступна только администраторам.');
+      return;
+    }
+    const target = ctx.message.reply_to_message?.from || ctx.from;
+    ctx.reply(`Ограничения с пользователя ${target.first_name || target.username || target.id} сняты.`);
+  });
+
+  bot.command(['ban', 'бан'], (ctx) => {
+    ensureGroup(ctx);
+    if (!isBotAdmin(ctx)) {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
@@ -127,12 +194,96 @@ function createBot() {
     ctx.reply(`Пользователь ${target.first_name || target.username || target.id} заблокирован. Причина: ${details.reason}`);
   });
 
+  bot.command(['unban', 'разбан'], (ctx) => {
+    ensureGroup(ctx);
+    if (!isBotAdmin(ctx)) {
+      ctx.reply('Эта команда доступна только администраторам.');
+      return;
+    }
+    const target = ctx.message.reply_to_message?.from || ctx.from;
+    ctx.reply(`Пользователь ${target.first_name || target.username || target.id} разблокирован.`);
+  });
+
+  bot.command(['setgreeting', 'установить_приветствие'], (ctx) => {
+    ensureGroup(ctx);
+    if (!isBotAdmin(ctx)) {
+      ctx.reply('Эта команда доступна только администраторам.');
+      return;
+    }
+    const text = ctx.message.text.split(/\s+/).slice(1).join(' ').trim();
+    if (!text) {
+      ctx.reply('Использование: /setgreeting текст приветствия');
+      return;
+    }
+    moderationService.setGreeting(ctx.chat.id, text);
+    ctx.reply('Приветствие чата обновлено.');
+  });
+
+  bot.command(['addbotadmin', 'добавить_админа'], (ctx) => {
+    ensureGroup(ctx);
+    if (!isBotAdmin(ctx)) {
+      ctx.reply('Только главный или вспомогательный администратор бота может добавлять новых админов.');
+      return;
+    }
+
+    const target = ctx.message.reply_to_message?.from;
+    if (!target) {
+      ctx.reply('Ответьте на сообщение пользователя, которого хотите сделать администратором бота.');
+      return;
+    }
+
+    const isPrimary = database.isPrimaryBotAdmin(ctx.chat.id, ctx.from.id);
+    if (!isPrimary && target.id === ctx.from.id) {
+      ctx.reply('Нельзя назначить себя дополнительным администратором.');
+      return;
+    }
+
+    database.addBotAdmin(ctx.chat.id, target.id);
+    ctx.reply(`Пользователь ${target.first_name || target.username || target.id} добавлен как вспомогательный администратор бота.`);
+  });
+
   bot.on('text', (ctx) => {
     if (!ctx.message.text || ctx.message.text.startsWith('/')) {
       return;
     }
 
-    const response = moderationService.findFilterResponse(ctx.chat.id, ctx.message.text);
+    const text = ctx.message.text.trim();
+
+    // Обработка текстовых команд: +rules, +greeting
+    if (text.startsWith('+rules ') || text.startsWith('+правила ')) {
+      if (!isBotAdmin(ctx)) {
+        ctx.reply('Эта команда доступна только администраторам.');
+        return;
+      }
+      ensureGroup(ctx);
+      const newRules = text.startsWith('+rules') ? text.slice(7) : text.slice(10);
+      if (!newRules.trim()) {
+        ctx.reply('Использование: +rules новые правила или +правила новые правила');
+        return;
+      }
+      moderationService.setRules(ctx.chat.id, newRules.trim());
+      ctx.reply('✅ Правила чата обновлены.');
+      return;
+    }
+
+    if (text.startsWith('+greeting ') || text.startsWith('+приветствие ')) {
+      if (!isBotAdmin(ctx)) {
+        ctx.reply('Эта команда доступна только администраторам.');
+        return;
+      }
+      ensureGroup(ctx);
+      const newGreeting = text.startsWith('+greeting') ? text.slice(10) : text.slice(13);
+      if (!newGreeting.trim()) {
+        ctx.reply('Использование: +greeting новое приветствие или +приветствие новое приветствие');
+        return;
+      }
+      moderationService.setGreeting(ctx.chat.id, newGreeting.trim());
+      ctx.reply('✅ Приветствие чата обновлено.');
+      return;
+    }
+
+    // Обработка фильтров
+    const response = moderationService.findFilterResponse(ctx.chat.id, text);
     if (response) {
       ctx.reply(response);
     }
