@@ -238,20 +238,20 @@ function createBot() {
       '/help, !помощь - показать эту справку',
       '/id, !айди - показать ваши ID',
       '/about, !информация - информация о боте',
-      '/whoami, !кто_я - забавное описание вас',
+      '/whoami, !кто я - забавное описание вас',
       '',
       '👮 МОДЕРСКИЕ КОМАНДЫ',
       '/rules, !правила - показать правила чата',
-      '/setrules, !установить_правила <текст> - установить правила',
-      '/setgreeting, !установить_приветствие <текст> - установить приветствие',
+      '/setrules, !установить правила <текст> - установить правила',
+      '/setgreeting, !установить приветствие <текст> - установить приветствие',
       '/warn, !предупреждение - выдать предупреждение',
       '/warnings, !варны - показать варны пользователя',
-      '/unwarn, !снять_предупреждение - снять предупреждения',
+      '/unwarn, !снять предупреждение - снять предупреждения',
       '/mute, !мут <время> <причина> - ограничить сообщения',
       '/unmute, !размут - снять ограничение',
       '/ban, !бан <время> <причина> - заблокировать пользователя',
       '/unban, !разбан - разблокировать пользователя',
-      '/addbotadmin, !добавить_админа - назначить админа бота (ответом на сообщение)',
+      '/addbotadmin, !добавить админа - назначить админа бота (ответом на сообщение)',
       '/stats, !статистика - личная статистика пользователя',
       '/top, !топ - топ пользователей по сообщениям в группе',
       '',
@@ -603,8 +603,10 @@ function createBot() {
     const [commandWithBot, ...parts] = text.slice(1).split(/\s+/);
     const command = commandWithBot.split('@')[0].toLowerCase();
     const args = parts.join(' ');
+    const normalizedCommand = command.replace(/_/g, ' ');
+    const secondWord = parts[0]?.toLowerCase() || '';
 
-    switch (command) {
+    switch (normalizedCommand) {
       case 'начало':
         startCommand(ctx);
         return true;
@@ -617,27 +619,40 @@ function createBot() {
       case 'информация':
         aboutCommand(ctx);
         return true;
-      case 'кто_я':
-        whoamiCommand(ctx);
-        return true;
+      case 'кто':
+        if (secondWord === 'я') {
+          whoamiCommand(ctx);
+          return true;
+        }
+        return false;
       case 'статистика':
         statsCommand(ctx);
         return true;
       case 'правила':
         rulesCommand(ctx);
         return true;
-      case 'установить_правила':
-        setRulesCommand(ctx, args);
-        return true;
+      case 'установить':
+        if (secondWord === 'правила') {
+          setRulesCommand(ctx, args.replace(/^правила\s*/i, ''));
+          return true;
+        }
+        if (secondWord === 'приветствие') {
+          setGreetingCommand(ctx, args.replace(/^приветствие\s*/i, ''));
+          return true;
+        }
+        return false;
       case 'предупреждение':
         await warnCommand(ctx, args);
         return true;
       case 'варны':
         warningsCommand(ctx);
         return true;
-      case 'снять_предупреждение':
-        await unwarnCommand(ctx, args);
-        return true;
+      case 'снять':
+        if (secondWord === 'предупреждение') {
+          await unwarnCommand(ctx, args.replace(/^предупреждение\s*/i, ''));
+          return true;
+        }
+        return false;
       case 'мут':
         await muteCommand(ctx, args);
         return true;
@@ -650,12 +665,15 @@ function createBot() {
       case 'разбан':
         await unbanCommand(ctx, args);
         return true;
-      case 'установить_приветствие':
+      case 'установить приветствие':
         setGreetingCommand(ctx, args);
         return true;
-      case 'добавить_админа':
-        addBotAdminCommand(ctx);
-        return true;
+      case 'добавить':
+        if (secondWord === 'админа') {
+          addBotAdminCommand(ctx);
+          return true;
+        }
+        return false;
       case 'топ':
         topCommand(ctx);
         return true;
