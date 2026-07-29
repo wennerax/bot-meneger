@@ -461,6 +461,27 @@ function createBot() {
       case 'poke':
         sendRoleplayResponse(ctx, 'тыкнул', target, '👉');
         break;
+      case 'fuck':
+        sendRoleplayResponse(ctx, 'выебал', target, '🔞');
+        break;
+      case 'rape':
+        sendRoleplayResponse(ctx, 'трахнул', target, '🔞');
+        break;
+      case 'beat':
+        sendRoleplayResponse(ctx, 'уебал', target, '💢');
+        break;
+      case 'kill':
+        sendRoleplayResponse(ctx, 'убил', target, '☠️');
+        break;
+      case 'bite':
+        sendRoleplayResponse(ctx, 'укусил', target, '🦷');
+        break;
+      case 'lick':
+        sendRoleplayResponse(ctx, 'лизнул', target, '👅');
+        break;
+      case 'lickup':
+        sendRoleplayResponse(ctx, 'отлизал', target, '👅');
+        break;
       default:
         ctx.reply('Неизвестное действие.');
         break;
@@ -902,6 +923,30 @@ function createBot() {
       case 'тыкнуть':
         await roleplayCommand(ctx, args, 'poke');
         return true;
+      case 'вьебать':
+        await roleplayCommand(ctx, args, 'fuck');
+        return true;
+      case 'выебать':
+        await roleplayCommand(ctx, args, 'fuck');
+        return true;
+      case 'трахнуть':
+        await roleplayCommand(ctx, args, 'rape');
+        return true;
+      case 'уебать':
+        await roleplayCommand(ctx, args, 'beat');
+        return true;
+      case 'убить':
+        await roleplayCommand(ctx, args, 'kill');
+        return true;
+      case 'укусить':
+        await roleplayCommand(ctx, args, 'bite');
+        return true;
+      case 'лизнуть':
+        await roleplayCommand(ctx, args, 'lick');
+        return true;
+      case 'отлизать':
+        await roleplayCommand(ctx, args, 'lickup');
+        return true;
       case 'монетка':
         funCommand(ctx, 'coin');
         return true;
@@ -964,6 +1009,41 @@ function createBot() {
   bot.command(['poke', 'тыкнуть'], async (ctx) => {
     const args = ctx.message.text.replace(/^\/(?:poke|тыкнуть)\s*/i, '');
     await roleplayCommand(ctx, args, 'poke');
+  });
+
+  bot.command(['fuck', 'вьебать', 'выебать'], async (ctx) => {
+    const args = ctx.message.text.replace(/^\/(?:fuck|вьебать|выебать)\s*/i, '');
+    await roleplayCommand(ctx, args, 'fuck');
+  });
+
+  bot.command(['rape', 'трахнуть'], async (ctx) => {
+    const args = ctx.message.text.replace(/^\/(?:rape|трахнуть)\s*/i, '');
+    await roleplayCommand(ctx, args, 'rape');
+  });
+
+  bot.command(['beat', 'уебать'], async (ctx) => {
+    const args = ctx.message.text.replace(/^\/(?:beat|уебать)\s*/i, '');
+    await roleplayCommand(ctx, args, 'beat');
+  });
+
+  bot.command(['kill', 'убить'], async (ctx) => {
+    const args = ctx.message.text.replace(/^\/(?:kill|убить)\s*/i, '');
+    await roleplayCommand(ctx, args, 'kill');
+  });
+
+  bot.command(['bite', 'укусить'], async (ctx) => {
+    const args = ctx.message.text.replace(/^\/(?:bite|укусить)\s*/i, '');
+    await roleplayCommand(ctx, args, 'bite');
+  });
+
+  bot.command(['lick', 'лизнуть'], async (ctx) => {
+    const args = ctx.message.text.replace(/^\/(?:lick|лизнуть)\s*/i, '');
+    await roleplayCommand(ctx, args, 'lick');
+  });
+
+  bot.command(['lickup', 'отлизать'], async (ctx) => {
+    const args = ctx.message.text.replace(/^\/(?:lickup|отлизать)\s*/i, '');
+    await roleplayCommand(ctx, args, 'lickup');
   });
 
   bot.command(['coin', 'монетка'], (ctx) => {
