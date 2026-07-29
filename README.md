@@ -66,6 +66,43 @@
 python -m pytest
 ```
 
+## Безопасность API-ключей
+
+API-ключи (включая `AI_API_KEY`, `BOT_TOKEN` и другие приватные секреты) — конфиденциальны. Никогда не публикуйте их в чатах, исходниках репозиториев или скриншотах.
+
+- Если ключ оказался публичен — немедленно отзовите/перегенерируйте его в панели провайдера.
+- Храните ключи в файле `.env`, который должен быть добавлен в `.gitignore`.
+- Для временной установки в PowerShell (только текущая сессия):
+
+```powershell
+$env:AI_API_KEY = "sk-..."
+```
+
+- Для постоянной установки в Windows (требуется перезапуск терминала):
+
+```powershell
+setx AI_API_KEY "sk-..."
+```
+
+- Пример строки в `.env`:
+
+```env
+AI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+AI_MODEL=gpt-4o-mini
+AI_API_BASE_URL=https://api.openai.com/v1
+```
+
+Если вы используете DeepSeek AI, можно задать переменные с `DEEPSEEK_` префиксом:
+
+```env
+DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+DEEPSEEK_MODEL=gpt-4o-mini
+DEEPSEEK_API_BASE_URL=https://api.deepseek.example/v1
+```
+
+- Никогда не записывайте ключи прямо в код или коммиты. Если вы случайно добавили ключ в репозиторий, удалите его из истории и регенерируйте ключ у провайдера.
+
+
 ## Структура
 
 ```text

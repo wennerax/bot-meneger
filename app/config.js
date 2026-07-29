@@ -62,9 +62,10 @@ function loadConfig(overrides = {}, options = {}) {
     adminIds: parseAdminIds(merged.ADMIN_IDS),
     botName: merged.BOT_NAME || 'Telegram Bot Manager',
     databasePath: merged.DATABASE_PATH || 'data/bot.json',
-    aiApiKey: merged.AI_API_KEY || '',
-    aiModel: merged.AI_MODEL || 'gpt-4o-mini',
-    aiApiBaseUrl: merged.AI_API_BASE_URL || 'https://api.openai.com/v1',
+    // Support generic AI provider env and DeepSeek-specific env names.
+    aiApiKey: merged.DEEPSEEK_API_KEY || merged.AI_API_KEY || '',
+    aiModel: merged.AI_MODEL || merged.DEEPSEEK_MODEL || 'gpt-4o-mini',
+    aiApiBaseUrl: merged.DEEPSEEK_API_BASE_URL || merged.AI_API_BASE_URL || 'https://api.openai.com/v1',
   };
 }
 

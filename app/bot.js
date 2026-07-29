@@ -500,8 +500,17 @@ function createBot() {
         },
         body: JSON.stringify(buildAiRequestPayload(trimmedPrompt, config.aiModel)),
       });
-
       if (!response.ok) {
+        // Safe diagnostic logging: do not log secrets or keys.
+        console.error('AI request failed', { status: response.status, statusText: response.statusText });
+
+        // Give users a helpful, non-secret reply for common auth problems.
+        if (response.status === 401) {
+          ctx.reply('AI error: unauthorized (401). Проверьте, что AI_API_KEY установлен и корректен, а AI_API_BASE_URL соответствует провайдеру. Не публикуйте ключи в чате.');
+          return;
+        }
+
+        // For other status codes, throw to fall back to local reply.
         throw new Error(`AI request failed with ${response.status}`);
       }
 
@@ -512,6 +521,7 @@ function createBot() {
         return;
       }
     } catch (error) {
+      // Log error safely; never include the API key or other secrets in logs.
       console.error('AI request failed:', error?.message || error);
     }
 
