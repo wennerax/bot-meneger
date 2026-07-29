@@ -99,6 +99,42 @@ function createBot() {
     return ctx.from?.first_name || ctx.from?.username || String(ctx.from?.id);
   }
 
+  function resolveCommandTarget(ctx, args, usage) {
+    const replyTarget = ctx.message.reply_to_message?.from;
+    if (replyTarget) {
+      return { target: replyTarget, remainingArgs: args.trim() };
+    }
+
+    const parts = args.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) {
+      ctx.reply(`Используйте ${usage}`);
+      return null;
+    }
+
+    const first = parts[0];
+    if (first.startsWith('@')) {
+      const resolved = database.resolveUsername(ctx.chat.id, first);
+      if (!resolved) {
+        ctx.reply(`Не удалось найти пользователя ${first} в этой группе. Используйте ${usage}`);
+        return null;
+      }
+      return {
+        target: { id: Number(resolved.userId), first_name: resolved.displayName, username: first },
+        remainingArgs: parts.slice(1).join(' '),
+      };
+    }
+
+    if (/^\d+$/.test(first)) {
+      return {
+        target: { id: Number(first), first_name: `Пользователь ${first}`, username: null },
+        remainingArgs: parts.slice(1).join(' '),
+      };
+    }
+
+    ctx.reply(`Используйте ${usage}`);
+    return null;
+  }
+
   function startCommand(ctx) {
     const isNew = userService.register(ctx.from.id);
     const status = isNew ? 'Рад знакомству' : 'С возвращением';
@@ -199,11 +235,16 @@ function createBot() {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
-    const target = ctx.message.reply_to_message?.from || ctx.from;
-    const details = parsePunishmentDetails(args, Boolean(ctx.message.reply_to_message));
-    moderationService.addWarning(ctx.chat.id, target.id);
-    database.addPunishment(ctx.chat.id, target.id, 'warn', details.reason, null);
-    ctx.reply(`Предупреждение для ${target.first_name || target.username || target.id}: ${moderationService.getWarnings(ctx.chat.id, target.id)}/3. Причина: ${details.reason}`);
+
+    const targetData = resolveCommandTarget(ctx, args, '/warn @username причина');
+    if (!targetData) {
+      return;
+    }
+
+    const details = parsePunishmentDetails(targetData.remainingArgs, !!ctx.message.reply_to_message);
+    moderationService.addWarning(ctx.chat.id, targetData.target.id);
+    database.addPunishment(ctx.chat.id, targetData.target.id, 'warn', details.reason, null);
+    ctx.reply(`Предупреждение для ${targetData.target.first_name || targetData.target.username || targetData.target.id}: ${moderationService.getWarnings(ctx.chat.id, targetData.target.id)}/3. Причина: ${details.reason}`);
   }
 
   function warningsCommand(ctx) {
@@ -218,9 +259,14 @@ function createBot() {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
-    const target = ctx.message.reply_to_message?.from || ctx.from;
-    moderationService.resetWarnings(ctx.chat.id, target.id);
-    ctx.reply(`Предупреждения пользователя ${target.first_name || target.username || target.id} сброшены.`);
+
+    const targetData = resolveCommandTarget(ctx, '', '/unwarn @username');
+    if (!targetData) {
+      return;
+    }
+
+    moderationService.resetWarnings(ctx.chat.id, targetData.target.id);
+    ctx.reply(`Предупреждения пользователя ${targetData.target.first_name || targetData.target.username || targetData.target.id} сброшены.`);
   }
 
   function muteCommand(ctx, args) {
@@ -229,10 +275,15 @@ function createBot() {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
-    const target = ctx.message.reply_to_message?.from || ctx.from;
-    const details = parsePunishmentDetails(args, Boolean(ctx.message.reply_to_message));
-    database.addPunishment(ctx.chat.id, target.id, 'mute', details.reason, null);
-    ctx.reply(`Пользователь ${target.first_name || target.username || target.id} ограничен. Причина: ${details.reason}`);
+
+    const targetData = resolveCommandTarget(ctx, args, '/mute @username <время> <причина>');
+    if (!targetData) {
+      return;
+    }
+
+    const details = parsePunishmentDetails(targetData.remainingArgs, !!ctx.message.reply_to_message);
+    database.addPunishment(ctx.chat.id, targetData.target.id, 'mute', details.reason, null);
+    ctx.reply(`Пользователь ${targetData.target.first_name || targetData.target.username || targetData.target.id} ограничен. Причина: ${details.reason}`);
   }
 
   function unmuteCommand(ctx) {
@@ -241,8 +292,13 @@ function createBot() {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
-    const target = ctx.message.reply_to_message?.from || ctx.from;
-    ctx.reply(`Ограничения с пользователя ${target.first_name || target.username || target.id} сняты.`);
+
+    const targetData = resolveCommandTarget(ctx, '', '/unmute @username');
+    if (!targetData) {
+      return;
+    }
+
+    ctx.reply(`Ограничения с пользователя ${targetData.target.first_name || targetData.target.username || targetData.target.id} сняты.`);
   }
 
   function banCommand(ctx, args) {
@@ -251,10 +307,15 @@ function createBot() {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
-    const target = ctx.message.reply_to_message?.from || ctx.from;
-    const details = parsePunishmentDetails(args, Boolean(ctx.message.reply_to_message));
-    database.addPunishment(ctx.chat.id, target.id, 'ban', details.reason, null);
-    ctx.reply(`Пользователь ${target.first_name || target.username || target.id} заблокирован. Причина: ${details.reason}`);
+
+    const targetData = resolveCommandTarget(ctx, args, '/ban @username <время> <причина>');
+    if (!targetData) {
+      return;
+    }
+
+    const details = parsePunishmentDetails(targetData.remainingArgs, !!ctx.message.reply_to_message);
+    database.addPunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, null);
+    ctx.reply(`Пользователь ${targetData.target.first_name || targetData.target.username || targetData.target.id} заблокирован. Причина: ${details.reason}`);
   }
 
   function unbanCommand(ctx) {
@@ -263,8 +324,13 @@ function createBot() {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
-    const target = ctx.message.reply_to_message?.from || ctx.from;
-    ctx.reply(`Пользователь ${target.first_name || target.username || target.id} разблокирован.`);
+
+    const targetData = resolveCommandTarget(ctx, '', '/unban @username');
+    if (!targetData) {
+      return;
+    }
+
+    ctx.reply(`Пользователь ${targetData.target.first_name || targetData.target.username || targetData.target.id} разблокирован.`);
   }
 
   function setGreetingCommand(ctx, args) {
@@ -428,11 +494,16 @@ function createBot() {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
-    const target = ctx.message.reply_to_message?.from || ctx.from;
-    const details = parsePunishmentDetails(ctx.message.text.replace(/^\/warn\s*/i, ''), Boolean(ctx.message.reply_to_message));
-    moderationService.addWarning(ctx.chat.id, target.id);
-    database.addPunishment(ctx.chat.id, target.id, 'warn', details.reason, null);
-    ctx.reply(`Предупреждение для ${target.first_name || target.username || target.id}: ${moderationService.getWarnings(ctx.chat.id, target.id)}/3. Причина: ${details.reason}`);
+
+    const targetData = resolveCommandTarget(ctx, ctx.message.text.replace(/^\/warn\s*/i, ''), '/warn @username причина');
+    if (!targetData) {
+      return;
+    }
+
+    const details = parsePunishmentDetails(targetData.remainingArgs, Boolean(ctx.message.reply_to_message));
+    moderationService.addWarning(ctx.chat.id, targetData.target.id);
+    database.addPunishment(ctx.chat.id, targetData.target.id, 'warn', details.reason, null);
+    ctx.reply(`Предупреждение для ${targetData.target.first_name || targetData.target.username || targetData.target.id}: ${moderationService.getWarnings(ctx.chat.id, targetData.target.id)}/3. Причина: ${details.reason}`);
   });
 
   bot.command(['warnings', 'варны'], (ctx) => {
@@ -447,22 +518,31 @@ function createBot() {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
-    const target = ctx.message.reply_to_message?.from || ctx.from;
-    moderationService.resetWarnings(ctx.chat.id, target.id);
-    ctx.reply(`Предупреждения пользователя ${target.first_name || target.username || target.id} сброшены.`);
+
+    const targetData = resolveCommandTarget(ctx, ctx.message.text.replace(/^\/unwarn\s*/i, ''), '/unwarn @username');
+    if (!targetData) {
+      return;
+    }
+
+    moderationService.resetWarnings(ctx.chat.id, targetData.target.id);
+    ctx.reply(`Предупреждения пользователя ${targetData.target.first_name || targetData.target.username || targetData.target.id} сброшены.`);
   });
 
   bot.command(['mute', 'мут'], (ctx) => {
-
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
-    const target = ctx.message.reply_to_message?.from || ctx.from;
-    const details = parsePunishmentDetails(ctx.message.text.replace(/^\/mute\s*/i, ''), Boolean(ctx.message.reply_to_message));
-    database.addPunishment(ctx.chat.id, target.id, 'mute', details.reason, null);
-    ctx.reply(`Пользователь ${target.first_name || target.username || target.id} ограничен. Причина: ${details.reason}`);
+
+    const targetData = resolveCommandTarget(ctx, ctx.message.text.replace(/^\/mute\s*/i, ''), '/mute @username <время> <причина>');
+    if (!targetData) {
+      return;
+    }
+
+    const details = parsePunishmentDetails(targetData.remainingArgs, Boolean(ctx.message.reply_to_message));
+    database.addPunishment(ctx.chat.id, targetData.target.id, 'mute', details.reason, null);
+    ctx.reply(`Пользователь ${targetData.target.first_name || targetData.target.username || targetData.target.id} ограничен. Причина: ${details.reason}`);
   });
 
   bot.command(['unmute', 'размут'], (ctx) => {
@@ -471,8 +551,13 @@ function createBot() {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
-    const target = ctx.message.reply_to_message?.from || ctx.from;
-    ctx.reply(`Ограничения с пользователя ${target.first_name || target.username || target.id} сняты.`);
+
+    const targetData = resolveCommandTarget(ctx, ctx.message.text.replace(/^\/unmute\s*/i, ''), '/unmute @username');
+    if (!targetData) {
+      return;
+    }
+
+    ctx.reply(`Ограничения с пользователя ${targetData.target.first_name || targetData.target.username || targetData.target.id} сняты.`);
   });
 
   bot.command(['ban', 'бан'], (ctx) => {
@@ -481,10 +566,15 @@ function createBot() {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
-    const target = ctx.message.reply_to_message?.from || ctx.from;
-    const details = parsePunishmentDetails(ctx.message.text.replace(/^\/ban\s*/i, ''), Boolean(ctx.message.reply_to_message));
-    database.addPunishment(ctx.chat.id, target.id, 'ban', details.reason, null);
-    ctx.reply(`Пользователь ${target.first_name || target.username || target.id} заблокирован. Причина: ${details.reason}`);
+
+    const targetData = resolveCommandTarget(ctx, ctx.message.text.replace(/^\/ban\s*/i, ''), '/ban @username <время> <причина>');
+    if (!targetData) {
+      return;
+    }
+
+    const details = parsePunishmentDetails(targetData.remainingArgs, Boolean(ctx.message.reply_to_message));
+    database.addPunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, null);
+    ctx.reply(`Пользователь ${targetData.target.first_name || targetData.target.username || targetData.target.id} заблокирован. Причина: ${details.reason}`);
   });
 
   bot.command(['unban', 'разбан'], (ctx) => {
@@ -493,8 +583,13 @@ function createBot() {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
-    const target = ctx.message.reply_to_message?.from || ctx.from;
-    ctx.reply(`Пользователь ${target.first_name || target.username || target.id} разблокирован.`);
+
+    const targetData = resolveCommandTarget(ctx, ctx.message.text.replace(/^\/unban\s*/i, ''), '/unban @username');
+    if (!targetData) {
+      return;
+    }
+
+    ctx.reply(`Пользователь ${targetData.target.first_name || targetData.target.username || targetData.target.id} разблокирован.`);
   });
 
   bot.command(['setgreeting', 'установить_приветствие'], (ctx) => {
