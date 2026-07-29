@@ -4,6 +4,7 @@ const UserService = require('./services/user_service');
 const ModerationService = require('./services/moderation_service');
 const Database = require('./services/database');
 const { getFunnyDescription } = require('./services/moderation_service');
+const { getMentionText, resolveUsernameTarget } = require('./services/username_service');
 
 function parsePunishmentDetails(args, hasReply) {
   const parts = args ? args.trim().split(/\s+/).filter(Boolean) : [];
@@ -110,48 +111,7 @@ function createBot() {
       return { target: textMention.user, remainingArgs: args.trim() };
     }
 
-    const parts = args.trim().split(/\s+/).filter(Boolean);
-    if (parts.length === 0) {
-      ctx.reply(`Используйте ${usage}`);
-      return null;
-    }
-
-    const first = parts[0];
-    if (first.startsWith('@')) {
-      const resolved = database.resolveUsername(ctx.chat.id, first);
-      if (resolved) {
-        return {
-          target: { id: Number(resolved.userId), first_name: resolved.displayName, username: first },
-          remainingArgs: parts.slice(1).join(' '),
-        };
-      }
-
-      const username = first.replace(/^@/, '');
-      try {
-        const member = await ctx.telegram.getChatMember(ctx.chat.id, username);
-        if (member?.user) {
-          return {
-            target: { id: member.user.id, first_name: member.user.first_name || member.user.username || String(member.user.id), username: first },
-            remainingArgs: parts.slice(1).join(' '),
-          };
-        }
-      } catch (error) {
-        // ignore and fallback to usage message
-      }
-
-      ctx.reply(`Не удалось найти пользователя ${first} в этой группе. Используйте ${usage}`);
-      return null;
-    }
-
-    if (/^\d+$/.test(first)) {
-      return {
-        target: { id: Number(first), first_name: `Пользователь ${first}`, username: null },
-        remainingArgs: parts.slice(1).join(' '),
-      };
-    }
-
-    ctx.reply(`Используйте ${usage}`);
-    return null;
+    return resolveUsernameTarget(ctx, args, usage, database);
   }
 
   function startCommand(ctx) {
@@ -206,16 +166,6 @@ function createBot() {
 
   function whoamiCommand(ctx) {
     ctx.reply(`${ctx.from.first_name || 'Пользователь'}, ${getFunnyDescription()}`);
-  }
-
-  function getMentionText(user) {
-    if (!user) {
-      return 'пользователь';
-    }
-    if (user.username) {
-      return `@${user.username}`;
-    }
-    return user.first_name || 'пользователь';
   }
 
   function sendRoleplayResponse(ctx, verb, target, emoji) {
