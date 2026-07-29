@@ -1,0 +1,13 @@
+{
+  "name": "bot-meneger",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "node app/main.js",
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "telegraf": "^4.16.0"
+  }
+}
