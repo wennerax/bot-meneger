@@ -126,6 +126,29 @@ function buildBotAdminListMessage(primaryAdminId, auxiliaryAdminIds = []) {
   return lines.join('\n');
 }
 
+function buildLocalAiReply(prompt) {
+  const trimmed = String(prompt || '').trim();
+  if (!trimmed) {
+    return 'Напиши вопрос, и я постараюсь помочь. Это локальный помощник без API-ключей.';
+  }
+
+  const lower = trimmed.toLowerCase();
+  if (lower.includes('привет') || lower.includes('hello') || lower.includes('hi')) {
+    return 'Привет! Я локальный помощник бота без API-ключей. Чем могу помочь?';
+  }
+  if (lower.includes('как дела') || lower.includes('how are you')) {
+    return 'У меня всё отлично, спасибо! Готов помочь с вопросом или шуткой.';
+  }
+  if (lower.includes('шутка') || lower.includes('joke')) {
+    return 'Конечно: почему программисты любят темноту? Потому что свет — это для слабаков.';
+  }
+  if (lower.includes('команда') || lower.includes('command')) {
+    return 'Могу подсказать, как использовать бота или придумать ответ для чата.';
+  }
+
+  return `Я локальный помощник без ключей. Ты спросил: "${trimmed}". Могу ответить кратко, с шуткой или дать совет.`;
+}
+
 function createBot() {
   const config = loadConfig();
   const bot = new Telegraf(config.botToken || '');
@@ -434,6 +457,10 @@ function createBot() {
   function funCommand(ctx, kind) {
     const reply = buildFunReply(kind);
     ctx.reply(reply);
+  }
+
+  function aiCommand(ctx, prompt) {
+    ctx.reply(buildLocalAiReply(prompt));
   }
 
   function sendRoleplayResponse(ctx, verb, target, emoji) {
@@ -1046,6 +1073,11 @@ function createBot() {
     await roleplayCommand(ctx, args, 'lickup');
   });
 
+  bot.command(['ai'], (ctx) => {
+    const text = ctx.message.text.replace(/^\/ai\s*/i, '').trim();
+    aiCommand(ctx, text);
+  });
+
   bot.command(['coin', 'монетка'], (ctx) => {
     funCommand(ctx, 'coin');
   });
@@ -1330,5 +1362,6 @@ module.exports = {
   parsePageNumber,
   buildPunishmentListMessage,
   buildBotAdminListMessage,
+  buildLocalAiReply,
   startBot,
 };
