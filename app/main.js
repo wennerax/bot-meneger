@@ -12,6 +12,7 @@ function main() {
 
   // Perform a lightweight AI endpoint check if a key is configured.
   // This will not log the key; it only reports status codes and friendly hints.
+  const aiModule = require('./ai');
   (async function checkAi() {
     if (!config.aiApiKey) {
       startBot();
@@ -19,22 +20,13 @@ function main() {
     }
 
     try {
-      const testBody = JSON.stringify({ model: config.aiModel, messages: [{ role: 'user', content: 'ping' }] });
-      const res = await fetch(`${config.aiApiBaseUrl.replace(/\/$/, '')}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${config.aiApiKey}`,
-        },
-        body: testBody,
-      });
-
-      if (res.ok) {
+      const result = await aiModule.checkAiEndpoint({ apiKey: config.aiApiKey, apiBaseUrl: config.aiApiBaseUrl, model: config.aiModel });
+      if (result.status === 'ok') {
         console.log('AI endpoint check: reachable');
-      } else if (res.status === 401) {
+      } else if (result.status === 'unauthorized') {
         console.warn('AI endpoint check: unauthorized (401). Проверьте DEEPSEEK_API_KEY / AI_API_KEY и AI_API_BASE_URL. Не публикуйте ключи.');
       } else {
-        console.warn(`AI endpoint check: ${res.status} ${res.statusText}`);
+        console.warn('AI endpoint check:', result);
       }
     } catch (err) {
       console.warn('AI endpoint check failed:', err?.message || err);
