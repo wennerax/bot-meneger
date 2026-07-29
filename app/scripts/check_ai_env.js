@@ -1,0 +1,10 @@
+const { loadConfig } = require('../config');
+const c = loadConfig();
+const hasConfigKey = !!c.aiApiKey;
+const envDeepseek = !!process.env.DEEPSEEK_API_KEY;
+const envAi = !!process.env.AI_API_KEY;
+const source = envDeepseek ? 'DEEPSEEK_API_KEY' : (envAi ? 'AI_API_KEY' : 'none');
+console.log('ai key present in config:', hasConfigKey);
+console.log('env DEEPSEEK_API_KEY present:', envDeepseek);
+console.log('env AI_API_KEY present:', envAi);
+console.log('detected source (if any):', source);

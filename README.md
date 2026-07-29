@@ -102,6 +102,31 @@ DEEPSEEK_API_BASE_URL=https://api.deepseek.example/v1
 
 - Никогда не записывайте ключи прямо в код или коммиты. Если вы случайно добавили ключ в репозиторий, удалите его из истории и регенерируйте ключ у провайдера.
 
+### Проверка AI endpoint (локально)
+
+Если вы хотите быстро проверить, корректно ли настроен ключ и endpoint, используйте один из примеров ниже (не публикуйте ключ публично).
+
+curl (bash/unix):
+
+```bash
+curl -s -X POST "${DEEPSEEK_API_BASE_URL:-https://api.deepseek.com}/chat/completions" \
+	-H "Authorization: Bearer $DEEPSEEK_API_KEY" \
+	-H "Content-Type: application/json" \
+	-d '{"model":"deepseek","messages":[{"role":"user","content":"ping"}]}' | jq .
+```
+
+PowerShell (Windows):
+
+```powershell
+$body = @{ model='deepseek'; messages=@(@{ role='user'; content='ping' }) } | ConvertTo-Json -Depth 5
+Invoke-RestMethod -Uri ($env:DEEPSEEK_API_BASE_URL -or 'https://api.deepseek.com') -Method POST -Headers @{ Authorization = "Bearer $env:DEEPSEEK_API_KEY"; 'Content-Type' = 'application/json' } -Body $body
+```
+
+Ожидаемые результаты:
+- Успех (200/201): endpoint работает.
+- 401 Unauthorized: ключ неверный/отозван — сгенерируйте новый ключ в панели DeepSeek и обновите `.env`.
+- Другие коды/ошибки: проверьте `DEEPSEEK_API_BASE_URL` и формат запроса.
+
 
 ## Структура
 
