@@ -106,6 +106,26 @@ function buildPunishmentListMessage(kind, punishments, page, pageSize = 10) {
   return `${title} (страница ${safePage}/${totalPages})\n${lines.join('\n')}`;
 }
 
+function buildBotAdminListMessage(primaryAdminId, auxiliaryAdminIds = []) {
+  const primaryLabel = primaryAdminId === null || primaryAdminId === undefined ? 'нет' : `User ${primaryAdminId}`;
+  const auxiliaryLabels = Array.isArray(auxiliaryAdminIds) ? auxiliaryAdminIds : [];
+  const lines = [
+    '🤖 Администраторы бота',
+    `Главный администратор: ${primaryLabel}`,
+  ];
+
+  if (auxiliaryLabels.length) {
+    lines.push('Вспомогательные администраторы:');
+    auxiliaryLabels.forEach((label, index) => {
+      lines.push(`${index + 1}. ${label}`);
+    });
+  } else {
+    lines.push('Вспомогательные администраторы: нет');
+  }
+
+  return lines.join('\n');
+}
+
 function createBot() {
   const config = loadConfig();
   const bot = new Telegraf(config.botToken || '');
@@ -307,6 +327,7 @@ function createBot() {
       '/unban, !разбан - разблокировать пользователя',
       '/banlist, !баны [страница] - список активных банов',
       '/mutelist, !муты [страница] - список активных мутов',
+      '/admins, !админы - список администраторов бота',
       '/addbotadmin, !добавить админа - назначить админа бота (ответом на сообщение)',
       '/stats, !статистика - личная статистика пользователя',
       '/top, !топ - топ пользователей по сообщениям в группе',
@@ -439,6 +460,36 @@ function createBot() {
       : database.getActivePunishments(ctx.chat.id).filter((item) => item.action === 'ban');
 
     ctx.reply(buildPunishmentListMessage(kind, punishments, page, 10));
+  }
+
+  function listBotAdminsCommand(ctx) {
+    ensureGroup(ctx);
+    const primaryAdminId = database.getPrimaryBotAdmin(ctx.chat.id);
+    const auxiliaryAdminIds = database.getAuxiliaryBotAdmins(ctx.chat.id);
+    const labels = auxiliaryAdminIds.map((userId) => {
+      const profile = database.getUserProfile(ctx.chat.id, userId);
+      if (profile?.displayName) {
+        return `${profile.displayName} (${userId})`;
+      }
+      if (profile?.username) {
+        return `${profile.username} (${userId})`;
+      }
+      return `User ${userId}`;
+    });
+    const primaryLabel = primaryAdminId === null || primaryAdminId === undefined
+      ? 'нет'
+      : (() => {
+          const profile = database.getUserProfile(ctx.chat.id, primaryAdminId);
+          if (profile?.displayName) {
+            return `${profile.displayName} (${primaryAdminId})`;
+          }
+          if (profile?.username) {
+            return `${profile.username} (${primaryAdminId})`;
+          }
+          return `User ${primaryAdminId}`;
+        })();
+
+    ctx.reply(buildBotAdminListMessage(primaryAdminId, labels));
   }
 
   function rulesCommand(ctx) {
@@ -764,6 +815,9 @@ function createBot() {
       case 'муты':
         listPunishmentsCommand(ctx, 'mute', args);
         return true;
+      case 'админы':
+        listBotAdminsCommand(ctx);
+        return true;
       case 'обнять':
         await roleplayCommand(ctx, args, 'hug');
         return true;
@@ -861,6 +915,10 @@ function createBot() {
   });
 
   bot.command(['top', 'топ'], topCommand);
+
+  bot.command(['admins', 'админы'], (ctx) => {
+    listBotAdminsCommand(ctx);
+  });
 
   bot.command(['banlist', 'баны'], (ctx) => {
     const args = ctx.message.text.replace(/^\/(?:banlist|баны)\s*/i, '');
@@ -1057,5 +1115,6 @@ module.exports = {
   buildFunReply,
   parsePageNumber,
   buildPunishmentListMessage,
+  buildBotAdminListMessage,
   startBot,
 };

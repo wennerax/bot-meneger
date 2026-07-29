@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parsePunishmentDetails, buildPunishmentNotification, buildFunReply, parsePageNumber, buildPunishmentListMessage } = require('../app/bot');
+const { parsePunishmentDetails, buildPunishmentNotification, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage } = require('../app/bot');
 
 test('parsePunishmentDetails extracts duration and reason', () => {
   const result = parsePunishmentDetails('1d реклама', false);
@@ -52,4 +52,12 @@ test('buildPunishmentListMessage paginates active bans and mutes', () => {
   assert.match(pageOne, /1\. User 1/);
   assert.match(pageTwo, /Муты \(страница 2\/3\)/);
   assert.match(pageTwo, /6\. User 6/);
+});
+
+test('buildBotAdminListMessage separates primary and auxiliary admins', () => {
+  const message = buildBotAdminListMessage(1001, ['1002', '1003']);
+
+  assert.match(message, /Главный администратор/);
+  assert.match(message, /Вспомогательные администраторы/);
+  assert.match(message, /1002/);
 });

@@ -133,6 +133,19 @@ class Database {
     return this.isPrimaryBotAdmin(chatId, user) || Boolean(this.data.botAdmins[id]?.includes(user));
   }
 
+  getPrimaryBotAdmin(chatId) {
+    const id = Number(chatId);
+    return this.data.groups[id]?.ownerId !== undefined && this.data.groups[id]?.ownerId !== null
+      ? Number(this.data.groups[id].ownerId)
+      : null;
+  }
+
+  getAuxiliaryBotAdmins(chatId) {
+    const id = Number(chatId);
+    const primaryAdminId = this.getPrimaryBotAdmin(id);
+    return (this.data.botAdmins[id] || []).filter((userId) => Number(userId) !== Number(primaryAdminId));
+  }
+
   getBotAdmins(chatId) {
     const id = Number(chatId);
     const ownerId = this.data.groups[id]?.ownerId;
