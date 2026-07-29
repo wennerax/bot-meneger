@@ -33,6 +33,25 @@ function parsePunishmentDetails(args, hasReply) {
   return { durationHours, reason };
 }
 
+function formatDurationLabel(durationHours) {
+  if (durationHours === null || durationHours === undefined) {
+    return 'без срока';
+  }
+  if (durationHours < 1) {
+    return `${Math.round(durationHours * 60)}м`;
+  }
+  if (durationHours < 24) {
+    return `${Math.round(durationHours)}ч`;
+  }
+  return `${Math.round(durationHours / 24)}д`;
+}
+
+function buildPunishmentNotification(action, chatTitle, reason, durationHours) {
+  const actionName = action === 'ban' ? 'заблокирован(а)' : action === 'mute' ? 'ограничен(а)' : 'наказан(а)';
+  const durationLabel = formatDurationLabel(durationHours);
+  return `Вы были ${actionName} в чате "${chatTitle}". Причина: ${reason}. Срок: ${durationLabel}.`;
+}
+
 function createBot() {
   const config = loadConfig();
   const bot = new Telegraf(config.botToken || '');
@@ -300,7 +319,7 @@ function createBot() {
     }
 
     const details = parsePunishmentDetails(targetData.remainingArgs, !!ctx.message.reply_to_message);
-    const untilDate = details.durationHours ? Math.floor(Date.now() / 1000) + Math.round(details.durationHours * 3600) : null;
+    const untilDate = details.durationHours ? Math.floor(Date.now() / 1000) + Math.round(details.durationHours * 3600) : undefined;
 
     try {
       await ctx.telegram.restrictChatMember(ctx.chat.id, targetData.target.id, {
@@ -319,8 +338,19 @@ function createBot() {
       return;
     }
 
-    database.addPunishment(ctx.chat.id, targetData.target.id, 'mute', details.reason, untilDate);
-    ctx.reply(`Пользователь ${targetData.target.first_name || targetData.target.username || targetData.target.id} ограничен. Причина: ${details.reason}`);
+    database.addPunishment(ctx.chat.id, targetData.target.id, 'mute', details.reason, untilDate || null);
+    const targetLabel = getMentionText(targetData.target);
+    const durationLabel = formatDurationLabel(details.durationHours);
+    ctx.reply(`🔒 ${targetLabel} получил mute на ${durationLabel}. Причина: ${details.reason}`);
+
+    try {
+      await ctx.telegram.sendMessage(
+        targetData.target.id,
+        buildPunishmentNotification('mute', ctx.chat.title || String(ctx.chat.id), details.reason, details.durationHours)
+      );
+    } catch (error) {
+      // ignore private message failures due to privacy settings
+    }
   }
 
   async function unmuteCommand(ctx) {
@@ -368,7 +398,7 @@ function createBot() {
     }
 
     const details = parsePunishmentDetails(targetData.remainingArgs, !!ctx.message.reply_to_message);
-    const untilDate = details.durationHours ? Math.floor(Date.now() / 1000) + Math.round(details.durationHours * 3600) : null;
+    const untilDate = details.durationHours ? Math.floor(Date.now() / 1000) + Math.round(details.durationHours * 3600) : undefined;
 
     try {
       await ctx.telegram.banChatMember(ctx.chat.id, targetData.target.id, untilDate);
@@ -377,8 +407,19 @@ function createBot() {
       return;
     }
 
-    database.addPunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, untilDate);
-    ctx.reply(`Пользователь ${targetData.target.first_name || targetData.target.username || targetData.target.id} заблокирован. Причина: ${details.reason}`);
+    database.addPunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, untilDate || null);
+    const targetLabel = getMentionText(targetData.target);
+    const durationLabel = formatDurationLabel(details.durationHours);
+    ctx.reply(`⛔ ${targetLabel} получил ban на ${durationLabel}. Причина: ${details.reason}`);
+
+    try {
+      await ctx.telegram.sendMessage(
+        targetData.target.id,
+        buildPunishmentNotification('ban', ctx.chat.title || String(ctx.chat.id), details.reason, details.durationHours)
+      );
+    } catch (error) {
+      // ignore private message failures due to privacy settings
+    }
   }
 
   async function unbanCommand(ctx) {
@@ -808,4 +849,4 @@ function startBot() {
   });
 }
 
-module.exports = { createBot, parsePunishmentDetails, startBot };
+module.exports = { createBot, parsePunishmentDetails, buildPunishmentNotification, startBot };
