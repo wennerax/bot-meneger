@@ -74,6 +74,38 @@ function buildFunReply(kind) {
   return 'Пока что нет такой игры.';
 }
 
+function parsePageNumber(input = '') {
+  const trimmed = String(input || '').trim();
+  if (!trimmed) {
+    return 1;
+  }
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function buildPunishmentListMessage(kind, punishments, page, pageSize = 10) {
+  const title = kind === 'mute' ? 'Муты' : 'Баны';
+  const safePunishments = Array.isArray(punishments) ? punishments : [];
+  const totalPages = Math.max(1, Math.ceil(safePunishments.length / pageSize));
+  const safePage = Math.min(Math.max(page, 1), totalPages);
+  const start = (safePage - 1) * pageSize;
+  const end = start + pageSize;
+  const pageItems = safePunishments.slice(start, end);
+
+  if (!pageItems.length) {
+    return `${title} (страница ${safePage}/${totalPages})\nПока нет активных записей.`;
+  }
+
+  const lines = pageItems.map((item, index) => {
+    const userLabel = item.userId ? `User ${item.userId}` : 'Неизвестный пользователь';
+    const reason = item.reason ? ` — ${item.reason}` : '';
+    const untilLabel = item.untilAt ? ` — до ${new Date(item.untilAt * 1000).toLocaleString('ru-RU')}` : '';
+    return `${start + index + 1}. ${userLabel}${reason}${untilLabel}`;
+  });
+
+  return `${title} (страница ${safePage}/${totalPages})\n${lines.join('\n')}`;
+}
+
 function createBot() {
   const config = loadConfig();
   const bot = new Telegraf(config.botToken || '');
@@ -273,6 +305,8 @@ function createBot() {
       '/unmute, !размут - снять ограничение',
       '/ban, !бан <время> <причина> - заблокировать пользователя',
       '/unban, !разбан - разблокировать пользователя',
+      '/banlist, !баны [страница] - список активных банов',
+      '/mutelist, !муты [страница] - список активных мутов',
       '/addbotadmin, !добавить админа - назначить админа бота (ответом на сообщение)',
       '/stats, !статистика - личная статистика пользователя',
       '/top, !топ - топ пользователей по сообщениям в группе',
@@ -390,6 +424,21 @@ function createBot() {
     }
     const lines = top.map((item, index) => `${index + 1}. ${item.displayName || item.userId} — ${item.messageCount} сообщений`);
     ctx.reply(`🏆 Топ по сообщениям в этой группе:\n${lines.join('\n')}`);
+  }
+
+  function listPunishmentsCommand(ctx, kind, args = '') {
+    ensureGroup(ctx);
+    if (!isBotAdmin(ctx)) {
+      ctx.reply('Эта команда доступна только администраторам.');
+      return;
+    }
+
+    const page = parsePageNumber(args);
+    const punishments = kind === 'mute'
+      ? database.getActivePunishments(ctx.chat.id).filter((item) => item.action === 'mute')
+      : database.getActivePunishments(ctx.chat.id).filter((item) => item.action === 'ban');
+
+    ctx.reply(buildPunishmentListMessage(kind, punishments, page, 10));
   }
 
   function rulesCommand(ctx) {
@@ -709,6 +758,12 @@ function createBot() {
       case 'топ':
         topCommand(ctx);
         return true;
+      case 'баны':
+        listPunishmentsCommand(ctx, 'ban', args);
+        return true;
+      case 'муты':
+        listPunishmentsCommand(ctx, 'mute', args);
+        return true;
       case 'обнять':
         await roleplayCommand(ctx, args, 'hug');
         return true;
@@ -806,6 +861,16 @@ function createBot() {
   });
 
   bot.command(['top', 'топ'], topCommand);
+
+  bot.command(['banlist', 'баны'], (ctx) => {
+    const args = ctx.message.text.replace(/^\/(?:banlist|баны)\s*/i, '');
+    listPunishmentsCommand(ctx, 'ban', args);
+  });
+
+  bot.command(['mutelist', 'муты'], (ctx) => {
+    const args = ctx.message.text.replace(/^\/(?:mutelist|муты)\s*/i, '');
+    listPunishmentsCommand(ctx, 'mute', args);
+  });
 
   bot.on('my_chat_member', async (ctx) => {
     const newStatus = ctx.update.my_chat_member.new_chat_member.status;
@@ -985,4 +1050,12 @@ function startBot() {
   });
 }
 
-module.exports = { createBot, parsePunishmentDetails, buildPunishmentNotification, buildFunReply, startBot };
+module.exports = {
+  createBot,
+  parsePunishmentDetails,
+  buildPunishmentNotification,
+  buildFunReply,
+  parsePageNumber,
+  buildPunishmentListMessage,
+  startBot,
+};
