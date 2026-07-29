@@ -252,7 +252,7 @@ function createBot() {
       '/ban, !бан <время> <причина> - заблокировать пользователя',
       '/unban, !разбан - разблокировать пользователя',
       '/addbotadmin, !добавить_админа - назначить админа бота (ответом на сообщение)',
-      '/stats, !статистика - статистика пользователей',
+      '/stats, !статистика - личная статистика пользователя',
       '/top, !топ - топ пользователей по сообщениям в группе',
       '',
       '🎉 РАЗВЛЕЧЕНИЯ',
@@ -313,13 +313,36 @@ function createBot() {
     return targetData?.target || null;
   }
 
-  function statsCommand(ctx) {
+  async function statsCommand(ctx, args) {
     ensureGroup(ctx);
-    if (!isBotAdmin(ctx)) {
-      ctx.reply('Команда доступна только администраторам.');
-      return;
+
+    let targetUser = ctx.message.reply_to_message?.from || ctx.from;
+    if (args && args.trim()) {
+      const targetData = await resolveCommandTarget(ctx, args, '/stats @username');
+      if (!targetData) {
+        return;
+      }
+      targetUser = targetData.target;
     }
-    ctx.reply(`Зарегистрировано пользователей: ${userService.count}`);
+
+    const profile = database.getUserProfile(ctx.chat.id, targetUser.id);
+    const username = profile.username || getMentionText(targetUser);
+    const punishments = profile.punishments.length
+      ? profile.punishments.map((item) => `${item.action}${item.reason ? `: ${item.reason}` : ''}`).join(', ')
+      : 'нет';
+    const description = profile.description ? profile.description : 'нет';
+    const topLabel = profile.topPosition ? `${profile.topPosition} место` : 'не в топе';
+    const lastSeenLabel = profile.lastSeenAt ? new Date(profile.lastSeenAt).toLocaleString('ru-RU') : 'неизвестно';
+
+    ctx.reply([
+      `📊 Анкета пользователя ${username}`,
+      `Имя: ${profile.displayName || targetUser.first_name || targetUser.username || targetUser.id}`,
+      `Описание: ${description}`,
+      `Наказания: ${punishments}`,
+      `Сообщений: ${profile.messageCount}`,
+      `Место в топе: ${topLabel}`,
+      `Последний вход: ${lastSeenLabel}`,
+    ].join('\n'));
   }
 
   function topCommand(ctx) {
@@ -668,13 +691,9 @@ function createBot() {
     ctx.reply(`${ctx.from.first_name || 'Пользователь'}, ${getFunnyDescription()}`);
   });
 
-  bot.command(['stats', 'статистика'], (ctx) => {
-    ensureGroup(ctx);
-    if (!isBotAdmin(ctx)) {
-      ctx.reply('Команда доступна только администраторам.');
-      return;
-    }
-    ctx.reply(`Зарегистрировано пользователей: ${userService.count}`);
+  bot.command(['stats', 'статистика'], async (ctx) => {
+    const args = ctx.message.text.replace(/^\/(?:stats|статистика)\s*/i, '');
+    await statsCommand(ctx, args);
   });
 
   bot.command(['rules', 'правила'], (ctx) => {
@@ -810,6 +829,18 @@ function createBot() {
     }
 
     if (text.startsWith('/')) {
+      return;
+    }
+
+    const descriptionMatch = text.match(/^(\+описание|\+description)(?:\s+(.+))?$/i);
+    if (descriptionMatch) {
+      const description = (descriptionMatch[2] || '').trim();
+      if (!description) {
+        ctx.reply('Использование: +описание текст или +description text');
+        return;
+      }
+      database.setUserDescription(ctx.chat.id, ctx.from.id, description);
+      ctx.reply('✅ Описание добавлено в вашу анкету.');
       return;
     }
 

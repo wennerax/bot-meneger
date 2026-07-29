@@ -73,3 +73,27 @@ test('active punishments persist and can be removed manually', () => {
 
   db.close();
 });
+
+test('profile descriptions and stats are stored per chat user', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-meneger-'));
+  const db = new Database(path.join(dir, 'bot.json'));
+
+  db.ensureGroup(500, 'Stats', 1);
+  db.recordMessage(500, 2, 'Alice', 'alice');
+  db.recordMessage(500, 2, 'Alice', 'alice');
+  db.recordMessage(500, 3, 'Bob', 'bob');
+  db.addPunishment(500, 2, 'warn', 'спам', null);
+  db.setUserDescription(500, 2, 'Люблю музыку');
+
+  const profile = db.getUserProfile(500, 2);
+
+  assert.equal(profile.displayName, 'Alice');
+  assert.equal(profile.username, '@alice');
+  assert.equal(profile.messageCount, 2);
+  assert.equal(profile.topPosition, 1);
+  assert.equal(profile.description, 'Люблю музыку');
+  assert.equal(profile.punishments.length, 1);
+  assert.equal(profile.punishments[0].action, 'warn');
+
+  db.close();
+});

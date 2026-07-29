@@ -33,6 +33,7 @@ class Database {
         blacklist: parsed.blacklist || [],
         messageCounts: parsed.messageCounts || {},
         groupUsers: parsed.groupUsers || {},
+        userDescriptions: parsed.userDescriptions || {},
       };
     } catch (error) {
       return this._emptyState();
@@ -49,6 +50,7 @@ class Database {
       blacklist: [],
       messageCounts: {},
       groupUsers: {},
+      userDescriptions: {},
     };
   }
 
@@ -183,6 +185,52 @@ class Database {
     }
 
     return { userId: match.userId, displayName: match.displayName };
+  }
+
+  setUserDescription(chatId, userId, description) {
+    const id = Number(chatId);
+    const user = Number(userId);
+    if (!this.data.userDescriptions[id]) {
+      this.data.userDescriptions[id] = {};
+    }
+
+    const cleaned = String(description || '').trim();
+    if (!cleaned) {
+      this.data.userDescriptions[id][user] = '';
+    } else {
+      this.data.userDescriptions[id][user] = cleaned;
+    }
+
+    this._save();
+  }
+
+  getUserProfile(chatId, userId) {
+    const id = Number(chatId);
+    const user = Number(userId);
+    const userData = this.data.groupUsers[id]?.[user] || null;
+    const counts = this.data.messageCounts[id]?.[user] || null;
+    const punishments = this.data.punishments.filter((item) => item.chatId === id && item.userId === user);
+    const activePunishments = this.data.activePunishments.filter((item) => item.chatId === id && item.userId === user);
+    const sorted = Object.entries(this.data.messageCounts[id] || {})
+      .map(([entryUserId, item]) => ({
+        userId: Number(entryUserId),
+        messageCount: item.messageCount,
+      }))
+      .sort((left, right) => right.messageCount - left.messageCount);
+
+    const topPosition = sorted.findIndex((item) => item.userId === user) + 1;
+    const messageCount = counts?.messageCount || 0;
+
+    return {
+      userId: user,
+      displayName: userData?.displayName || null,
+      username: userData?.username ? `@${userData.username}` : null,
+      description: this.data.userDescriptions[id]?.[user] || null,
+      messageCount,
+      topPosition: topPosition > 0 ? topPosition : null,
+      punishments: [...punishments, ...activePunishments],
+      lastSeenAt: userData?.lastSeenAt || null,
+    };
   }
 
   topMessages(chatId, limit = 10) {
