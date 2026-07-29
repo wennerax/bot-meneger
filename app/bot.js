@@ -52,6 +52,28 @@ function buildPunishmentNotification(action, chatTitle, reason, durationHours) {
   return `Вы были ${actionName} в чате "${chatTitle}". Причина: ${reason}. Срок: ${durationLabel}.`;
 }
 
+function buildFunReply(kind) {
+  if (kind === 'coin') {
+    return Math.random() > 0.5 ? 'Орёл' : 'Решка';
+  }
+  if (kind === 'dice') {
+    return String(Math.floor(Math.random() * 6) + 1);
+  }
+  if (kind === 'fate') {
+    const answers = ['Да', 'Нет', 'Возможно', 'Скорее да', 'Скорее нет', 'Никогда не угадаешь'];
+    return answers[Math.floor(Math.random() * answers.length)];
+  }
+  if (kind === 'compliment') {
+    const replies = ['у тебя очень приятная энергия', 'ты делаешь этот чат лучше', 'ты невероятно добрый человек', 'ты умеешь вдохновлять'];
+    return replies[Math.floor(Math.random() * replies.length)];
+  }
+  if (kind === 'insult') {
+    const replies = ['ты — источник вайба', 'ты удивительно милый человек', 'у тебя очень сильный характер', 'ты даже в шутку звучишь круто'];
+    return replies[Math.floor(Math.random() * replies.length)];
+  }
+  return 'Пока что нет такой игры.';
+}
+
 function createBot() {
   const config = loadConfig();
   const bot = new Telegraf(config.botToken || '');
@@ -260,6 +282,11 @@ function createBot() {
       '/kiss @username, !поцеловать @username - поцеловать пользователя',
       '/slap @username, !шлепнуть @username - шлёпнуть пользователя',
       '/poke @username, !тыкнуть @username - ткнуть пользователя',
+      '/coin, !монетка - подбросить монетку',
+      '/dice, !кубик - бросить кубик',
+      '/fate, !вопрос - спросить судьбу',
+      '/compliment, !комплимент - получить комплимент',
+      '/insult, !похвала - получить приятную шутку',
       '',
       'Используйте русские команды с ! и английские с /',
     ].join('\n'));
@@ -275,6 +302,11 @@ function createBot() {
 
   function whoamiCommand(ctx) {
     ctx.reply(`${ctx.from.first_name || 'Пользователь'}, ${getFunnyDescription()}`);
+  }
+
+  function funCommand(ctx, kind) {
+    const reply = buildFunReply(kind);
+    ctx.reply(reply);
   }
 
   function sendRoleplayResponse(ctx, verb, target, emoji) {
@@ -689,6 +721,21 @@ function createBot() {
       case 'тыкнуть':
         await roleplayCommand(ctx, args, 'poke');
         return true;
+      case 'монетка':
+        funCommand(ctx, 'coin');
+        return true;
+      case 'кубик':
+        funCommand(ctx, 'dice');
+        return true;
+      case 'вопрос':
+        funCommand(ctx, 'fate');
+        return true;
+      case 'комплимент':
+        funCommand(ctx, 'compliment');
+        return true;
+      case 'похвала':
+        funCommand(ctx, 'insult');
+        return true;
       default:
         return false;
     }
@@ -736,6 +783,26 @@ function createBot() {
   bot.command(['poke', 'тыкнуть'], async (ctx) => {
     const args = ctx.message.text.replace(/^\/(?:poke|тыкнуть)\s*/i, '');
     await roleplayCommand(ctx, args, 'poke');
+  });
+
+  bot.command(['coin', 'монетка'], (ctx) => {
+    funCommand(ctx, 'coin');
+  });
+
+  bot.command(['dice', 'кубик'], (ctx) => {
+    funCommand(ctx, 'dice');
+  });
+
+  bot.command(['fate', 'вопрос'], (ctx) => {
+    funCommand(ctx, 'fate');
+  });
+
+  bot.command(['compliment', 'комплимент'], (ctx) => {
+    funCommand(ctx, 'compliment');
+  });
+
+  bot.command(['insult', 'похвала'], (ctx) => {
+    funCommand(ctx, 'insult');
   });
 
   bot.command(['top', 'топ'], topCommand);
@@ -918,4 +985,4 @@ function startBot() {
   });
 }
 
-module.exports = { createBot, parsePunishmentDetails, buildPunishmentNotification, startBot };
+module.exports = { createBot, parsePunishmentDetails, buildPunishmentNotification, buildFunReply, startBot };
