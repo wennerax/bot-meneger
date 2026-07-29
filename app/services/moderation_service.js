@@ -11,6 +11,8 @@ class ModerationService {
         greeting: 'Добро пожаловать в чат! Ознакомьтесь с правилами через /rules.',
         warnings: {},
         filters: {},
+        spamProtectionEnabled: false,
+        linkProtectionEnabled: false,
       });
     }
     return this.chats.get(id);
@@ -45,6 +47,30 @@ class ModerationService {
 
   resetWarnings(chatId, userId) {
     delete this._getChat(chatId).warnings[Number(userId)];
+  }
+
+  enableSpamProtection(chatId) {
+    this._getChat(chatId).spamProtectionEnabled = true;
+  }
+
+  disableSpamProtection(chatId) {
+    this._getChat(chatId).spamProtectionEnabled = false;
+  }
+
+  isSpamProtectionEnabled(chatId) {
+    return Boolean(this._getChat(chatId).spamProtectionEnabled);
+  }
+
+  enableLinkProtection(chatId) {
+    this._getChat(chatId).linkProtectionEnabled = true;
+  }
+
+  disableLinkProtection(chatId) {
+    this._getChat(chatId).linkProtectionEnabled = false;
+  }
+
+  isLinkProtectionEnabled(chatId) {
+    return Boolean(this._getChat(chatId).linkProtectionEnabled);
   }
 
   addFilter(chatId, keyword, response) {

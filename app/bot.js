@@ -133,6 +133,7 @@ function createBot() {
   const moderationService = new ModerationService();
   const database = new Database(config.databasePath);
   const punishmentTimers = new Map();
+  const spamActivity = new Map();
 
   function getPunishmentTimerKey(chatId, userId, action) {
     return `${chatId}:${userId}:${action}`;
@@ -240,6 +241,73 @@ function createBot() {
     database.ensureGroup(ctx.chat.id, ctx.chat.title || String(ctx.chat.id), ctx.chat?.owner_id || null);
   }
 
+  function isLinkMessage(text) {
+    return /(?:https?:\/\/|www\.)\S+/i.test(text) || /(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/\S*)?/i.test(text);
+  }
+
+  async function deleteMessageSafely(ctx, messageId) {
+    if (!messageId) {
+      return;
+    }
+    try {
+      await ctx.telegram.deleteMessage(ctx.chat.id, messageId);
+    } catch (error) {
+      // ignore missing permissions or already deleted messages
+    }
+  }
+
+  async function applyAutomaticMute(ctx, userId, durationHours, reason) {
+    const untilDate = Math.floor(Date.now() / 1000) + Math.round(durationHours * 3600);
+    try {
+      await ctx.telegram.restrictChatMember(ctx.chat.id, userId, buildMutePermissions(false), untilDate);
+    } catch (error) {
+      return;
+    }
+
+    database.addPunishment(ctx.chat.id, userId, 'mute', reason, untilDate || null);
+    database.addActivePunishment(ctx.chat.id, userId, 'mute', reason, untilDate || null);
+    schedulePunishmentExpiry({
+      chatId: ctx.chat.id,
+      userId,
+      action: 'mute',
+      untilAt: untilDate,
+    });
+
+    try {
+      await ctx.telegram.sendMessage(userId, buildPunishmentNotification('mute', ctx.chat.title || String(ctx.chat.id), reason, durationHours));
+    } catch (error) {
+      // ignore private message failures due to privacy settings
+    }
+  }
+
+  function trackSpamActivity(ctx) {
+    if (!isGroupChat(ctx)) {
+      return false;
+    }
+
+    const chatId = ctx.chat.id;
+    const userId = ctx.from?.id;
+    if (!userId) {
+      return false;
+    }
+
+    const now = Date.now();
+    const chatTracker = spamActivity.get(chatId) || new Map();
+    const userTracker = chatTracker.get(userId) || { messages: [] };
+    userTracker.messages = userTracker.messages.filter((item) => now - item.timestamp < 5000);
+    userTracker.messages.push({ messageId: ctx.message.message_id, timestamp: now });
+
+    if (userTracker.messages.length >= 5) {
+      chatTracker.set(userId, { messages: [] });
+      spamActivity.set(chatId, chatTracker);
+      return true;
+    }
+
+    chatTracker.set(userId, userTracker);
+    spamActivity.set(chatId, chatTracker);
+    return false;
+  }
+
   async function ensureGroupOwner(ctx) {
     const chatData = ctx.chat || ctx.update?.my_chat_member?.chat;
     if (!chatData) {
@@ -318,6 +386,10 @@ function createBot() {
       '/rules, !правила - показать правила чата',
       '/setrules, !установить правила <текст> - установить правила',
       '/setgreeting, !установить приветствие <текст> - установить приветствие',
+      '+антиспам - включить антиспам',
+      '-антиспам - выключить антиспам',
+      '+ссылки - включить антиссылки',
+      '-ссылки - выключить антиссылки',
       '/warn, !предупреждение - выдать предупреждение',
       '/warnings, !варны - показать варны пользователя',
       '/unwarn, !снять предупреждение - снять предупреждения',
@@ -1040,6 +1112,50 @@ function createBot() {
       return;
     }
 
+    if (text.startsWith('+антиспам') || text.startsWith('+antispam')) {
+      ensureGroup(ctx);
+      if (!isBotAdmin(ctx)) {
+        ctx.reply('Эта команда доступна только администраторам.');
+        return;
+      }
+      moderationService.enableSpamProtection(ctx.chat.id);
+      ctx.reply('✅ Антиспам включён.');
+      return;
+    }
+
+    if (text.startsWith('-антиспам')) {
+      ensureGroup(ctx);
+      if (!isBotAdmin(ctx)) {
+        ctx.reply('Эта команда доступна только администраторам.');
+        return;
+      }
+      moderationService.disableSpamProtection(ctx.chat.id);
+      ctx.reply('✅ Антиспам выключен.');
+      return;
+    }
+
+    if (text.startsWith('+ссылки') || text.startsWith('+links')) {
+      ensureGroup(ctx);
+      if (!isBotAdmin(ctx)) {
+        ctx.reply('Эта команда доступна только администраторам.');
+        return;
+      }
+      moderationService.enableLinkProtection(ctx.chat.id);
+      ctx.reply('✅ Антиссылки включены.');
+      return;
+    }
+
+    if (text.startsWith('-ссылки') || text.startsWith('-links')) {
+      ensureGroup(ctx);
+      if (!isBotAdmin(ctx)) {
+        ctx.reply('Эта команда доступна только администраторам.');
+        return;
+      }
+      moderationService.disableLinkProtection(ctx.chat.id);
+      ctx.reply('✅ Антиссылки выключены.');
+      return;
+    }
+
     const descriptionMatch = text.match(/^(\+описание|\+description)(?:\s+(.+))?$/i);
     if (descriptionMatch) {
       const description = (descriptionMatch[2] || '').trim();
@@ -1082,6 +1198,24 @@ function createBot() {
       }
       moderationService.setGreeting(ctx.chat.id, newGreeting.trim());
       ctx.reply('✅ Приветствие чата обновлено.');
+      return;
+    }
+
+    if (isGroupChat(ctx) && moderationService.isSpamProtectionEnabled(ctx.chat.id)) {
+      const shouldPunish = trackSpamActivity(ctx);
+      if (shouldPunish) {
+        const recentMessages = spamActivity.get(ctx.chat.id)?.get(ctx.from.id)?.messages || [];
+        if (recentMessages.length) {
+          await Promise.all(recentMessages.map((item) => deleteMessageSafely(ctx, item.messageId)));
+        }
+        await applyAutomaticMute(ctx, ctx.from.id, 24, 'Спам');
+        return;
+      }
+    }
+
+    if (isGroupChat(ctx) && moderationService.isLinkProtectionEnabled(ctx.chat.id) && isLinkMessage(text)) {
+      await deleteMessageSafely(ctx, ctx.message.message_id);
+      await applyAutomaticMute(ctx, ctx.from.id, 24 * 7, 'Ссылка');
       return;
     }
 

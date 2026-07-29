@@ -22,3 +22,22 @@ test('rules and filters are stored per chat and can be removed', () => {
   assert.equal(service.findFilterResponse(200, 'привет'), null);
   assert.equal(service.removeFilter(100, 'SPAM'), false);
 });
+
+test('spam and link protection can be toggled per chat', () => {
+  const service = new ModerationService();
+
+  assert.equal(service.isSpamProtectionEnabled(100), false);
+  assert.equal(service.isLinkProtectionEnabled(100), false);
+
+  service.enableSpamProtection(100);
+  service.enableLinkProtection(100);
+
+  assert.equal(service.isSpamProtectionEnabled(100), true);
+  assert.equal(service.isLinkProtectionEnabled(100), true);
+
+  service.disableSpamProtection(100);
+  service.disableLinkProtection(100);
+
+  assert.equal(service.isSpamProtectionEnabled(100), false);
+  assert.equal(service.isLinkProtectionEnabled(100), false);
+});
