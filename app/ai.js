@@ -1,28 +1,5 @@
 const fetch = global.fetch || require('node-fetch');
 
-function buildLocalAiReply(prompt) {
-  const trimmed = String(prompt || '').trim();
-  if (!trimmed) {
-    return 'Напиши вопрос, и я постараюсь помочь. Это локальный помощник без API-ключей.';
-  }
-
-  const lower = trimmed.toLowerCase();
-  if (lower.includes('привет') || lower.includes('hello') || lower.includes('hi')) {
-    return 'Привет! Я локальный помощник бота без API-ключей. Чем могу помочь?';
-  }
-  if (lower.includes('как дела') || lower.includes('how are you')) {
-    return 'У меня всё отлично, спасибо! Готов помочь с вопросом или шуткой.';
-  }
-  if (lower.includes('шутка') || lower.includes('joke')) {
-    return 'Конечно: почему программисты любят темноту? Потому что свет — это для слабаков.';
-  }
-  if (lower.includes('команда') || lower.includes('command')) {
-    return 'Могу подсказать, как использовать бота или придумать ответ для чата.';
-  }
-
-  return `Я локальный помощник без ключей. Ты спросил: "${trimmed}". Могу ответить кратко, с шуткой или дать совет.`;
-}
-
 function buildAiRequestPayload(prompt, model) {
   return {
     model: model || 'deepseek',
@@ -110,7 +87,6 @@ async function checkAiEndpoint(options = {}) {
 }
 
 module.exports = {
-  buildLocalAiReply,
   buildAiRequestPayload,
   requestAi,
   checkAiEndpoint,

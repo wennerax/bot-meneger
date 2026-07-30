@@ -441,33 +441,43 @@ function createBot() {
   async function aiCommand(ctx, prompt) {
     const trimmedPrompt = String(prompt || '').trim();
     if (!trimmedPrompt) {
-      ctx.reply('Напиши запрос после /ai.');
+      ctx.reply('Напиши запрос после /ai. Например: /ai расскажи анекдот.');
       return;
     }
 
     if (!config.aiApiKey) {
-      ctx.reply(ai.buildLocalAiReply(trimmedPrompt));
+      ctx.reply('AI недоступен: DEEPSEEK_API_KEY или AI_API_KEY должен быть задан в файле .env.');
       return;
     }
 
     try {
-      const content = await ai.requestAi(trimmedPrompt, { apiKey: config.aiApiKey, apiBaseUrl: config.aiApiBaseUrl, model: config.aiModel });
+      const content = await ai.requestAi(trimmedPrompt, {
+        apiKey: config.aiApiKey,
+        apiBaseUrl: config.aiApiBaseUrl,
+        model: config.aiModel,
+      });
+
       if (content) {
         ctx.reply(content);
         return;
       }
+
+      ctx.reply('AI вернул пустой ответ. Попробуйте сформулировать запрос иначе.');
     } catch (error) {
-      // Log error safely; never include the API key or other secrets in logs.
       console.error('AI request failed:', error?.message || error);
 
-      // If the error contains status, provide a helpful message for 401
       if (error && error.status === 401) {
-        ctx.reply('AI error: unauthorized (401). Проверьте, что DEEPSEEK_API_KEY / AI_API_KEY установлен и корректен, а AI_API_BASE_URL соответствует провайдеру. Не публикуйте ключи в чате.');
+        ctx.reply('AI error: unauthorized (401). Проверьте ключ в .env и AI_API_BASE_URL.');
         return;
       }
-    }
 
-    ctx.reply(ai.buildLocalAiReply(trimmedPrompt));
+      if (error && error.message === 'no_api_key') {
+        ctx.reply('AI ключ не найден. Установите DEEPSEEK_API_KEY или AI_API_KEY в .env.');
+        return;
+      }
+
+      ctx.reply('AI error: запрос не выполнен. Проверьте ключ и настройки AI в .env.');
+    }
   }
 
   function sendRoleplayResponse(ctx, verb, target, emoji) {

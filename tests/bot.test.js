@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { parsePunishmentDetails, buildPunishmentNotification, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage } = require('../app/bot');
-const { buildLocalAiReply, buildAiRequestPayload } = require('../app/ai');
+const { buildAiRequestPayload } = require('../app/ai');
 
 test('parsePunishmentDetails extracts duration and reason', () => {
   const result = parsePunishmentDetails('1d реклама', false);
@@ -61,12 +61,6 @@ test('buildBotAdminListMessage separates primary and auxiliary admins', () => {
   assert.match(message, /Главный администратор/);
   assert.match(message, /Вспомогательные администраторы/);
   assert.match(message, /1002/);
-});
-
-test('buildLocalAiReply returns a helpful offline answer', () => {
-  const reply = buildLocalAiReply('привет');
-
-  assert.match(reply, /привет|локальный помощник/i);
 });
 
 test('buildAiRequestPayload builds an OpenAI-compatible request body', () => {
