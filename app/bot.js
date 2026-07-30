@@ -239,6 +239,17 @@ function createBot() {
     return type === 'group' || type === 'supergroup';
   }
 
+  function isPrivateChat(ctx) {
+    return ctx.chat?.type === 'private';
+  }
+
+  function isKnownCommandText(text) {
+    const slashCommand = /^\/(start|help|id|about|whoami|stats|rules|hug|kiss|slap|poke|coin|dice|fate|compliment|insult|top|admins|banlist|mutelist|setrules|warn|warnings|unwarn|mute|unmute|ban|unban|setgreeting|addbotadmin|ai)(\s|$)/i;
+    const bangCommand = /^!(начало|помощь|айди|информация|кто\s*я|статистика|правила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|похвала)(\s|$)/i;
+    const plusMinusCommand = /^(\+антиспам|\+antispam|\-антиспам|\-antispam|\+ссылки|\+links|\-ссылки|\-links|\+описание|\+description|\+rules|\+правила|\+greeting|\+приветствие)(\s|$)/i;
+    return slashCommand.test(text) || bangCommand.test(text) || plusMinusCommand.test(text);
+  }
+
   function ensureGroup(ctx) {
     database.ensureGroup(ctx.chat.id, ctx.chat.title || String(ctx.chat.id), ctx.chat?.owner_id || null);
   }
@@ -437,6 +448,34 @@ function createBot() {
   function funCommand(ctx, kind) {
     const reply = buildFunReply(kind);
     ctx.reply(reply);
+  }
+
+  async function handlePrivateAIMessages(ctx, text) {
+    const prompt = `Пользователь пишет: "${text}". Отвечай как помощник, который помогает написать команду для бота и подсказывает, если текст не является корректной командой.`;
+    try {
+      const content = await ai.requestAi(prompt, {
+        apiKey: config.aiApiKey,
+        apiBaseUrl: config.aiApiBaseUrl,
+        model: config.aiModel,
+        weatherLocation: config.weatherLocation,
+      });
+      if (content) {
+        ctx.reply(content);
+      } else {
+        ctx.reply('Я получил ваш текст, но не смог сформировать ответ. Попробуйте переформулировать.');
+      }
+    } catch (error) {
+      console.error('AI request failed:', error?.message || error);
+      if (error && error.status === 401) {
+        ctx.reply('AI error: unauthorized (401). Проверьте ключ в .env и AI_API_BASE_URL.');
+        return;
+      }
+      if (error && error.message === 'no_api_key') {
+        ctx.reply('AI ключ не найден. Установите OPENROUTER_API_KEY или AI_API_KEY в .env.');
+        return;
+      }
+      ctx.reply('AI error: запрос не выполнен. Проверьте ключ и настройки AI в .env.');
+    }
   }
 
   async function aiCommand(ctx, prompt) {
@@ -1237,9 +1276,23 @@ function createBot() {
       if (await handleRussianCommand(ctx, text)) {
         return;
       }
+
+      if (isPrivateChat(ctx) && !isKnownCommandText(text)) {
+        await handlePrivateAIMessages(ctx, text);
+        return;
+      }
     }
 
     if (text.startsWith('/')) {
+      if (isPrivateChat(ctx) && !isKnownCommandText(text)) {
+        await handlePrivateAIMessages(ctx, text);
+        return;
+      }
+      return;
+    }
+
+    if (isPrivateChat(ctx) && !isKnownCommandText(text)) {
+      await handlePrivateAIMessages(ctx, text);
       return;
     }
 
@@ -1354,6 +1407,12 @@ function createBot() {
     const response = moderationService.findFilterResponse(ctx.chat.id, text);
     if (response) {
       ctx.reply(response);
+      return;
+    }
+
+    if (isPrivateChat(ctx)) {
+      await handlePrivateAIMessages(ctx, text);
+      return;
     }
   });
 
