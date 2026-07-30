@@ -43,13 +43,27 @@ function buildAiRequestPayload(prompt, model) {
   };
 }
 
+function buildAiUrl(apiBaseUrl) {
+  const url = String(apiBaseUrl || '').trim();
+  if (!url) {
+    return '';
+  }
+
+  const normalized = url.replace(/\/$/, '');
+  if (normalized.includes('/chat/completions')) {
+    return normalized;
+  }
+
+  return `${normalized}/chat/completions`;
+}
+
 async function requestAi(prompt, options = {}) {
   const { apiKey, apiBaseUrl, model } = options;
   if (!apiKey) {
     throw new Error('no_api_key');
   }
 
-  const url = `${String(apiBaseUrl || '').replace(/\/$/, '')}/chat/completions`;
+  const url = buildAiUrl(apiBaseUrl);
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -77,7 +91,7 @@ async function checkAiEndpoint(options = {}) {
   }
 
   try {
-    const url = `${String(apiBaseUrl || '').replace(/\/$/, '')}/chat/completions`;
+    const url = buildAiUrl(apiBaseUrl);
     const res = await fetch(url, {
       method: 'POST',
       headers: {
