@@ -1,4 +1,6 @@
 const { Telegraf } = require('telegraf');
+const PureImage = require('pureimage');
+const { PassThrough } = require('stream');
 const { loadConfig } = require('./config');
 const UserService = require('./services/user_service');
 const ModerationService = require('./services/moderation_service');
@@ -124,6 +126,126 @@ function buildBotAdminListMessage(primaryAdminId, auxiliaryAdminIds = []) {
   }
 
   return lines.join('\n');
+}
+
+async function buildActivityGraphBuffer(dailyCounts, username) {
+  const dates = Object.keys(dailyCounts || {}).sort();
+  if (!dates.length) {
+    return null;
+  }
+
+  const counts = dates.map((date) => Number(dailyCounts[date] || 0));
+  const width = 900;
+  const height = 450;
+  const padding = 60;
+  const chartHeight = height - padding * 2.2;
+  const chartWidth = width - padding * 2;
+
+  const img = PureImage.make(width, height);
+  const ctx = img.getContext('2d');
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = '#000000';
+  ctx.font = '24px serif';
+  ctx.fillText(`Активность ${username}`, padding, 36);
+
+  const maxCount = Math.max(...counts, 1);
+  const x0 = padding;
+  const y0 = height - padding;
+  const x1 = width - padding;
+  const y1 = padding + 20;
+
+  ctx.strokeStyle = '#333333';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  ctx.lineTo(x1, y0);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  ctx.lineTo(x0, y1);
+  ctx.stroke();
+
+  const rows = 5;
+  ctx.font = '16px serif';
+  ctx.fillStyle = '#444444';
+  for (let row = 0; row <= rows; row += 1) {
+    const y = y0 - (row * (chartHeight / rows));
+    const value = Math.round((maxCount * row) / rows);
+    ctx.strokeStyle = '#e0e0e0';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x0, y);
+    ctx.lineTo(x1, y);
+    ctx.stroke();
+
+    ctx.fillStyle = '#333333';
+    ctx.fillText(String(value), 10, y + 5);
+  }
+
+  const pointCount = dates.length;
+  const stepX = pointCount === 1 ? 0 : chartWidth / Math.max(pointCount - 1, 1);
+  const points = dates.map((date, index) => {
+    const x = x0 + index * stepX;
+    const y = y0 - (counts[index] / maxCount) * chartHeight;
+    return { x, y, date, value: counts[index] };
+  });
+
+  ctx.strokeStyle = '#1976d2';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  points.forEach((point, index) => {
+    if (index === 0) {
+      ctx.moveTo(point.x, point.y);
+    } else {
+      ctx.lineTo(point.x, point.y);
+    }
+  });
+  ctx.stroke();
+
+  ctx.fillStyle = 'rgba(25, 118, 210, 0.18)';
+  ctx.beginPath();
+  points.forEach((point, index) => {
+    if (index === 0) {
+      ctx.moveTo(point.x, point.y);
+    } else {
+      ctx.lineTo(point.x, point.y);
+    }
+  });
+  ctx.lineTo(points[points.length - 1].x, y0);
+  ctx.lineTo(points[0].x, y0);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = '#1976d2';
+  points.forEach((point) => {
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, 5, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  ctx.fillStyle = '#000000';
+  ctx.font = '14px serif';
+  const labelStep = Math.max(1, Math.ceil(pointCount / 6));
+  points.forEach((point, index) => {
+    if (index % labelStep === 0 || index === pointCount - 1) {
+      const label = point.date.slice(5);
+      ctx.fillText(label, point.x - 24, y0 + 24);
+    }
+  });
+
+  const stream = new PassThrough();
+  const chunks = [];
+  stream.on('data', (chunk) => chunks.push(chunk));
+  const pngPromise = new Promise((resolve, reject) => {
+    stream.on('end', () => resolve(Buffer.concat(chunks)));
+    stream.on('error', reject);
+  });
+
+  await PureImage.encodePNGToStream(img, stream);
+  stream.end();
+  return pngPromise;
 }
 
 const ai = require('./ai');
@@ -599,7 +721,7 @@ function createBot() {
     const topLabel = profile.topPosition ? `${profile.topPosition} место` : 'не в топе';
     const lastSeenLabel = profile.lastSeenAt ? new Date(profile.lastSeenAt).toLocaleString('ru-RU') : 'неизвестно';
 
-    ctx.reply([
+    const text = [
       `📊 Анкета пользователя ${username}`,
       `Имя: ${profile.displayName || targetUser.first_name || targetUser.username || targetUser.id}`,
       `Описание: ${description}`,
@@ -607,7 +729,15 @@ function createBot() {
       `Сообщений: ${profile.messageCount}`,
       `Место в топе: ${topLabel}`,
       `Последний вход: ${lastSeenLabel}`,
-    ].join('\n'));
+    ].join('\n');
+
+    const graphBuffer = await buildActivityGraphBuffer(profile.dailyCounts, username);
+    if (graphBuffer) {
+      await ctx.replyWithPhoto({ source: graphBuffer }, { caption: text });
+      return;
+    }
+
+    ctx.reply(text);
   }
 
   function topCommand(ctx) {
