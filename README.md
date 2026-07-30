@@ -82,12 +82,12 @@ AI_MODEL=gpt-4o-mini
 AI_API_BASE_URL=https://api.openai.com/v1
 ```
 
-Если вы используете DeepSeek AI, можно задать переменные с `DEEPSEEK_` префиксом в `.env`:
+Если вы используете OpenRouter AI, можно задать переменные с `OPENROUTER_` префиксом в `.env`:
 
 ```env
-DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-DEEPSEEK_MODEL=gpt-4o-mini
-DEEPSEEK_API_BASE_URL=https://api.deepseek.example/v1
+OPENROUTER_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+OPENROUTER_MODEL=gpt-4o-mini
+OPENROUTER_API_BASE_URL=https://api.openrouter.ai/v1
 ```
 
 - Никогда не записывайте ключи прямо в код или коммиты. Если вы случайно добавили ключ в репозиторий, удалите его из истории и регенерируйте ключ у провайдера.
@@ -99,23 +99,23 @@ DEEPSEEK_API_BASE_URL=https://api.deepseek.example/v1
 curl (bash/unix):
 
 ```bash
-curl -s -X POST "${DEEPSEEK_API_BASE_URL:-https://api.deepseek.com}/chat/completions" \
-	-H "Authorization: Bearer $DEEPSEEK_API_KEY" \
+curl -s -X POST "${OPENROUTER_API_BASE_URL:-https://api.openrouter.ai}/chat/completions" \
+	-H "Authorization: Bearer $OPENROUTER_API_KEY" \
 	-H "Content-Type: application/json" \
-	-d '{"model":"deepseek","messages":[{"role":"user","content":"ping"}]}' | jq .
+	-d '{"model":"openrouter","messages":[{"role":"user","content":"ping"}]}' | jq .
 ```
 
 PowerShell (Windows):
 
 ```powershell
-$body = @{ model='deepseek'; messages=@(@{ role='user'; content='ping' }) } | ConvertTo-Json -Depth 5
-Invoke-RestMethod -Uri ($env:DEEPSEEK_API_BASE_URL -or 'https://api.deepseek.com') -Method POST -Headers @{ Authorization = "Bearer $env:DEEPSEEK_API_KEY"; 'Content-Type' = 'application/json' } -Body $body
+$body = @{ model='openrouter'; messages=@(@{ role='user'; content='ping' }) } | ConvertTo-Json -Depth 5
+Invoke-RestMethod -Uri ($env:OPENROUTER_API_BASE_URL -or 'https://api.openrouter.ai') -Method POST -Headers @{ Authorization = "Bearer $env:OPENROUTER_API_KEY"; 'Content-Type' = 'application/json' } -Body $body
 ```
 
 Ожидаемые результаты:
 - Успех (200/201): endpoint работает.
-- 401 Unauthorized: ключ неверный/отозван — сгенерируйте новый ключ в панели DeepSeek и обновите `.env`.
-- Другие коды/ошибки: проверьте `DEEPSEEK_API_BASE_URL` и формат запроса.
+- 401 Unauthorized: ключ неверный/отозван — сгенерируйте новый ключ в панели OpenRouter и обновите `.env`.
+- Другие коды/ошибки: проверьте `OPENROUTER_API_BASE_URL` и формат запроса.
 
 
 ## Структура

@@ -446,7 +446,7 @@ function createBot() {
     }
 
     if (!config.aiApiKey) {
-      ctx.reply('AI недоступен: DEEPSEEK_API_KEY или AI_API_KEY должен быть задан в файле .env.');
+      ctx.reply('AI недоступен: OPENROUTER_API_KEY или AI_API_KEY должен быть задан в файле .env.');
       return;
     }
 
@@ -473,7 +473,7 @@ function createBot() {
       }
 
       if (error && error.message === 'no_api_key') {
-        ctx.reply('AI ключ не найден. Установите DEEPSEEK_API_KEY или AI_API_KEY в .env.');
+        ctx.reply('AI ключ не найден. Установите OPENROUTER_API_KEY или AI_API_KEY в .env.');
         return;
       }
 

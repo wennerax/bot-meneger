@@ -56,18 +56,18 @@ function loadConfig(overrides = {}, options = {}) {
     : path.join(rootDir, '.env');
   const envFile = readEnvFile(envPath);
   const merged = { ...process.env, ...envFile, ...overrides };
-  const aiApiKey = envFile.DEEPSEEK_API_KEY || envFile.AI_API_KEY || '';
+  const aiApiKey = envFile.OPENROUTER_API_KEY || envFile.AI_API_KEY || '';
 
   return {
     botToken: merged.BOT_TOKEN || '',
     adminIds: parseAdminIds(merged.ADMIN_IDS),
     botName: merged.BOT_NAME || 'Telegram Bot Manager',
     databasePath: merged.DATABASE_PATH || 'data/bot.json',
-    // Support generic AI provider env and DeepSeek-specific env names.
+    // Support generic AI provider env and OpenRouter-specific env names.
     // NOTE: AI API keys are loaded only from .env for this project.
     aiApiKey,
-    aiModel: merged.AI_MODEL || merged.DEEPSEEK_MODEL || 'deepseek',
-    aiApiBaseUrl: merged.DEEPSEEK_API_BASE_URL || merged.AI_API_BASE_URL || 'https://api.deepseek.com',
+    aiModel: merged.AI_MODEL || merged.OPENROUTER_MODEL || 'openrouter',
+    aiApiBaseUrl: merged.OPENROUTER_API_BASE_URL || merged.AI_API_BASE_URL || 'https://api.openrouter.ai',
     weatherLocation: envFile.WEATHER_LOCATION || 'Moscow',
   };
 }

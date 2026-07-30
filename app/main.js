@@ -24,7 +24,7 @@ function main() {
       if (result.status === 'ok') {
         console.log('AI endpoint check: reachable');
       } else if (result.status === 'unauthorized') {
-        console.warn('AI endpoint check: unauthorized (401). Проверьте DEEPSEEK_API_KEY / AI_API_KEY и AI_API_BASE_URL. Не публикуйте ключи.');
+        console.warn('AI endpoint check: unauthorized (401). Проверьте OPENROUTER_API_KEY / AI_API_KEY и AI_API_BASE_URL. Не публикуйте ключи.');
       } else {
         console.warn('AI endpoint check:', result);
       }
