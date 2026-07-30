@@ -455,6 +455,7 @@ function createBot() {
         apiKey: config.aiApiKey,
         apiBaseUrl: config.aiApiBaseUrl,
         model: config.aiModel,
+        weatherLocation: config.weatherLocation,
       });
 
       if (content) {

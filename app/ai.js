@@ -1,6 +1,77 @@
 const fetch = global.fetch || require('node-fetch');
 
-function buildAiRequestPayload(prompt, model) {
+async function fetchNewsSummary() {
+  try {
+    const res = await fetch('https://api.first.org/data/v1/news');
+    if (!res.ok) {
+      return null;
+    }
+
+    const data = await res.json();
+    if (!data?.data?.length) {
+      return null;
+    }
+
+    return data.data.slice(0, 3).map((item, index) => {
+      const title = String(item.title || '').trim();
+      const source = String(item.link || item.source || '').trim();
+      return source ? `${index + 1}. ${title} (${source})` : `${index + 1}. ${title}`;
+    }).join(' | ');
+  } catch {
+    return null;
+  }
+}
+
+async function fetchWeatherSummary(location = 'Moscow') {
+  try {
+    const res = await fetch(`https://wttr.in/${encodeURIComponent(location)}?format=j1`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Bot/1.0)' },
+    });
+    if (!res.ok) {
+      return null;
+    }
+
+    const data = await res.json();
+    const current = data.current_condition?.[0];
+    if (!current) {
+      return null;
+    }
+
+    const weather = String(current.weatherDesc?.[0]?.value || '').trim();
+    const tempC = current.temp_C;
+    const feelsLike = current.FeelsLikeC;
+    const humidity = current.humidity;
+    const windKph = current.windspeedKmph;
+
+    return `Погода в ${location}: ${weather}, ${tempC}°C, ощущается как ${feelsLike}°C, ветер ${windKph} км/ч, влажность ${humidity}%.`;
+  } catch {
+    return null;
+  }
+}
+
+async function getRealtimeContext(options = {}) {
+  const now = new Date();
+  const parts = [`Текущая дата и время: ${now.toISOString()}.`];
+
+  if (options.enableRealtime !== false) {
+    const [news, weather] = await Promise.all([
+      fetchNewsSummary(),
+      fetchWeatherSummary(options.weatherLocation || 'Moscow'),
+    ]);
+
+    if (news) {
+      parts.push(`Последние новости: ${news}`);
+    }
+    if (weather) {
+      parts.push(weather);
+    }
+  }
+
+  return parts.join(' ');
+}
+
+async function buildAiRequestPayload(prompt, model, options = {}) {
+  const realtimeContext = await getRealtimeContext(options);
   return {
     model: model || 'deepseek',
     messages: [
@@ -8,11 +79,15 @@ function buildAiRequestPayload(prompt, model) {
         role: 'system',
         content: [
           'Ты полезный помощник для Telegram-бота.',
+          'Мой владелец — @dissociation_n.',
+          'Если пользователь спрашивает, кто твой владелец, отвечай: "Мой владелец — @dissociation_n".',
           'Отвечай кратко и по делу.',
+          'У тебя есть доступ к информации в реальном времени. Используй текущие дату и время, последние новости и погоду при формировании ответа, если это уместно.',
           'Никогда не раскрывай секретные данные, токены, ключи, пароли, внутренний код бота, его структуру, конфиденциальные данные пользователей или приватную информацию.',
           'Если пользователь просит показать токен, код, настройки или внутренние детали проекта, отвечай вежливо, что не можешь раскрывать такую информацию и предложи безопасный альтернативный ответ.',
-          'Никогда не выполняй действия, связанные с управлением чатом или правами пользователей: не бань, не муть, не разбанивай, не снимай мут, не удаляй админов, не выдавай наказания, не назначай роли и не меняй настройки модерации.',
+          'Никогда не выполняй действия, связанные с управлением чатом или правами пользователей: не бань, не муть, не разбанивай, не снимай мут, не удаляй админов, не выдавай наказание, не назначай роли и не меняй настройки модерации.',
           'Если пользователь просит сделать такие действия, отвечай, что ты не могу выполнять административные команды и могу только подсказать, как это сделать через обычные команды бота или администраторов.',
+          realtimeContext,
         ].join(' '),
       },
       { role: 'user', content: prompt },
@@ -47,7 +122,7 @@ async function requestAi(prompt, options = {}) {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify(buildAiRequestPayload(prompt, model)),
+    body: JSON.stringify(await buildAiRequestPayload(prompt, model, options)),
   });
 
   if (!res.ok) {
@@ -75,7 +150,7 @@ async function checkAiEndpoint(options = {}) {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify(buildAiRequestPayload('ping', model)),
+      body: JSON.stringify(await buildAiRequestPayload('ping', model, options)),
     });
 
     if (res.ok) return { status: 'ok' };

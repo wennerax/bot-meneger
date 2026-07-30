@@ -68,6 +68,7 @@ function loadConfig(overrides = {}, options = {}) {
     aiApiKey,
     aiModel: merged.AI_MODEL || merged.DEEPSEEK_MODEL || 'deepseek',
     aiApiBaseUrl: merged.DEEPSEEK_API_BASE_URL || merged.AI_API_BASE_URL || 'https://api.deepseek.com',
+    weatherLocation: envFile.WEATHER_LOCATION || 'Moscow',
   };
 }
 
