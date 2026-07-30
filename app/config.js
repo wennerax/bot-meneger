@@ -56,6 +56,7 @@ function loadConfig(overrides = {}, options = {}) {
     : path.join(rootDir, '.env');
   const envFile = readEnvFile(envPath);
   const merged = { ...process.env, ...envFile, ...overrides };
+  const aiApiKey = envFile.DEEPSEEK_API_KEY || envFile.AI_API_KEY || '';
 
   return {
     botToken: merged.BOT_TOKEN || '',
@@ -63,8 +64,8 @@ function loadConfig(overrides = {}, options = {}) {
     botName: merged.BOT_NAME || 'Telegram Bot Manager',
     databasePath: merged.DATABASE_PATH || 'data/bot.json',
     // Support generic AI provider env and DeepSeek-specific env names.
-    // NOTE: Do NOT hardcode API keys here. Set DEEPSEEK_API_KEY or AI_API_KEY in your .env instead.
-    aiApiKey: merged.DEEPSEEK_API_KEY || merged.AI_API_KEY || '',
+    // NOTE: AI API keys are loaded only from .env for this project.
+    aiApiKey,
     aiModel: merged.AI_MODEL || merged.DEEPSEEK_MODEL || 'deepseek',
     aiApiBaseUrl: merged.DEEPSEEK_API_BASE_URL || merged.AI_API_BASE_URL || 'https://api.deepseek.com',
   };
