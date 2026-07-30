@@ -8,7 +8,6 @@
     "test": "node --test tests/*.test.js"
   },
   "dependencies": {
-    "pureimage": "^0.6.19",
     "telegraf": "^4.16.0"
   }
 }

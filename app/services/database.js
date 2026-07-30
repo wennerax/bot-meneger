@@ -34,7 +34,6 @@ class Database {
         messageCounts: parsed.messageCounts || {},
         groupUsers: parsed.groupUsers || {},
         userDescriptions: parsed.userDescriptions || {},
-        userDailyCounts: parsed.userDailyCounts || {},
       };
     } catch (error) {
       return this._emptyState();
@@ -52,7 +51,6 @@ class Database {
       messageCounts: {},
       groupUsers: {},
       userDescriptions: {},
-      userDailyCounts: {},
     };
   }
 
@@ -186,15 +184,23 @@ class Database {
     this.data.messageCounts[id][user].displayName = displayName;
     this.data.messageCounts[id][user].messageCount += 1;
 
-    const dateKey = new Date().toISOString().slice(0, 10);
-    if (!this.data.userDailyCounts[id]) {
-      this.data.userDailyCounts[id] = {};
+    this._save();
+  }
+
+  resolveUsername(chatId, username) {
+    const id = Number(chatId);
+    const target = String(username).trim().replace(/^@/, '').toLowerCase();
+    const users = this.data.groupUsers[id] || {};
+    const match = Object.values(users).find((item) => item.username === target);
+
+    if (!match) {
+      return null;
     }
-    if (!this.data.userDailyCounts[id][user]) {
-      this.data.userDailyCounts[id][user] = {};
-    }
-    const currentCount = this.data.userDailyCounts[id][user][dateKey] || 0;
-    this.data.userDailyCounts[id][user][dateKey] = currentCount + 1;
+
+    return { userId: match.userId, displayName: match.displayName };
+  }
+
+  setUserDescription(chatId, userId, description) {
     const id = Number(chatId);
     const user = Number(userId);
     if (!this.data.userDescriptions[id]) {
@@ -227,7 +233,6 @@ class Database {
 
     const topPosition = sorted.findIndex((item) => item.userId === user) + 1;
     const messageCount = counts?.messageCount || 0;
-    const dailyCounts = this.data.userDailyCounts[id]?.[user] || {};
 
     return {
       userId: user,
@@ -238,7 +243,6 @@ class Database {
       topPosition: topPosition > 0 ? topPosition : null,
       punishments: [...punishments, ...activePunishments],
       lastSeenAt: userData?.lastSeenAt || null,
-      dailyCounts,
     };
   }
 
