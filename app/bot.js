@@ -522,8 +522,10 @@ function createBot() {
       '/rules, !правила - показать правила чата',
       '/setrules, !установить правила <текст> - установить правила',
       '/setgreeting, !установить приветствие <текст> - установить приветствие',
-      '+антиспам, +антифлуд - включить антифлуд',
-      '-антиспам, -антифлуд - выключить антифлуд',
+      '+антиспам - включить антиспам',
+      '-антиспам - выключить антиспам',
+      '+антифлуд - включить антифлуд',
+      '-антифлуд - выключить антифлуд',
       '+ссылки - включить антиссылки',
       '-ссылки - выключить антиссылки',
       '/warn, !предупреждение - выдать предупреждение',
@@ -1360,28 +1362,25 @@ function createBot() {
     await startCaptchaForUser(ctx, userId);
   });
 
-  bot.action(/captcha:/, async (ctx) => {
-    const raw = ctx.match?.[0] || '';
-    const parts = raw.split(':').filter(Boolean);
-    const value = parts[1] || '';
-    const chatId = Number(parts[2] || ctx.chat?.id || 0);
-    const userId = Number(ctx.from?.id);
-    if (!value || !Number.isFinite(chatId) || !Number.isFinite(userId)) {
-      await ctx.answerCbQuery('Неверная капча.');
+  bot.on('poll_answer', async (ctx) => {
+    const pollAnswer = ctx.update.poll_answer;
+    if (!pollAnswer || !pollAnswer.poll_id || !pollAnswer.user) {
       return;
     }
 
-    const key = getCaptchaKey(chatId, userId);
-    const state = captchaStates.get(key);
+    const state = captchaStates.get(pollAnswer.poll_id);
     if (!state) {
-      await ctx.answerCbQuery('Капча уже завершена или недоступна.');
       return;
     }
 
-    const passed = value === state.target;
-    await completeCaptcha(ctx, chatId, userId, passed);
-    await ctx.answerCbQuery(passed ? 'Капча пройдена!' : 'Неверный вариант.');
-    await ctx.deleteMessage();
+    const userId = Number(pollAnswer.user.id);
+    if (!Number.isFinite(userId) || userId !== state.userId || pollAnswer.user.is_bot) {
+      return;
+    }
+
+    const selectedOption = (pollAnswer.option_ids || [])[0];
+    const passed = selectedOption === state.correctOptionId;
+    await completeCaptcha(ctx, pollAnswer.poll_id, passed);
   });
 
   bot.command(['setrules', 'установить_правила'], (ctx) => {
@@ -1507,24 +1506,46 @@ function createBot() {
       return;
     }
 
-    if (text.startsWith('+антиспам') || text.startsWith('+antispam') || text.startsWith('+антифлуд') || text.startsWith('+antiflood')) {
+    if (text.startsWith('+антиспам') || text.startsWith('+antispam')) {
       ensureGroup(ctx);
       if (!isBotAdmin(ctx)) {
         ctx.reply('Эта команда доступна только администраторам.');
         return;
       }
       moderationService.enableSpamProtection(ctx.chat.id);
-      ctx.reply('✅ Антифлуд включён.');
+      ctx.reply('✅ Антиспам включён.');
       return;
     }
 
-    if (text.startsWith('-антиспам') || text.startsWith('-antispam') || text.startsWith('-антифлуд') || text.startsWith('-antiflood')) {
+    if (text.startsWith('-антиспам') || text.startsWith('-antispam')) {
       ensureGroup(ctx);
       if (!isBotAdmin(ctx)) {
         ctx.reply('Эта команда доступна только администраторам.');
         return;
       }
       moderationService.disableSpamProtection(ctx.chat.id);
+      ctx.reply('✅ Антиспам выключен.');
+      return;
+    }
+
+    if (text.startsWith('+антифлуд') || text.startsWith('+antiflood')) {
+      ensureGroup(ctx);
+      if (!isBotAdmin(ctx)) {
+        ctx.reply('Эта команда доступна только администраторам.');
+        return;
+      }
+      moderationService.enableFloodProtection(ctx.chat.id);
+      ctx.reply('✅ Антифлуд включён.');
+      return;
+    }
+
+    if (text.startsWith('-антифлуд') || text.startsWith('-antiflood')) {
+      ensureGroup(ctx);
+      if (!isBotAdmin(ctx)) {
+        ctx.reply('Эта команда доступна только администраторам.');
+        return;
+      }
+      moderationService.disableFloodProtection(ctx.chat.id);
       ctx.reply('✅ Антифлуд выключен.');
       return;
     }
@@ -1595,13 +1616,13 @@ function createBot() {
       return;
     }
 
-    if (isGroupChat(ctx) && moderationService.isSpamProtectionEnabled(ctx.chat.id)) {
-      if (isAntiFloodViolation(text)) {
-        await deleteMessageSafely(ctx, ctx.message.message_id);
-        await applyAutomaticMute(ctx, ctx.from.id, 24, 'Антифлуд');
-        return;
-      }
+    if (isGroupChat(ctx) && moderationService.isFloodProtectionEnabled(ctx.chat.id) && hasRepeatedCharacterFlood(text)) {
+      await deleteMessageSafely(ctx, ctx.message.message_id);
+      await applyAutomaticMute(ctx, ctx.from.id, 1, 'Антифлуд');
+      return;
+    }
 
+    if (isGroupChat(ctx) && moderationService.isSpamProtectionEnabled(ctx.chat.id)) {
       const shouldPunish = trackSpamActivity(ctx);
       if (shouldPunish) {
         const recentMessages = spamActivity.get(ctx.chat.id)?.get(ctx.from.id)?.messages || [];

@@ -13,6 +13,7 @@ class ModerationService {
         filters: {},
         spamProtectionEnabled: false,
         linkProtectionEnabled: false,
+        floodProtectionEnabled: false,
       });
     }
     return this.chats.get(id);
@@ -71,6 +72,18 @@ class ModerationService {
 
   isLinkProtectionEnabled(chatId) {
     return Boolean(this._getChat(chatId).linkProtectionEnabled);
+  }
+
+  enableFloodProtection(chatId) {
+    this._getChat(chatId).floodProtectionEnabled = true;
+  }
+
+  disableFloodProtection(chatId) {
+    this._getChat(chatId).floodProtectionEnabled = false;
+  }
+
+  isFloodProtectionEnabled(chatId) {
+    return Boolean(this._getChat(chatId).floodProtectionEnabled);
   }
 
   addFilter(chatId, keyword, response) {

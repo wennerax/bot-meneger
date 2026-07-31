@@ -41,3 +41,15 @@ test('spam and link protection can be toggled per chat', () => {
   assert.equal(service.isSpamProtectionEnabled(100), false);
   assert.equal(service.isLinkProtectionEnabled(100), false);
 });
+
+test('flood protection can be toggled per chat', () => {
+  const service = new ModerationService();
+
+  assert.equal(service.isFloodProtectionEnabled(100), false);
+
+  service.enableFloodProtection(100);
+  assert.equal(service.isFloodProtectionEnabled(100), true);
+
+  service.disableFloodProtection(100);
+  assert.equal(service.isFloodProtectionEnabled(100), false);
+});
