@@ -141,6 +141,7 @@ function createBot() {
   const database = new Database(config.databasePath);
   const punishmentTimers = new Map();
   const spamActivity = new Map();
+  const messageHistory = new Map();
   const captchaStates = new Map();
 
   function getPunishmentTimerKey(chatId, userId, action) {
@@ -387,8 +388,65 @@ function createBot() {
     }
   }
 
+  function recordRecentMessage(ctx) {
+    if (!isGroupChat(ctx)) {
+      return;
+    }
+
+    const chatId = ctx.chat.id;
+    const userId = ctx.from?.id;
+    const messageId = ctx.message?.message_id;
+    if (!Number.isFinite(userId) || !messageId) {
+      return;
+    }
+
+    const now = Date.now();
+    const cutoff = now - 5 * 60 * 1000;
+    const chatHistory = messageHistory.get(chatId) || new Map();
+    const userHistory = (chatHistory.get(userId) || []).filter((item) => item.timestamp >= cutoff);
+    userHistory.push({ messageId, timestamp: now });
+    if (userHistory.length > 100) {
+      userHistory.splice(0, userHistory.length - 100);
+    }
+    chatHistory.set(userId, userHistory);
+    messageHistory.set(chatId, chatHistory);
+  }
+
+  async function deleteRecentMessages(ctx, chatId, userId, minutes = 5) {
+    const chatHistory = messageHistory.get(chatId);
+    if (!chatHistory) {
+      return;
+    }
+
+    const now = Date.now();
+    const cutoff = now - minutes * 60 * 1000;
+    const userHistory = chatHistory.get(userId) || [];
+    const toDelete = userHistory.filter((item) => item.timestamp >= cutoff).map((item) => item.messageId);
+    const remaining = userHistory.filter((item) => item.timestamp < cutoff);
+
+    if (remaining.length > 0) {
+      chatHistory.set(userId, remaining);
+    } else {
+      chatHistory.delete(userId);
+    }
+
+    if (chatHistory.size > 0) {
+      messageHistory.set(chatId, chatHistory);
+    } else {
+      messageHistory.delete(chatId);
+    }
+
+    if (toDelete.length === 0) {
+      return;
+    }
+
+    await Promise.all(toDelete.map((messageId) => deleteMessageSafely(ctx, messageId)));
+  }
+
   async function applyAutomaticMute(ctx, userId, durationHours, reason) {
     const untilDate = Math.floor(Date.now() / 1000) + Math.round(durationHours * 3600);
+    await deleteRecentMessages(ctx, ctx.chat.id, userId, 5);
+
     try {
       await ctx.telegram.restrictChatMember(ctx.chat.id, userId, buildMutePermissions(false), untilDate);
     } catch (error) {
