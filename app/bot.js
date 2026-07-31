@@ -182,6 +182,43 @@ function createBot() {
     return `${chatId}:${userId}`;
   }
 
+  function isCapsFlood(text) {
+    if (!text || typeof text !== 'string') {
+      return false;
+    }
+
+    const letters = text.match(/[A-Za-zА-Яа-яЁё]/g) || [];
+    if (letters.length < 5) {
+      return false;
+    }
+
+    const uppercaseCount = letters.filter((ch) => ch === ch.toUpperCase()).length;
+    return uppercaseCount / letters.length >= 0.7;
+  }
+
+  function hasRepeatedCharacterFlood(text) {
+    if (!text || typeof text !== 'string') {
+      return false;
+    }
+
+    let maxRun = 1;
+    let currentRun = 1;
+    for (let i = 1; i < text.length; i += 1) {
+      if (text[i] === text[i - 1]) {
+        currentRun += 1;
+        maxRun = Math.max(maxRun, currentRun);
+      } else {
+        currentRun = 1;
+      }
+    }
+
+    return maxRun >= 7;
+  }
+
+  function isAntiFloodViolation(text) {
+    return isCapsFlood(text) || hasRepeatedCharacterFlood(text);
+  }
+
   async function startCaptchaForUser(ctx, userId) {
     if (!isGroupChat(ctx)) {
       return;
@@ -227,7 +264,12 @@ function createBot() {
       return;
     }
 
-    await ctx.telegram.kickChatMember(chatId, userId, true);
+    try {
+      await ctx.telegram.banChatMember(chatId, userId);
+      await ctx.telegram.unbanChatMember(chatId, userId, { only_if_banned: true });
+    } catch (error) {
+      // ignore if the member cannot be removed or unbanned
+    }
     await ctx.telegram.sendMessage(userId, 'Капча не пройдена. Вы исключены из группы.');
   }
 
@@ -480,8 +522,8 @@ function createBot() {
       '/rules, !правила - показать правила чата',
       '/setrules, !установить правила <текст> - установить правила',
       '/setgreeting, !установить приветствие <текст> - установить приветствие',
-      '+антиспам, +антифлуд - включить антиспам',
-      '-антиспам, -антифлуд - выключить антиспам',
+      '+антиспам, +антифлуд - включить антифлуд',
+      '-антиспам, -антифлуд - выключить антифлуд',
       '+ссылки - включить антиссылки',
       '-ссылки - выключить антиссылки',
       '/warn, !предупреждение - выдать предупреждение',
@@ -1472,7 +1514,7 @@ function createBot() {
         return;
       }
       moderationService.enableSpamProtection(ctx.chat.id);
-      ctx.reply('✅ Антиспам включён.');
+      ctx.reply('✅ Антифлуд включён.');
       return;
     }
 
@@ -1483,7 +1525,7 @@ function createBot() {
         return;
       }
       moderationService.disableSpamProtection(ctx.chat.id);
-      ctx.reply('✅ Антиспам выключен.');
+      ctx.reply('✅ Антифлуд выключен.');
       return;
     }
 
@@ -1554,6 +1596,12 @@ function createBot() {
     }
 
     if (isGroupChat(ctx) && moderationService.isSpamProtectionEnabled(ctx.chat.id)) {
+      if (isAntiFloodViolation(text)) {
+        await deleteMessageSafely(ctx, ctx.message.message_id);
+        await applyAutomaticMute(ctx, ctx.from.id, 24, 'Антифлуд');
+        return;
+      }
+
       const shouldPunish = trackSpamActivity(ctx);
       if (shouldPunish) {
         const recentMessages = spamActivity.get(ctx.chat.id)?.get(ctx.from.id)?.messages || [];
