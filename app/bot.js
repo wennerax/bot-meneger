@@ -52,6 +52,11 @@ function buildPunishmentNotification(action, chatTitle, reason, durationHours) {
   return `Вы были ${actionName} в чате "${chatTitle}". Причина: ${reason}. Срок: ${durationLabel}.`;
 }
 
+function buildModerationAlertMessage(userLabel, durationHours, reason) {
+  const durationLabel = formatDurationLabel(durationHours);
+  return `⚠️ Пользователь ${userLabel} замучен на ${durationLabel} по причине: ${reason}.`;
+}
+
 function buildFunReply(kind) {
   if (kind === 'coin') {
     return Math.random() > 0.5 ? 'Орёл' : 'Решка';
@@ -136,6 +141,7 @@ function createBot() {
   const database = new Database(config.databasePath);
   const punishmentTimers = new Map();
   const spamActivity = new Map();
+  const captchaStates = new Map();
 
   function getPunishmentTimerKey(chatId, userId, action) {
     return `${chatId}:${userId}:${action}`;
@@ -162,6 +168,67 @@ function createBot() {
       can_pin_messages: false,
       can_manage_topics: false,
     };
+  }
+
+  function getCaptchaEmojiSet() {
+    const emojis = ['🐶', '🐱', '🦊', '🐼'];
+    const target = emojis[Math.floor(Math.random() * emojis.length)];
+    const options = emojis.filter((emoji) => emoji !== target);
+    const shuffled = [...options, target].sort(() => Math.random() - 0.5);
+    return { target, options: shuffled };
+  }
+
+  function getCaptchaKey(chatId, userId) {
+    return `${chatId}:${userId}`;
+  }
+
+  async function startCaptchaForUser(ctx, userId) {
+    if (!isGroupChat(ctx)) {
+      return;
+    }
+
+    const chatId = Number(ctx.chat.id);
+    const memberUser = ctx.chatMember?.new_chat_member?.user || ctx.update?.chat_member?.new_chat_member?.user || null;
+    const displayName = memberUser?.first_name || memberUser?.username || 'пользователь';
+    const { target, options } = getCaptchaEmojiSet();
+    const key = getCaptchaKey(chatId, userId);
+    captchaStates.set(key, {
+      chatId,
+      userId,
+      target,
+      createdAt: Date.now(),
+    });
+
+    await ctx.telegram.restrictChatMember(chatId, userId, buildMutePermissions(false));
+    await ctx.telegram.sendMessage(chatId, `Пользователь ${displayName} должен пройти капчу, чтобы писать в чате.`, {
+      disable_notification: true,
+    });
+    await ctx.telegram.sendMessage(userId, `Привет! Чтобы пройти капчу в чате "${ctx.chat.title || 'группе'}", выбери правильный эмодзи.`, {
+      reply_markup: {
+        inline_keyboard: [
+          options.map((emoji) => ({ text: emoji, callback_data: `captcha:${emoji}:${chatId}` })),
+        ],
+      },
+    });
+  }
+
+  async function completeCaptcha(ctx, chatId, userId, passed) {
+    const key = getCaptchaKey(chatId, userId);
+    const state = captchaStates.get(key);
+    if (!state) {
+      return;
+    }
+
+    captchaStates.delete(key);
+
+    if (passed) {
+      await ctx.telegram.restrictChatMember(chatId, userId, buildMutePermissions(true));
+      await ctx.telegram.sendMessage(userId, 'Капча пройдена. Добро пожаловать!');
+      return;
+    }
+
+    await ctx.telegram.kickChatMember(chatId, userId, true);
+    await ctx.telegram.sendMessage(userId, 'Капча не пройдена. Вы исключены из группы.');
   }
 
   async function expirePunishment(punishment) {
@@ -243,10 +310,19 @@ function createBot() {
     return ctx.chat?.type === 'private';
   }
 
+  function getMessageText(ctx) {
+    return String(ctx.message?.text || ctx.message?.caption || '').trim();
+  }
+
+  function isMediaMessage(ctx) {
+    const message = ctx.message || {};
+    return Boolean(message.photo || message.video || message.document || message.animation || message.audio || message.voice || message.sticker || message.video_note);
+  }
+
   function isKnownCommandText(text) {
     const slashCommand = /^\/(start|help|id|about|whoami|stats|rules|hug|kiss|slap|poke|coin|dice|fate|compliment|insult|top|admins|banlist|mutelist|setrules|warn|warnings|unwarn|mute|unmute|ban|unban|setgreeting|addbotadmin|ai)(\s|$)/i;
     const bangCommand = /^!(начало|помощь|айди|информация|кто\s*я|статистика|правила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|похвала)(\s|$)/i;
-    const plusMinusCommand = /^(\+антиспам|\+antispam|\-антиспам|\-antispam|\+ссылки|\+links|\-ссылки|\-links|\+описание|\+description|\+rules|\+правила|\+greeting|\+приветствие)(\s|$)/i;
+    const plusMinusCommand = /^(\+антиспам|\+antispam|\+антифлуд|\+antiflood|\-антиспам|\-antispam|\-антифлуд|\-antiflood|\+ссылки|\+links|\-ссылки|\-links|\+описание|\+description|\+rules|\+правила|\+greeting|\+приветствие)(\s|$)/i;
     return slashCommand.test(text) || bangCommand.test(text) || plusMinusCommand.test(text);
   }
 
@@ -285,6 +361,11 @@ function createBot() {
       action: 'mute',
       untilAt: untilDate,
     });
+
+    if (isGroupChat(ctx)) {
+      const userLabel = getMentionText(ctx.from || { id: userId });
+      await ctx.reply(buildModerationAlertMessage(userLabel, durationHours, reason));
+    }
 
     try {
       await ctx.telegram.sendMessage(userId, buildPunishmentNotification('mute', ctx.chat.title || String(ctx.chat.id), reason, durationHours));
@@ -399,8 +480,8 @@ function createBot() {
       '/rules, !правила - показать правила чата',
       '/setrules, !установить правила <текст> - установить правила',
       '/setgreeting, !установить приветствие <текст> - установить приветствие',
-      '+антиспам - включить антиспам',
-      '-антиспам - выключить антиспам',
+      '+антиспам, +антифлуд - включить антиспам',
+      '-антиспам, -антифлуд - выключить антиспам',
       '+ссылки - включить антиссылки',
       '-ссылки - выключить антиссылки',
       '/warn, !предупреждение - выдать предупреждение',
@@ -573,6 +654,42 @@ function createBot() {
     return targetData?.target || null;
   }
 
+  function buildActivityChartSvg(activity = []) {
+    const safeActivity = Array.isArray(activity) && activity.length ? activity : [];
+    const width = 360;
+    const height = 140;
+    const paddingX = 24;
+    const paddingY = 18;
+    const chartWidth = width - paddingX * 2;
+    const chartHeight = height - paddingY * 2;
+    const maxValue = Math.max(1, ...safeActivity.map((item) => Number(item.count || 0)));
+
+    const points = safeActivity.map((item, index) => {
+      const x = paddingX + (chartWidth / Math.max(1, safeActivity.length - 1)) * index;
+      const value = Number(item.count || 0);
+      const y = paddingY + chartHeight - (value / maxValue) * chartHeight;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+
+    const polyline = points.length ? `M ${points.join(' L ')}` : '';
+    const labels = safeActivity.map((item, index) => {
+      const label = item.day ? item.day.slice(5) : `${index + 1}`;
+      const x = paddingX + (chartWidth / Math.max(1, safeActivity.length - 1)) * index;
+      return `<text x="${x.toFixed(1)}" y="${height - 4}" font-size="10" text-anchor="middle" fill="#6b7280">${label}</text>`;
+    }).join('');
+
+    const bars = safeActivity.map((item, index) => {
+      const value = Number(item.count || 0);
+      const x = paddingX + 8 + (chartWidth / Math.max(1, safeActivity.length)) * index;
+      const barWidth = Math.max(10, (chartWidth / Math.max(1, safeActivity.length)) - 10);
+      const heightValue = (value / maxValue) * (chartHeight * 0.7);
+      const y = paddingY + chartHeight - heightValue;
+      return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${heightValue.toFixed(1)}" rx="3" fill="#3b82f6" />`;
+    }).join('');
+
+    return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">\n  <rect x="0" y="0" width="${width}" height="${height}" rx="12" fill="#0f172a" />\n  <line x1="${paddingX}" y1="${height - paddingY}" x2="${width - paddingX}" y2="${height - paddingY}" stroke="#475569" stroke-width="1" />\n  <line x1="${paddingX}" y1="${paddingY}" x2="${paddingX}" y2="${height - paddingY}" stroke="#475569" stroke-width="1" />\n  ${polyline ? `<path d="${polyline}" fill="none" stroke="#60a5fa" stroke-width="2.5" />` : ''}\n  ${bars}\n  ${labels}\n</svg>`;
+  }
+
   async function statsCommand(ctx, args) {
     ensureGroup(ctx);
 
@@ -586,6 +703,7 @@ function createBot() {
     }
 
     const profile = database.getUserProfile(ctx.chat.id, targetUser.id);
+    const activity = database.getUserActivity(ctx.chat.id, targetUser.id, 7);
     const username = profile.username || getMentionText(targetUser);
     const punishments = profile.punishments.length
       ? profile.punishments.map((item) => `${item.action}${item.reason ? `: ${item.reason}` : ''}`).join(', ')
@@ -593,16 +711,22 @@ function createBot() {
     const description = profile.description ? profile.description : 'нет';
     const topLabel = profile.topPosition ? `${profile.topPosition} место` : 'не в топе';
     const lastSeenLabel = profile.lastSeenAt ? new Date(profile.lastSeenAt).toLocaleString('ru-RU') : 'неизвестно';
+    const chartSvg = buildActivityChartSvg(activity);
 
-    ctx.reply([
-      `📊 Анкета пользователя ${username}`,
-      `Имя: ${profile.displayName || targetUser.first_name || targetUser.username || targetUser.id}`,
-      `Описание: ${description}`,
-      `Наказания: ${punishments}`,
-      `Сообщений: ${profile.messageCount}`,
-      `Место в топе: ${topLabel}`,
-      `Последний вход: ${lastSeenLabel}`,
-    ].join('\n'));
+    await ctx.replyWithPhoto({ source: Buffer.from(chartSvg, 'utf8') }, {
+      caption: [
+        `📊 Анкета пользователя ${username}`,
+        `Имя: ${profile.displayName || targetUser.first_name || targetUser.username || targetUser.id}`,
+        `Описание: ${description}`,
+        `Наказания: ${punishments}`,
+        `Сообщений: ${profile.messageCount}`,
+        `Место в топе: ${topLabel}`,
+        `Последний вход: ${lastSeenLabel}`,
+        '',
+        'Активность за последние 7 дней',
+      ].join('\n'),
+      parse_mode: 'HTML',
+    });
   }
 
   function topCommand(ctx) {
@@ -1174,6 +1298,50 @@ function createBot() {
     }
   });
 
+  bot.on('chat_member', async (ctx) => {
+    const member = ctx.chatMember?.new_chat_member;
+    if (!member || !ctx.chat || !ctx.from) {
+      return;
+    }
+
+    const isBot = Boolean(member.user?.is_bot);
+    const isNewMember = member.status === 'member' || member.status === 'restricted';
+    if (!isNewMember || isBot) {
+      return;
+    }
+
+    const userId = Number(member.user?.id);
+    if (!Number.isFinite(userId)) {
+      return;
+    }
+
+    await startCaptchaForUser(ctx, userId);
+  });
+
+  bot.action(/captcha:/, async (ctx) => {
+    const raw = ctx.match?.[0] || '';
+    const parts = raw.split(':').filter(Boolean);
+    const value = parts[1] || '';
+    const chatId = Number(parts[2] || ctx.chat?.id || 0);
+    const userId = Number(ctx.from?.id);
+    if (!value || !Number.isFinite(chatId) || !Number.isFinite(userId)) {
+      await ctx.answerCbQuery('Неверная капча.');
+      return;
+    }
+
+    const key = getCaptchaKey(chatId, userId);
+    const state = captchaStates.get(key);
+    if (!state) {
+      await ctx.answerCbQuery('Капча уже завершена или недоступна.');
+      return;
+    }
+
+    const passed = value === state.target;
+    await completeCaptcha(ctx, chatId, userId, passed);
+    await ctx.answerCbQuery(passed ? 'Капча пройдена!' : 'Неверный вариант.');
+    await ctx.deleteMessage();
+  });
+
   bot.command(['setrules', 'установить_правила'], (ctx) => {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
@@ -1257,12 +1425,18 @@ function createBot() {
     ctx.reply(`Пользователь ${target.first_name || target.username || target.id} добавлен как вспомогательный администратор бота.`);
   });
 
-  bot.on('text', async (ctx) => {
-    if (!ctx.message.text) {
+  async function handleIncomingMessage(ctx) {
+    const message = ctx.message;
+    if (!message) {
       return;
     }
 
-    const text = ctx.message.text.trim();
+    const text = getMessageText(ctx);
+    const hasMessageContent = Boolean(text || isMediaMessage(ctx));
+    if (!hasMessageContent) {
+      return;
+    }
+
     if (isGroupChat(ctx)) {
       database.recordMessage(ctx.chat.id, ctx.from.id, getDisplayName(ctx), ctx.from.username);
     }
@@ -1291,7 +1465,7 @@ function createBot() {
       return;
     }
 
-    if (text.startsWith('+антиспам') || text.startsWith('+antispam')) {
+    if (text.startsWith('+антиспам') || text.startsWith('+antispam') || text.startsWith('+антифлуд') || text.startsWith('+antiflood')) {
       ensureGroup(ctx);
       if (!isBotAdmin(ctx)) {
         ctx.reply('Эта команда доступна только администраторам.');
@@ -1302,7 +1476,7 @@ function createBot() {
       return;
     }
 
-    if (text.startsWith('-антиспам')) {
+    if (text.startsWith('-антиспам') || text.startsWith('-antispam') || text.startsWith('-антифлуд') || text.startsWith('-antiflood')) {
       ensureGroup(ctx);
       if (!isBotAdmin(ctx)) {
         ctx.reply('Эта команда доступна только администраторам.');
@@ -1347,7 +1521,6 @@ function createBot() {
       return;
     }
 
-    // Обработка текстовых команд: +rules, +greeting
     if (text.startsWith('+rules ') || text.startsWith('+правила ')) {
       if (!isBotAdmin(ctx)) {
         ctx.reply('Эта команда доступна только администраторам.');
@@ -1398,7 +1571,6 @@ function createBot() {
       return;
     }
 
-    // Обработка фильтров
     const response = moderationService.findFilterResponse(ctx.chat.id, text);
     if (response) {
       ctx.reply(response);
@@ -1409,6 +1581,10 @@ function createBot() {
       await handlePrivateAIMessages(ctx, text);
       return;
     }
+  }
+
+  bot.on(['text', 'photo', 'video', 'document', 'animation', 'audio', 'voice', 'sticker', 'video_note'], async (ctx) => {
+    await handleIncomingMessage(ctx);
   });
 
   return { bot, config, userService, moderationService, database };
@@ -1431,6 +1607,7 @@ module.exports = {
   createBot,
   parsePunishmentDetails,
   buildPunishmentNotification,
+  buildModerationAlertMessage,
   buildFunReply,
   parsePageNumber,
   buildPunishmentListMessage,

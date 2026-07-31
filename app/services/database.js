@@ -34,6 +34,7 @@ class Database {
         messageCounts: parsed.messageCounts || {},
         groupUsers: parsed.groupUsers || {},
         userDescriptions: parsed.userDescriptions || {},
+        dailyActivity: parsed.dailyActivity || {},
       };
     } catch (error) {
       return this._emptyState();
@@ -51,6 +52,7 @@ class Database {
       messageCounts: {},
       groupUsers: {},
       userDescriptions: {},
+      dailyActivity: {},
     };
   }
 
@@ -184,6 +186,21 @@ class Database {
     this.data.messageCounts[id][user].displayName = displayName;
     this.data.messageCounts[id][user].messageCount += 1;
 
+    const dayKey = new Date().toISOString().slice(0, 10);
+    if (!this.data.dailyActivity[id]) {
+      this.data.dailyActivity[id] = {};
+    }
+    if (!this.data.dailyActivity[id][user]) {
+      this.data.dailyActivity[id][user] = [];
+    }
+
+    const lastEntry = this.data.dailyActivity[id][user][this.data.dailyActivity[id][user].length - 1];
+    if (lastEntry && lastEntry.day === dayKey) {
+      lastEntry.count += 1;
+    } else {
+      this.data.dailyActivity[id][user].push({ day: dayKey, count: 1 });
+    }
+
     this._save();
   }
 
@@ -257,6 +274,24 @@ class Database {
       }))
       .sort((left, right) => right.messageCount - left.messageCount)
       .slice(0, limit);
+  }
+
+  getUserActivity(chatId, userId, days = 7) {
+    const id = Number(chatId);
+    const user = Number(userId);
+    const history = this.data.dailyActivity[id]?.[user] || [];
+    const result = [];
+    const today = new Date();
+
+    for (let offset = days - 1; offset >= 0; offset -= 1) {
+      const date = new Date(today);
+      date.setDate(today.getDate() - offset);
+      const dayKey = date.toISOString().slice(0, 10);
+      const entry = history.find((item) => item.day === dayKey);
+      result.push({ day: dayKey, count: entry ? entry.count : 0 });
+    }
+
+    return result;
   }
 
   setLinkTrigger(chatId, enabled) {

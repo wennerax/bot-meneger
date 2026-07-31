@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parsePunishmentDetails, buildPunishmentNotification, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage } = require('../app/bot');
+const { parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage } = require('../app/bot');
 const { buildAiRequestPayload } = require('../app/ai');
 
 test('parsePunishmentDetails extracts duration and reason', () => {
@@ -19,6 +19,12 @@ test('buildPunishmentNotification includes group, reason and duration', () => {
   const message = buildPunishmentNotification('mute', 'Test Group', 'спам', 2);
 
   assert.equal(message, 'Вы были ограничен(а) в чате "Test Group". Причина: спам. Срок: 2ч.');
+});
+
+test('buildModerationAlertMessage includes duration and reason', () => {
+  const message = buildModerationAlertMessage('@alice', 24, 'Спам');
+
+  assert.equal(message, '⚠️ Пользователь @alice замучен на 1д по причине: Спам.');
 });
 
 test('buildFunReply returns a valid coin result', () => {
@@ -63,8 +69,8 @@ test('buildBotAdminListMessage separates primary and auxiliary admins', () => {
   assert.match(message, /1002/);
 });
 
-test('buildAiRequestPayload builds an OpenAI-compatible request body', () => {
-  const payload = buildAiRequestPayload('привет', 'gpt-4o-mini');
+test('buildAiRequestPayload builds an OpenAI-compatible request body', async () => {
+  const payload = await buildAiRequestPayload('привет', 'gpt-4o-mini');
 
   assert.equal(payload.model, 'gpt-4o-mini');
   assert.equal(payload.messages[1].role, 'user');

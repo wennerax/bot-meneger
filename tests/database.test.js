@@ -97,3 +97,22 @@ test('profile descriptions and stats are stored per chat user', () => {
 
   db.close();
 });
+
+test('daily activity history is tracked per chat user', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-meneger-'));
+  const db = new Database(path.join(dir, 'bot.json'));
+
+  db.ensureGroup(600, 'Daily', 1);
+  db.recordMessage(600, 2, 'Alice', 'alice');
+  db.recordMessage(600, 2, 'Alice', 'alice');
+
+  const history = db.getUserActivity(600, 2, 7);
+  const today = history[history.length - 1];
+
+  assert.ok(Array.isArray(history));
+  assert.equal(history.length, 7);
+  assert.ok(today);
+  assert.equal(today.count, 2);
+
+  db.close();
+});
