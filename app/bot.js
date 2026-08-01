@@ -838,6 +838,18 @@ function createBot() {
       const y = paddingY + chartHeight - (value / maxValue) * chartHeight;
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     });
+  }
+
+  function escapeCaptionText(value) {
+    const text = value === null || value === undefined ? '' : String(value);
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+      .replace(/\r?\n/g, ' ');
+  }
 
     const polyline = points.length ? `M ${points.join(' L ')}` : '';
     const labels = safeActivity.map((item, index) => {
@@ -881,13 +893,13 @@ function createBot() {
     const lastSeenLabel = profile.lastSeenAt ? new Date(profile.lastSeenAt).toLocaleString('ru-RU') : 'неизвестно';
     const chartSvg = buildActivityChartSvg(activity);
     const caption = [
-      `📊 Анкета пользователя ${username}`,
-      `Имя: ${profile.displayName || targetUser.first_name || targetUser.username || targetUser.id}`,
-      `Описание: ${description}`,
-      `Наказания: ${punishments}`,
-      `Сообщений: ${profile.messageCount}`,
-      `Место в топе: ${topLabel}`,
-      `Последний вход: ${lastSeenLabel}`,
+      `📊 Анкета пользователя ${escapeCaptionText(username)}`,
+      `Имя: ${escapeCaptionText(profile.displayName || targetUser.first_name || targetUser.username || targetUser.id)}`,
+      `Описание: ${escapeCaptionText(description)}`,
+      `Наказания: ${escapeCaptionText(punishments)}`,
+      `Сообщений: ${escapeCaptionText(profile.messageCount)}`,
+      `Место в топе: ${escapeCaptionText(topLabel)}`,
+      `Последний вход: ${escapeCaptionText(lastSeenLabel)}`,
       '',
       'Активность за последние 7 дней',
     ].join('\n');
