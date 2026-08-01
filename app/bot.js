@@ -179,10 +179,6 @@ function createBot() {
     return { target, options: shuffled };
   }
 
-  function getCaptchaKey(chatId, userId) {
-    return `${chatId}:${userId}`;
-  }
-
   function isCapsFlood(text) {
     if (!text || typeof text !== 'string') {
       return false;
@@ -229,11 +225,40 @@ function createBot() {
     const memberUser = ctx.chatMember?.new_chat_member?.user || ctx.update?.chat_member?.new_chat_member?.user || null;
     const displayName = memberUser?.first_name || memberUser?.username || 'пользователь';
     const { target, options } = getCaptchaEmojiSet();
-    const key = getCaptchaKey(chatId, userId);
-    captchaStates.set(key, {
+    const shuffledOptions = [...options, target].sort(() => Math.random() - 0.5);
+    const correctOptionId = shuffledOptions.indexOf(target);
+
+    let pollMessage;
+    try {
+      pollMessage = await ctx.telegram.sendPoll(userId,
+        `Капча для группы "${ctx.chat.title || 'группы'}". Выбери ${target}`,
+        shuffledOptions,
+        {
+          type: 'quiz',
+          correct_option_id: correctOptionId,
+          is_anonymous: false,
+          open_period: 300,
+          disable_notification: true,
+        }
+      );
+    } catch (error) {
+      await ctx.telegram.sendMessage(chatId, `Не удалось отправить капчу пользователю ${displayName}. Он должен открыть чат с ботом.`);
+      return;
+    }
+
+    const pollId = pollMessage?.poll?.id;
+    const pollMessageId = pollMessage?.message_id;
+    if (!pollId || !pollMessageId) {
+      await ctx.telegram.sendMessage(chatId, `Не удалось создать капчу для пользователя ${displayName}.`);
+      return;
+    }
+
+    captchaStates.set(pollId, {
       chatId,
       userId,
-      target,
+      displayName,
+      correctOptionId,
+      pollMessageId,
       createdAt: Date.now(),
     });
 
@@ -241,37 +266,45 @@ function createBot() {
     await ctx.telegram.sendMessage(chatId, `Пользователь ${displayName} должен пройти капчу, чтобы писать в чате.`, {
       disable_notification: true,
     });
-    await ctx.telegram.sendMessage(userId, `Привет! Чтобы пройти капчу в чате "${ctx.chat.title || 'группе'}", выбери правильный эмодзи.`, {
-      reply_markup: {
-        inline_keyboard: [
-          options.map((emoji) => ({ text: emoji, callback_data: `captcha:${emoji}:${chatId}` })),
-        ],
-      },
-    });
   }
 
-  async function completeCaptcha(ctx, chatId, userId, passed) {
-    const key = getCaptchaKey(chatId, userId);
-    const state = captchaStates.get(key);
+  async function completeCaptcha(ctx, pollId, passed) {
+    const state = captchaStates.get(pollId);
     if (!state) {
       return;
     }
 
-    captchaStates.delete(key);
+    captchaStates.delete(pollId);
 
     if (passed) {
-      await ctx.telegram.restrictChatMember(chatId, userId, buildMutePermissions(true));
-      await ctx.telegram.sendMessage(userId, 'Капча пройдена. Добро пожаловать!');
+      await ctx.telegram.restrictChatMember(state.chatId, state.userId, buildMutePermissions(true));
+      await ctx.telegram.sendMessage(state.userId, 'Капча пройдена. Добро пожаловать!');
+      await ctx.telegram.sendMessage(state.chatId, `Пользователь ${state.displayName} прошёл капчу и получил доступ к чату.`);
+      setTimeout(async () => {
+        try {
+          await ctx.telegram.deleteMessage(state.userId, state.pollMessageId);
+        } catch (deleteError) {
+          // ignore deletion errors
+        }
+      }, 5000);
       return;
     }
 
     try {
-      await ctx.telegram.banChatMember(chatId, userId);
-      await ctx.telegram.unbanChatMember(chatId, userId, { only_if_banned: true });
+      await ctx.telegram.banChatMember(state.chatId, state.userId);
+      await ctx.telegram.unbanChatMember(state.chatId, state.userId, { only_if_banned: true });
     } catch (error) {
       // ignore if the member cannot be removed or unbanned
     }
-    await ctx.telegram.sendMessage(userId, 'Капча не пройдена. Вы исключены из группы.');
+    await ctx.telegram.sendMessage(state.userId, 'Капча не пройдена. Вы исключены из группы.');
+    await ctx.telegram.sendMessage(state.chatId, `Пользователь ${state.displayName} не прошёл капчу и исключён из группы.`);
+    setTimeout(async () => {
+      try {
+        await ctx.telegram.deleteMessage(state.userId, state.pollMessageId);
+      } catch (deleteError) {
+        // ignore deletion errors
+      }
+    }, 5000);
   }
 
   async function expirePunishment(punishment) {
@@ -565,55 +598,87 @@ function createBot() {
     ctx.reply(`${status}, ${ctx.from.first_name || 'пользователь'}!\n\nИспользуйте /help или !помощь, чтобы увидеть команды.`);
   }
 
-  function helpCommand(ctx) {
-    ctx.reply([
-      '📋 СПРАВКА ПО КОМАНДАМ',
-      '',
-      '👤 ПОЛЬЗОВАТЕЛЬСКИЕ КОМАНДЫ',
-      '/start, !начало - начать работу',
-      '/help, !помощь - показать эту справку',
-      '/id, !айди - показать ваши ID',
-      '/about, !информация - информация о боте',
-      '/whoami, !кто я - забавное описание вас',
-      '',
-      '👮 МОДЕРСКИЕ КОМАНДЫ',
-      '/rules, !правила - показать правила чата',
-      '/setrules, !установить правила <текст> - установить правила',
-      '/setgreeting, !установить приветствие <текст> - установить приветствие',
-      '+антиспам - включить антиспам',
-      '-антиспам - выключить антиспам',
-      '+антифлуд - включить антифлуд',
-      '-антифлуд - выключить антифлуд',
-      '+ссылки - включить антиссылки',
-      '-ссылки - выключить антиссылки',
-      '/warn, !предупреждение - выдать предупреждение',
-      '/warnings, !варны - показать варны пользователя',
-      '/unwarn, !снять предупреждение - снять предупреждения',
-      '/mute, !мут <время> <причина> - ограничить сообщения',
-      '/unmute, !размут - снять ограничение',
-      '/ban, !бан <время> <причина> - заблокировать пользователя',
-      '/unban, !разбан - разблокировать пользователя',
-      '/banlist, !баны [страница] - список активных банов',
-      '/mutelist, !муты [страница] - список активных мутов',
-      '/admins, !админы - список администраторов бота',
-      '/addbotadmin, !добавить админа - назначить админа бота (ответом на сообщение)',
-      '/stats, !статистика - личная статистика пользователя',
-      '/top, !топ - топ пользователей по сообщениям в группе',
-      '',
-      '🎉 РАЗВЛЕЧЕНИЯ',
-      '/hug @username, !обнять @username - обнять пользователя',
-      '/kiss @username, !поцеловать @username - поцеловать пользователя',
-      '/slap @username, !шлепнуть @username - шлёпнуть пользователя',
-      '/poke @username, !тыкнуть @username - ткнуть пользователя',
-      '/coin, !монетка - подбросить монетку',
-      '/dice, !кубик - бросить кубик',
-      '/fate, !вопрос - спросить судьбу',
-      '/compliment, !комплимент - получить комплимент',
-      '/insult, !похвала - получить приятную шутку',
-      '/ai <текст> - спросить AI и получить ответ',
-      '',
-      'Используйте русские команды с ! и английские с /',
-    ].join('\n'));
+  function getHelpPages() {
+    return [
+      [
+        '📋 СПРАВКА ПО КОМАНДАМ',
+        '',
+        '👤 ПОЛЬЗОВАТЕЛЬСКИЕ КОМАНДЫ',
+        '/start, !начало - начать работу',
+        '/help, !помощь - показать эту справку',
+        '/id, !айди - показать ваши ID',
+        '/about, !информация - информация о боте',
+        '/whoami, !кто я - забавное описание вас',
+        '/stats, !статистика - личная статистика пользователя',
+        '/top, !топ - топ пользователей по сообщениям в группе',
+      ].join('\n'),
+      [
+        '📋 СПРАВКА ПО КОМАНДАМ',
+        '',
+        '👮 МОДЕРСКИЕ КОМАНДЫ',
+        '/rules, !правила - показать правила чата',
+        '/setrules, !установить правила <текст> - установить правила',
+        '/setgreeting, !установить приветствие <текст> - установить приветствие',
+        '+антиспам - включить антиспам',
+        '-антиспам - выключить антиспам',
+        '+антифлуд - включить антифлуд',
+        '-антифлуд - выключить антифлуд',
+        '+ссылки - включить антиссылки',
+        '-ссылки - выключить антиссылки',
+        '/warn, !предупреждение - выдать предупреждение',
+        '/warnings, !варны - показать варны пользователя',
+        '/unwarn, !снять предупреждение - снять предупреждения',
+        '/mute, !мут <время> <причина> - ограничить сообщения',
+        '/unmute, !размут - снять ограничение',
+        '/ban, !бан <время> <причина> - заблокировать пользователя',
+        '/unban, !разбан - разблокировать пользователя',
+        '/banlist, !баны [страница] - список активных банов',
+        '/mutelist, !муты [страница] - список активных мутов',
+        '/admins, !админы - список администраторов бота',
+        '/addbotadmin, !добавить админа - назначить админа бота (ответом на сообщение)',
+      ].join('\n'),
+      [
+        '📋 СПРАВКА ПО КОМАНДАМ',
+        '',
+        '🎉 РАЗВЛЕЧЕНИЯ',
+        '/hug @username, !обнять @username - обнять пользователя',
+        '/kiss @username, !поцеловать @username - поцеловать пользователя',
+        '/slap @username, !шлёпнуть @username - шлёпнуть пользователя',
+        '/poke @username, !тыкнуть @username - ткнуть пользователя',
+        '/coin, !монетка - подбросить монетку',
+        '/dice, !кубик - бросить кубик',
+        '/fate, !вопрос - спросить судьбу',
+        '/compliment, !комплимент - получить комплимент',
+        '/insult, !похвала - получить приятную шутку',
+        '/ai <текст> - спросить AI и получить ответ',
+        '',
+        'Используйте русские команды с ! и английские с /',
+      ].join('\n'),
+    ];
+  }
+
+  function buildHelpPage(pageIndex) {
+    const pages = getHelpPages();
+    const page = Math.max(0, Math.min(pageIndex, pages.length - 1));
+    const buttons = [];
+    if (page > 0) {
+      buttons.push({ text: '⬅️ Назад', callback_data: `help:${page - 1}` });
+    }
+    if (page < pages.length - 1) {
+      buttons.push({ text: 'Вперёд ➡️', callback_data: `help:${page + 1}` });
+    }
+
+    return {
+      text: `${pages[page]}\n\nСтраница ${page + 1}/${pages.length}`,
+      reply_markup: {
+        inline_keyboard: [buttons],
+      },
+    };
+  }
+
+  async function helpCommand(ctx) {
+    const helpPage = buildHelpPage(0);
+    await ctx.reply(helpPage.text, { reply_markup: helpPage.reply_markup });
   }
 
   function idCommand(ctx) {
@@ -814,19 +879,20 @@ function createBot() {
     const topLabel = profile.topPosition ? `${profile.topPosition} место` : 'не в топе';
     const lastSeenLabel = profile.lastSeenAt ? new Date(profile.lastSeenAt).toLocaleString('ru-RU') : 'неизвестно';
     const chartSvg = buildActivityChartSvg(activity);
+    const caption = [
+      `📊 Анкета пользователя ${username}`,
+      `Имя: ${profile.displayName || targetUser.first_name || targetUser.username || targetUser.id}`,
+      `Описание: ${description}`,
+      `Наказания: ${punishments}`,
+      `Сообщений: ${profile.messageCount}`,
+      `Место в топе: ${topLabel}`,
+      `Последний вход: ${lastSeenLabel}`,
+      '',
+      'Активность за последние 7 дней',
+    ].join('\n');
 
-    await ctx.replyWithPhoto({ source: Buffer.from(chartSvg, 'utf8') }, {
-      caption: [
-        `📊 Анкета пользователя ${username}`,
-        `Имя: ${profile.displayName || targetUser.first_name || targetUser.username || targetUser.id}`,
-        `Описание: ${description}`,
-        `Наказания: ${punishments}`,
-        `Сообщений: ${profile.messageCount}`,
-        `Место в топе: ${topLabel}`,
-        `Последний вход: ${lastSeenLabel}`,
-        '',
-        'Активность за последние 7 дней',
-      ].join('\n'),
+    await ctx.replyWithDocument({ source: Buffer.from(chartSvg, 'utf8'), filename: 'stats.svg' }, {
+      caption,
       parse_mode: 'HTML',
     });
   }
@@ -1276,6 +1342,13 @@ function createBot() {
   bot.command(['start', 'начало'], startCommand);
   bot.command(['help', 'помощь'], helpCommand);
 
+  bot.action(/^help:(\d+)$/, async (ctx) => {
+    const pageIndex = Number(ctx.match[1]);
+    const helpPage = buildHelpPage(pageIndex);
+    await ctx.answerCbQuery();
+    await ctx.editMessageText(helpPage.text, { reply_markup: helpPage.reply_markup });
+  });
+
   bot.command(['id', 'айди'], (ctx) => {
     ctx.reply(`Ваш Telegram ID: ${ctx.from.id}\nID чата: ${ctx.chat.id}`);
   });
@@ -1289,7 +1362,7 @@ function createBot() {
   });
 
   bot.command(['stats', 'статистика'], async (ctx) => {
-    const args = ctx.message.text.replace(/^\/(?:stats|статистика)\s*/i, '');
+    const args = ctx.message.text.replace(/^\/(?:stats|статистика)(?:@[\w_]+)?\s*/i, '');
     await statsCommand(ctx, args);
   });
 
