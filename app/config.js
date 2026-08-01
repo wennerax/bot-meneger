@@ -54,9 +54,17 @@ function loadConfig(overrides = {}, options = {}) {
   const envPath = options.filePath
     ? path.resolve(rootDir, options.filePath)
     : path.join(rootDir, '.env');
-  const envFile = readEnvFile(envPath);
-  const merged = { ...process.env, ...envFile, ...overrides };
-  const aiApiKey = envFile.OPENROUTER_API_KEY || envFile.AI_API_KEY || '';
+
+  const isProduction = process.env.NODE_ENV === 'production';
+  const shouldLoadEnvFile = Boolean(options.filePath) || !isProduction;
+  const envFile = shouldLoadEnvFile ? readEnvFile(envPath) : {};
+
+  if (isProduction && !options.filePath && fs.existsSync(envPath)) {
+    console.warn('Production mode: ignoring .env file for secret configuration. Set BOT_TOKEN and other sensitive values via environment variables.');
+  }
+
+  const merged = { ...envFile, ...process.env, ...overrides };
+  const aiApiKey = merged.OPENROUTER_API_KEY || merged.AI_API_KEY || '';
 
   return {
     botToken: merged.BOT_TOKEN || '',
@@ -64,11 +72,10 @@ function loadConfig(overrides = {}, options = {}) {
     botName: merged.BOT_NAME || 'Telegram Bot Manager',
     databasePath: merged.DATABASE_PATH || 'data/bot.json',
     // Support generic AI provider env and OpenRouter-specific env names.
-    // NOTE: AI API keys are loaded only from .env for this project.
     aiApiKey,
     aiModel: merged.AI_MODEL || merged.OPENROUTER_MODEL || 'openrouter',
     aiApiBaseUrl: merged.OPENROUTER_API_BASE_URL || merged.AI_API_BASE_URL || 'https://api.openrouter.ai',
-    weatherLocation: envFile.WEATHER_LOCATION || 'Moscow',
+    weatherLocation: merged.WEATHER_LOCATION || 'Moscow',
   };
 }
 

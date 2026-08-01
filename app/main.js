@@ -7,6 +7,10 @@ function main() {
   console.log(`Admin IDs: ${config.adminIds.join(', ') || 'none'}`);
   console.log(`Database: ${config.databasePath}`);
 
+  if (process.env.NODE_ENV === 'production' && !process.env.BOT_TOKEN) {
+    console.error('Production mode requires BOT_TOKEN to be supplied via environment variables. .env is ignored.');
+  }
+
   // Safe AI key presence log (do not print key value)
   console.log(`AI key present: ${config.aiApiKey ? 'yes' : 'no'}`);
 

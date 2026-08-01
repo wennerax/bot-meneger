@@ -216,13 +216,13 @@ function createBot() {
     return isCapsFlood(text) || hasRepeatedCharacterFlood(text);
   }
 
-  async function startCaptchaForUser(ctx, userId) {
+  async function startCaptchaForUser(ctx, userId, joinUser = null) {
     if (!isGroupChat(ctx)) {
       return;
     }
 
     const chatId = Number(ctx.chat.id);
-    const memberUser = ctx.chatMember?.new_chat_member?.user || ctx.update?.chat_member?.new_chat_member?.user || null;
+    const memberUser = joinUser || ctx.chatMember?.new_chat_member?.user || ctx.update?.chat_member?.new_chat_member?.user || null;
     const displayName = memberUser?.first_name || memberUser?.username || 'пользователь';
     const { target, options } = getCaptchaEmojiSet();
     const shuffledOptions = [...options, target].sort(() => Math.random() - 0.5);
@@ -636,6 +636,7 @@ function createBot() {
         '/mutelist, !муты [страница] - список активных мутов',
         '/admins, !админы - список администраторов бота',
         '/addbotadmin, !добавить админа - назначить админа бота (ответом на сообщение)',
+        '/removebotadmin, !снять админа - снять вспомогательного администратора бота (ответом на сообщение)',
       ].join('\n'),
       [
         '📋 СПРАВКА ПО КОМАНДАМ',
@@ -1196,6 +1197,37 @@ function createBot() {
     ctx.reply(`Пользователь ${target.first_name || target.username || target.id} добавлен как вспомогательный администратор бота.`);
   }
 
+  function removeBotAdminCommand(ctx) {
+    ensureGroup(ctx);
+    if (!isBotAdmin(ctx)) {
+      ctx.reply('Только главный или вспомогательный администратор бота может снимать админов.');
+      return;
+    }
+
+    const target = ctx.message.reply_to_message?.from;
+    if (!target) {
+      ctx.reply('Ответьте на сообщение пользователя, которого хотите разжаловать.');
+      return;
+    }
+
+    if (database.isPrimaryBotAdmin(ctx.chat.id, target.id)) {
+      ctx.reply('Нельзя снять главного администратора бота.');
+      return;
+    }
+
+    if (target.id === ctx.from.id) {
+      ctx.reply('Нельзя снять себя с роли администратора бота.');
+      return;
+    }
+
+    if (!database.removeBotAdmin(ctx.chat.id, target.id)) {
+      ctx.reply('Этот пользователь не является вспомогательным администратором бота.');
+      return;
+    }
+
+    ctx.reply(`Пользователь ${target.first_name || target.username || target.id} больше не является вспомогательным администратором бота.`);
+  }
+
   async function handleRussianCommand(ctx, text) {
     const [commandWithBot, ...parts] = text.slice(1).split(/\s+/);
     const command = commandWithBot.split('@')[0].toLowerCase();
@@ -1268,6 +1300,12 @@ function createBot() {
       case 'добавить':
         if (secondWord === 'админа') {
           addBotAdminCommand(ctx);
+          return true;
+        }
+        return false;
+      case 'снять':
+        if (secondWord === 'админа') {
+          removeBotAdminCommand(ctx);
           return true;
         }
         return false;
@@ -1475,13 +1513,12 @@ function createBot() {
 
   bot.on('chat_member', async (ctx) => {
     const member = ctx.chatMember?.new_chat_member;
-    if (!member || !ctx.chat || !ctx.from) {
+    if (!member || !ctx.chat) {
       return;
     }
 
     const isBot = Boolean(member.user?.is_bot);
-    const isNewMember = member.status === 'member' || member.status === 'restricted';
-    if (!isNewMember || isBot) {
+    if (isBot) {
       return;
     }
 
@@ -1490,7 +1527,25 @@ function createBot() {
       return;
     }
 
-    await startCaptchaForUser(ctx, userId);
+    await startCaptchaForUser(ctx, userId, member.user);
+  });
+
+  bot.on('new_chat_members', async (ctx) => {
+    const newMembers = ctx.message?.new_chat_members;
+    if (!Array.isArray(newMembers) || !ctx.chat) {
+      return;
+    }
+
+    for (const member of newMembers) {
+      if (member.is_bot) {
+        continue;
+      }
+      const userId = Number(member.id);
+      if (!Number.isFinite(userId)) {
+        continue;
+      }
+      await startCaptchaForUser(ctx, userId, member);
+    }
   });
 
   bot.on('poll_answer', async (ctx) => {
@@ -1595,6 +1650,37 @@ function createBot() {
 
     database.addBotAdmin(ctx.chat.id, target.id);
     ctx.reply(`Пользователь ${target.first_name || target.username || target.id} добавлен как вспомогательный администратор бота.`);
+  });
+
+  bot.command(['removebotadmin', 'снять_админа'], (ctx) => {
+    ensureGroup(ctx);
+    if (!isBotAdmin(ctx)) {
+      ctx.reply('Только главный или вспомогательный администратор бота может снимать админов.');
+      return;
+    }
+
+    const target = ctx.message.reply_to_message?.from;
+    if (!target) {
+      ctx.reply('Ответьте на сообщение пользователя, которого хотите разжаловать.');
+      return;
+    }
+
+    if (database.isPrimaryBotAdmin(ctx.chat.id, target.id)) {
+      ctx.reply('Нельзя снять главного администратора бота.');
+      return;
+    }
+
+    if (target.id === ctx.from.id) {
+      ctx.reply('Нельзя снять себя с роли администратора бота.');
+      return;
+    }
+
+    if (!database.removeBotAdmin(ctx.chat.id, target.id)) {
+      ctx.reply('Этот пользователь не является вспомогательным администратором бота.');
+      return;
+    }
+
+    ctx.reply(`Пользователь ${target.first_name || target.username || target.id} больше не является вспомогательным администратором бота.`);
   });
 
   async function handleIncomingMessage(ctx) {

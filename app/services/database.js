@@ -123,6 +123,21 @@ class Database {
     this._save();
   }
 
+  removeBotAdmin(chatId, userId) {
+    const id = Number(chatId);
+    const user = Number(userId);
+    if (!this.data.botAdmins[id]) {
+      return false;
+    }
+    const index = this.data.botAdmins[id].indexOf(user);
+    if (index === -1) {
+      return false;
+    }
+    this.data.botAdmins[id].splice(index, 1);
+    this._save();
+    return true;
+  }
+
   isPrimaryBotAdmin(chatId, userId) {
     const id = Number(chatId);
     const ownerId = this.data.groups[id]?.ownerId;
