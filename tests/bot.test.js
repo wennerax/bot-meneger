@@ -62,11 +62,11 @@ test('buildPunishmentListMessage paginates active bans and mutes', () => {
 });
 
 test('buildBotAdminListMessage separates primary and auxiliary admins', () => {
-  const message = buildBotAdminListMessage(1001, ['1002', '1003']);
+  const message = buildBotAdminListMessage('@alice', ['@bob', '@carol']);
 
-  assert.match(message, /Главный администратор/);
-  assert.match(message, /Вспомогательные администраторы/);
-  assert.match(message, /1002/);
+  assert.match(message, /Главный администратор: @alice/);
+  assert.match(message, /1\. @bob/);
+  assert.match(message, /2\. @carol/);
 });
 
 test('buildAiRequestPayload builds an OpenAI-compatible request body', async () => {

@@ -1,4 +1,5 @@
 const { Telegraf } = require('telegraf');
+const sharp = require('sharp');
 const { loadConfig } = require('./config');
 const UserService = require('./services/user_service');
 const ModerationService = require('./services/moderation_service');
@@ -111,9 +112,9 @@ function buildPunishmentListMessage(kind, punishments, page, pageSize = 10) {
   return `${title} (страница ${safePage}/${totalPages})\n${lines.join('\n')}`;
 }
 
-function buildBotAdminListMessage(primaryAdminId, auxiliaryAdminIds = []) {
-  const primaryLabel = primaryAdminId === null || primaryAdminId === undefined ? 'нет' : `User ${primaryAdminId}`;
-  const auxiliaryLabels = Array.isArray(auxiliaryAdminIds) ? auxiliaryAdminIds : [];
+function buildBotAdminListMessage(primaryAdminLabel, auxiliaryAdminLabels = []) {
+    const primaryLabel = primaryAdminLabel || 'нет';
+    const auxiliaryLabels = Array.isArray(auxiliaryAdminLabels) ? auxiliaryAdminLabels : [];
   const lines = [
     '🤖 Администраторы бота',
     `Главный администратор: ${primaryLabel}`,
@@ -625,27 +626,27 @@ function createBot() {
         '-антифлуд - выключить антифлуд',
         '+ссылки - включить антиссылки',
         '-ссылки - выключить антиссылки',
-        '/warn, !предупреждение - выдать предупреждение',
-        '/warnings, !варны - показать варны пользователя',
-        '/unwarn, !снять предупреждение - снять предупреждения',
-        '/mute, !мут <время> <причина> - ограничить сообщения',
+        '/warn, !предупреждение @юз - выдать предупреждение',
+        '/warnings, !варны [@юз] - показать варны пользователя',
+        '/unwarn, !снять предупреждение @юз - снять предупреждения',
+        '/mute, !мут @юз <время> <причина> - ограничить сообщения',
         '/unmute, !размут - снять ограничение',
         '/ban, !бан <время> <причина> - заблокировать пользователя',
         '/unban, !разбан - разблокировать пользователя',
         '/banlist, !баны [страница] - список активных банов',
         '/mutelist, !муты [страница] - список активных мутов',
         '/admins, !админы - список администраторов бота',
-        '/addbotadmin, !добавить админа - назначить админа бота (ответом на сообщение)',
-        '/removebotadmin, !снять админа - снять вспомогательного администратора бота (ответом на сообщение)',
+        '/addbotadmin @юз, !добавить админа @юз - назначить админа бота',
+        '/removebotadmin @юз, !снять админа @юз - снять вспомогательного администратора бота',
       ].join('\n'),
       [
         '📋 СПРАВКА ПО КОМАНДАМ',
         '',
         '🎉 РАЗВЛЕЧЕНИЯ',
-        '/hug @username, !обнять @username - обнять пользователя',
-        '/kiss @username, !поцеловать @username - поцеловать пользователя',
-        '/slap @username, !шлёпнуть @username - шлёпнуть пользователя',
-        '/poke @username, !тыкнуть @username - ткнуть пользователя',
+        '/hug @юз, !обнять @юз - обнять пользователя',
+        '/kiss @юз, !поцеловать @юз - поцеловать пользователя',
+        '/slap @юз, !шлёпнуть @юз - шлёпнуть пользователя',
+        '/poke @юз, !тыкнуть @юз - ткнуть пользователя',
         '/coin, !монетка - подбросить монетку',
         '/dice, !кубик - бросить кубик',
         '/fate, !вопрос - спросить судьбу',
@@ -772,7 +773,7 @@ function createBot() {
   }
 
   async function roleplayCommand(ctx, args, action) {
-    const target = await resolveRoleplayTarget(ctx, args, `/${action} @username`);
+    const target = await resolveRoleplayTarget(ctx, args, `/${action} @юз`);
     if (!target) {
       return;
     }
@@ -838,18 +839,6 @@ function createBot() {
       const y = paddingY + chartHeight - (value / maxValue) * chartHeight;
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     });
-  }
-
-  function escapeCaptionText(value) {
-    const text = value === null || value === undefined ? '' : String(value);
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;')
-      .replace(/\r?\n/g, ' ');
-  }
 
     const polyline = points.length ? `M ${points.join(' L ')}` : '';
     const labels = safeActivity.map((item, index) => {
@@ -870,12 +859,28 @@ function createBot() {
     return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">\n  <rect x="0" y="0" width="${width}" height="${height}" rx="12" fill="#0f172a" />\n  <line x1="${paddingX}" y1="${height - paddingY}" x2="${width - paddingX}" y2="${height - paddingY}" stroke="#475569" stroke-width="1" />\n  <line x1="${paddingX}" y1="${paddingY}" x2="${paddingX}" y2="${height - paddingY}" stroke="#475569" stroke-width="1" />\n  ${polyline ? `<path d="${polyline}" fill="none" stroke="#60a5fa" stroke-width="2.5" />` : ''}\n  ${bars}\n  ${labels}\n</svg>`;
   }
 
+  async function buildActivityChartPng(activity = []) {
+    const svg = buildActivityChartSvg(activity);
+    return sharp(Buffer.from(svg, 'utf8')).png().toBuffer();
+  }
+
+  function escapeCaptionText(value) {
+    const text = value === null || value === undefined ? '' : String(value);
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+      .replace(/\r?\n/g, ' ');
+  }
+
   async function statsCommand(ctx, args) {
     ensureGroup(ctx);
 
     let targetUser = ctx.message.reply_to_message?.from || ctx.from;
     if (args && args.trim()) {
-      const targetData = await resolveCommandTarget(ctx, args, '/stats @username');
+      const targetData = await resolveCommandTarget(ctx, args, '/stats @юз');
       if (!targetData) {
         return;
       }
@@ -904,10 +909,19 @@ function createBot() {
       'Активность за последние 7 дней',
     ].join('\n');
 
-    await ctx.replyWithDocument({ source: Buffer.from(chartSvg, 'utf8'), filename: 'stats.svg' }, {
-      caption,
-      parse_mode: 'HTML',
-    });
+    try {
+      const chartPng = await buildActivityChartPng(activity);
+      await ctx.replyWithPhoto({ source: chartPng }, {
+        caption,
+        parse_mode: 'HTML',
+      });
+    } catch (error) {
+      console.error('Failed to convert chart to PNG:', error);
+      await ctx.replyWithDocument({ source: Buffer.from(chartSvg, 'utf8'), filename: 'stats.svg' }, {
+        caption,
+        parse_mode: 'HTML',
+      });
+    }
   }
 
   function topCommand(ctx) {
@@ -944,30 +958,24 @@ function createBot() {
     ensureGroup(ctx);
     const primaryAdminId = database.getPrimaryBotAdmin(ctx.chat.id);
     const auxiliaryAdminIds = database.getAuxiliaryBotAdmins(ctx.chat.id);
-    const labels = auxiliaryAdminIds.map((userId) => {
+
+    const buildAdminLabel = (userId) => {
       const profile = database.getUserProfile(ctx.chat.id, userId);
-      if (profile?.displayName) {
-        return `${profile.displayName} (${userId})`;
-      }
       if (profile?.username) {
-        return `${profile.username} (${userId})`;
+        return profile.username;
+      }
+      if (profile?.displayName) {
+        return profile.displayName;
       }
       return `User ${userId}`;
-    });
+    };
+
+    const labels = auxiliaryAdminIds.map(buildAdminLabel);
     const primaryLabel = primaryAdminId === null || primaryAdminId === undefined
       ? 'нет'
-      : (() => {
-          const profile = database.getUserProfile(ctx.chat.id, primaryAdminId);
-          if (profile?.displayName) {
-            return `${profile.displayName} (${primaryAdminId})`;
-          }
-          if (profile?.username) {
-            return `${profile.username} (${primaryAdminId})`;
-          }
-          return `User ${primaryAdminId}`;
-        })();
+      : buildAdminLabel(primaryAdminId);
 
-    ctx.reply(buildBotAdminListMessage(primaryAdminId, labels));
+    ctx.reply(buildBotAdminListMessage(primaryLabel, labels));
   }
 
   function rulesCommand(ctx) {
@@ -996,7 +1004,7 @@ function createBot() {
       return;
     }
 
-    const targetData = await resolveCommandTarget(ctx, args, '/warn @username причина');
+    const targetData = await resolveCommandTarget(ctx, args, '/warn @юз причина');
     if (!targetData) {
       return;
     }
@@ -1007,9 +1015,16 @@ function createBot() {
     ctx.reply(`Предупреждение для ${targetData.target.first_name || targetData.target.username || targetData.target.id}: ${moderationService.getWarnings(ctx.chat.id, targetData.target.id)}/3. Причина: ${details.reason}`);
   }
 
-  function warningsCommand(ctx) {
+  async function warningsCommand(ctx, args = '') {
     ensureGroup(ctx);
-    const target = ctx.message.reply_to_message?.from || ctx.from;
+    let target = ctx.message.reply_to_message?.from || ctx.from;
+    if (args && args.trim()) {
+      const targetData = await resolveCommandTarget(ctx, args, '/warnings @юз');
+      if (!targetData) {
+        return;
+      }
+      target = targetData.target;
+    }
     ctx.reply(`Предупреждений: ${moderationService.getWarnings(ctx.chat.id, target.id)}/3`);
   }
 
@@ -1020,7 +1035,7 @@ function createBot() {
       return;
     }
 
-    const targetData = await resolveCommandTarget(ctx, args, '/unwarn @username');
+    const targetData = await resolveCommandTarget(ctx, args, '/unwarn @юз');
     if (!targetData) {
       return;
     }
@@ -1036,7 +1051,7 @@ function createBot() {
       return;
     }
 
-    const targetData = await resolveCommandTarget(ctx, args, '/mute @username <время> <причина>');
+    const targetData = await resolveCommandTarget(ctx, args, '/mute @юз <время> <причина>');
     if (!targetData) {
       return;
     }
@@ -1083,7 +1098,7 @@ function createBot() {
       return;
     }
 
-    const targetData = await resolveCommandTarget(ctx, args, '/unmute @username');
+    const targetData = await resolveCommandTarget(ctx, args, '/unmute @юз');
     if (!targetData) {
       return;
     }
@@ -1107,7 +1122,7 @@ function createBot() {
       return;
     }
 
-    const targetData = await resolveCommandTarget(ctx, args, '/ban @username <время> <причина>');
+    const targetData = await resolveCommandTarget(ctx, args, '/ban @юз <время> <причина>');
     if (!targetData) {
       return;
     }
@@ -1154,7 +1169,7 @@ function createBot() {
       return;
     }
 
-    const targetData = await resolveCommandTarget(ctx, args, '/unban @username');
+    const targetData = await resolveCommandTarget(ctx, args, '/unban @юз');
     if (!targetData) {
       return;
     }
@@ -1186,19 +1201,19 @@ function createBot() {
     ctx.reply('Приветствие чата обновлено.');
   }
 
-  function addBotAdminCommand(ctx) {
+  async function addBotAdminCommand(ctx, args = '') {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
       ctx.reply('Только главный или вспомогательный администратор бота может добавлять новых админов.');
       return;
     }
 
-    const target = ctx.message.reply_to_message?.from;
-    if (!target) {
-      ctx.reply('Ответьте на сообщение пользователя, которого хотите сделать администратором бота.');
+    const targetData = await resolveCommandTarget(ctx, args, '/addbotadmin @юз');
+    if (!targetData) {
       return;
     }
 
+    const target = targetData.target;
     const isPrimary = database.isPrimaryBotAdmin(ctx.chat.id, ctx.from.id);
     if (!isPrimary && target.id === ctx.from.id) {
       ctx.reply('Нельзя назначить себя дополнительным администратором.');
@@ -1209,19 +1224,19 @@ function createBot() {
     ctx.reply(`Пользователь ${target.first_name || target.username || target.id} добавлен как вспомогательный администратор бота.`);
   }
 
-  function removeBotAdminCommand(ctx) {
+  async function removeBotAdminCommand(ctx, args = '') {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
       ctx.reply('Только главный или вспомогательный администратор бота может снимать админов.');
       return;
     }
 
-    const target = ctx.message.reply_to_message?.from;
-    if (!target) {
-      ctx.reply('Ответьте на сообщение пользователя, которого хотите разжаловать.');
+    const targetData = await resolveCommandTarget(ctx, args, '/removebotadmin @юз');
+    if (!targetData) {
       return;
     }
 
+    const target = targetData.target;
     if (database.isPrimaryBotAdmin(ctx.chat.id, target.id)) {
       ctx.reply('Нельзя снять главного администратора бота.');
       return;
@@ -1286,7 +1301,7 @@ function createBot() {
         await warnCommand(ctx, args);
         return true;
       case 'варны':
-        warningsCommand(ctx);
+        await warningsCommand(ctx, args);
         return true;
       case 'снять':
         if (secondWord === 'предупреждение') {
@@ -1311,13 +1326,13 @@ function createBot() {
         return true;
       case 'добавить':
         if (secondWord === 'админа') {
-          addBotAdminCommand(ctx);
+          await addBotAdminCommand(ctx, args.replace(/^админа\s*/i, ''));
           return true;
         }
         return false;
       case 'снять':
         if (secondWord === 'админа') {
-          removeBotAdminCommand(ctx);
+          await removeBotAdminCommand(ctx, args.replace(/^админа\s*/i, ''));
           return true;
         }
         return false;
@@ -1600,10 +1615,9 @@ function createBot() {
     await warnCommand(ctx, ctx.message.text.replace(/^\/(?:warn|предупреждение)\s*/i, ''));
   });
 
-  bot.command(['warnings', 'варны'], (ctx) => {
-    ensureGroup(ctx);
-    const target = ctx.message.reply_to_message?.from || ctx.from;
-    ctx.reply(`Предупреждений: ${moderationService.getWarnings(ctx.chat.id, target.id)}/3`);
+  bot.command(['warnings', 'варны'], async (ctx) => {
+    const args = ctx.message.text.replace(/^\/(?:warnings|варны)(?:@[\w_]+)?\s*/i, '');
+    await warningsCommand(ctx, args);
   });
 
   bot.command(['unwarn', 'снять_предупреждение'], async (ctx) => {
@@ -1641,58 +1655,14 @@ function createBot() {
     ctx.reply('Приветствие чата обновлено.');
   });
 
-  bot.command(['addbotadmin', 'добавить_админа'], (ctx) => {
-    ensureGroup(ctx);
-    if (!isBotAdmin(ctx)) {
-      ctx.reply('Только главный или вспомогательный администратор бота может добавлять новых админов.');
-      return;
-    }
-
-    const target = ctx.message.reply_to_message?.from;
-    if (!target) {
-      ctx.reply('Ответьте на сообщение пользователя, которого хотите сделать администратором бота.');
-      return;
-    }
-
-    const isPrimary = database.isPrimaryBotAdmin(ctx.chat.id, ctx.from.id);
-    if (!isPrimary && target.id === ctx.from.id) {
-      ctx.reply('Нельзя назначить себя дополнительным администратором.');
-      return;
-    }
-
-    database.addBotAdmin(ctx.chat.id, target.id);
-    ctx.reply(`Пользователь ${target.first_name || target.username || target.id} добавлен как вспомогательный администратор бота.`);
+  bot.command(['addbotadmin', 'добавить_админа'], async (ctx) => {
+    const args = ctx.message.text.replace(/^\/(?:addbotadmin|добавить_админа)(?:@[\w_]+)?\s*/i, '');
+    await addBotAdminCommand(ctx, args);
   });
 
-  bot.command(['removebotadmin', 'снять_админа'], (ctx) => {
-    ensureGroup(ctx);
-    if (!isBotAdmin(ctx)) {
-      ctx.reply('Только главный или вспомогательный администратор бота может снимать админов.');
-      return;
-    }
-
-    const target = ctx.message.reply_to_message?.from;
-    if (!target) {
-      ctx.reply('Ответьте на сообщение пользователя, которого хотите разжаловать.');
-      return;
-    }
-
-    if (database.isPrimaryBotAdmin(ctx.chat.id, target.id)) {
-      ctx.reply('Нельзя снять главного администратора бота.');
-      return;
-    }
-
-    if (target.id === ctx.from.id) {
-      ctx.reply('Нельзя снять себя с роли администратора бота.');
-      return;
-    }
-
-    if (!database.removeBotAdmin(ctx.chat.id, target.id)) {
-      ctx.reply('Этот пользователь не является вспомогательным администратором бота.');
-      return;
-    }
-
-    ctx.reply(`Пользователь ${target.first_name || target.username || target.id} больше не является вспомогательным администратором бота.`);
+  bot.command(['removebotadmin', 'снять_админа'], async (ctx) => {
+    const args = ctx.message.text.replace(/^\/(?:removebotadmin|снять_админа)(?:@[\w_]+)?\s*/i, '');
+    await removeBotAdminCommand(ctx, args);
   });
 
   async function handleIncomingMessage(ctx) {
