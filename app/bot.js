@@ -230,8 +230,8 @@ function createBot() {
 
     let pollMessage;
     try {
-      pollMessage = await ctx.telegram.sendPoll(userId,
-        `Капча для группы "${ctx.chat.title || 'группы'}". Выбери ${target}`,
+      pollMessage = await ctx.telegram.sendPoll(chatId,
+        `Капча для пользователя ${displayName}. Выбери ${target}`,
         shuffledOptions,
         {
           type: 'quiz',
@@ -242,7 +242,7 @@ function createBot() {
         }
       );
     } catch (error) {
-      await ctx.telegram.sendMessage(chatId, `Не удалось отправить капчу пользователю ${displayName}. Он должен открыть чат с ботом.`);
+      await ctx.telegram.sendMessage(chatId, `Не удалось создать капчу в группе для пользователя ${displayName}. Пожалуйста, проверьте права бота.`);
       return;
     }
 
@@ -263,7 +263,7 @@ function createBot() {
     });
 
     await ctx.telegram.restrictChatMember(chatId, userId, buildMutePermissions(false));
-    await ctx.telegram.sendMessage(chatId, `Пользователь ${displayName} должен пройти капчу, чтобы писать в чате.`, {
+    await ctx.telegram.sendMessage(chatId, `Пользователь ${displayName} должен пройти капчу в этом чате, чтобы писать сообщения.`, {
       disable_notification: true,
     });
   }
@@ -282,7 +282,7 @@ function createBot() {
       await ctx.telegram.sendMessage(state.chatId, `Пользователь ${state.displayName} прошёл капчу и получил доступ к чату.`);
       setTimeout(async () => {
         try {
-          await ctx.telegram.deleteMessage(state.userId, state.pollMessageId);
+          await ctx.telegram.deleteMessage(state.chatId, state.pollMessageId);
         } catch (deleteError) {
           // ignore deletion errors
         }
@@ -300,7 +300,7 @@ function createBot() {
     await ctx.telegram.sendMessage(state.chatId, `Пользователь ${state.displayName} не прошёл капчу и исключён из группы.`);
     setTimeout(async () => {
       try {
-        await ctx.telegram.deleteMessage(state.userId, state.pollMessageId);
+        await ctx.telegram.deleteMessage(state.chatId, state.pollMessageId);
       } catch (deleteError) {
         // ignore deletion errors
       }
