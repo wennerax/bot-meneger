@@ -70,11 +70,34 @@ function buildFunReply(kind) {
     return answers[Math.floor(Math.random() * answers.length)];
   }
   if (kind === 'compliment') {
-    const replies = ['у тебя очень приятная энергия', 'ты делаешь этот чат лучше', 'ты невероятно добрый человек', 'ты умеешь вдохновлять'];
+    const replies = [
+      'у тебя очень приятная энергия',
+      'ты делаешь этот чат лучше',
+      'ты невероятно добрый человек',
+      'ты умеешь вдохновлять',
+      'у тебя шикарный вкус',
+      'ты — лучшая часть этого чата',
+      'ты сегодня сияешь как солнце',
+      'ты словно человек, который может поднять настроение любому',
+      'твой юмор дороже любого подарка',
+      'ты — настоящий двигатель позитивной жопы',
+      'ты — огонь, который не тушит ни одна хуйня',
+      'ты — редкий цветок в этом говне',
+      'ты — просто красавчик(ца), и это не шутка',
+    ];
     return replies[Math.floor(Math.random() * replies.length)];
   }
   if (kind === 'insult') {
-    const replies = ['ты — источник вайба', 'ты удивительно милый человек', 'у тебя очень сильный характер', 'ты даже в шутку звучишь круто'];
+    const replies = [
+      'ты — пиздец с человеческим лицом',
+      'ты такой долбоёб, что даже Wi-Fi начинает от тебя отказываться',
+      'ты — ходячий говноплан, но тебе будто нравится',
+      'ты — ебаный шлак, который ещё и считает себя крутым',
+      'ты — тип, которому стоило бы выключить мозг и не включать его снова',
+      'ты — мудак, который делает этот чат живее, но от этого не лучше',
+      'ты — серый кардинал дурдома, но без кардинального смысла',
+      'ты — феерический пиздеж, который ещё не понял, где кончается реальность',
+    ];
     return replies[Math.floor(Math.random() * replies.length)];
   }
   return 'Пока что нет такой игры.';
@@ -254,18 +277,19 @@ function createBot() {
       return;
     }
 
+    await ctx.telegram.restrictChatMember(chatId, userId, buildMutePermissions(false));
+    const instructionMessage = await ctx.telegram.sendMessage(chatId, `Пользователь ${displayName} должен пройти капчу в этом чате, чтобы писать сообщения.`, {
+      disable_notification: true,
+    });
+
     captchaStates.set(pollId, {
       chatId,
       userId,
       displayName,
       correctOptionId,
       pollMessageId,
+      instructionMessageId: instructionMessage?.message_id,
       createdAt: Date.now(),
-    });
-
-    await ctx.telegram.restrictChatMember(chatId, userId, buildMutePermissions(false));
-    await ctx.telegram.sendMessage(chatId, `Пользователь ${displayName} должен пройти капчу в этом чате, чтобы писать сообщения.`, {
-      disable_notification: true,
     });
   }
 
@@ -292,11 +316,10 @@ function createBot() {
 
     if (passed) {
       await ctx.telegram.restrictChatMember(state.chatId, state.userId, buildMutePermissions(true));
-      const sentPrivateMessage = await ctx.telegram.sendMessage(state.userId, 'Капча пройдена. Добро пожаловать!');
       const sentGroupMessage = await ctx.telegram.sendMessage(state.chatId, `Пользователь ${state.displayName} прошёл капчу и получил доступ к чату.`);
-      scheduleDeleteMessage(ctx.telegram, state.userId, sentPrivateMessage?.message_id);
       scheduleDeleteMessage(ctx.telegram, state.chatId, sentGroupMessage?.message_id);
       scheduleDeleteMessage(ctx.telegram, state.chatId, state.pollMessageId);
+      scheduleDeleteMessage(ctx.telegram, state.chatId, state.instructionMessageId);
       return;
     }
 
@@ -407,7 +430,7 @@ function createBot() {
 
   function isKnownCommandText(text) {
     const slashCommand = /^\/(start|help|id|about|whoami|stats|rules|hug|kiss|slap|poke|coin|dice|fate|compliment|insult|top|admins|banlist|mutelist|setrules|warn|warnings|unwarn|mute|unmute|ban|unban|setgreeting|addbotadmin|ai)(\s|$)/i;
-    const bangCommand = /^!(начало|помощь|айди|информация|кто\s*я|статистика|правила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|похвала)(\s|$)/i;
+    const bangCommand = /^!(начало|помощь|айди|информация|кто\s*я|статистика|правила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|инсульт)(\s|$)/i;
     const plusMinusCommand = /^(\+антиспам|\+antispam|\+антифлуд|\+antiflood|\-антиспам|\-antispam|\-антифлуд|\-antiflood|\+ссылки|\+links|\-ссылки|\-links|\+описание|\+description|\+rules|\+правила|\+greeting|\+приветствие)(\s|$)/i;
     return slashCommand.test(text) || bangCommand.test(text) || plusMinusCommand.test(text);
   }
@@ -660,7 +683,7 @@ function createBot() {
         '/dice, !кубик - бросить кубик',
         '/fate, !вопрос - спросить судьбу',
         '/compliment, !комплимент - получить комплимент',
-        '/insult, !похвала - получить приятную шутку',
+        '/insult, !инсульт - получить приятную шутку',
         '/ai <текст> - спросить AI и получить ответ',
         '',
         'Используйте русские команды с ! и английские с /',
@@ -1424,7 +1447,7 @@ function createBot() {
   });
 
   bot.command(['id', 'айди'], (ctx) => {
-    ctx.reply(`Ваш Telegram ID: ${ctx.from.id}\nID чата: ${ctx.chat.id}`);
+    ctx.reply(`Ваш Telegram ID: ${ctx.from.id}`);
   });
 
   bot.command(['about', 'информация'], (ctx) => {
@@ -1520,7 +1543,7 @@ function createBot() {
     funCommand(ctx, 'compliment');
   });
 
-  bot.command(['insult', 'похвала'], (ctx) => {
+  bot.command(['insult', 'инсульт'], (ctx) => {
     funCommand(ctx, 'insult');
   });
 
