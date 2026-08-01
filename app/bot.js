@@ -269,6 +269,19 @@ function createBot() {
     });
   }
 
+  function scheduleDeleteMessage(telegram, chatId, messageId, delay = 5000) {
+    if (!chatId || !messageId) {
+      return;
+    }
+    setTimeout(async () => {
+      try {
+        await telegram.deleteMessage(chatId, messageId);
+      } catch (deleteError) {
+        // ignore deletion errors
+      }
+    }, delay);
+  }
+
   async function completeCaptcha(ctx, pollId, passed) {
     const state = captchaStates.get(pollId);
     if (!state) {
@@ -279,15 +292,11 @@ function createBot() {
 
     if (passed) {
       await ctx.telegram.restrictChatMember(state.chatId, state.userId, buildMutePermissions(true));
-      await ctx.telegram.sendMessage(state.userId, 'Капча пройдена. Добро пожаловать!');
-      await ctx.telegram.sendMessage(state.chatId, `Пользователь ${state.displayName} прошёл капчу и получил доступ к чату.`);
-      setTimeout(async () => {
-        try {
-          await ctx.telegram.deleteMessage(state.chatId, state.pollMessageId);
-        } catch (deleteError) {
-          // ignore deletion errors
-        }
-      }, 5000);
+      const sentPrivateMessage = await ctx.telegram.sendMessage(state.userId, 'Капча пройдена. Добро пожаловать!');
+      const sentGroupMessage = await ctx.telegram.sendMessage(state.chatId, `Пользователь ${state.displayName} прошёл капчу и получил доступ к чату.`);
+      scheduleDeleteMessage(ctx.telegram, state.userId, sentPrivateMessage?.message_id);
+      scheduleDeleteMessage(ctx.telegram, state.chatId, sentGroupMessage?.message_id);
+      scheduleDeleteMessage(ctx.telegram, state.chatId, state.pollMessageId);
       return;
     }
 
