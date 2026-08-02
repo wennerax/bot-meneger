@@ -27,23 +27,41 @@ class Database {
       const normalizedBotAdmins = {};
       const rawBotAdmins = parsed.botAdmins || {};
 
+      // Support multiple legacy formats: array of entries, or object map { userId: level }
       Object.entries(rawBotAdmins).forEach(([chatId, admins]) => {
-        if (!Array.isArray(admins)) {
-          normalizedBotAdmins[chatId] = [];
+        const id = String(chatId);
+        normalizedBotAdmins[id] = {};
+
+        if (Array.isArray(admins)) {
+          admins.forEach((entry) => {
+            if (typeof entry === 'number' || typeof entry === 'string') {
+              normalizedBotAdmins[id][String(Number(entry))] = 1;
+              return;
+            }
+            if (entry && typeof entry === 'object') {
+              const userId = Number(entry.userId);
+              const level = Number(entry.level) || 1;
+              if (Number.isFinite(userId)) {
+                normalizedBotAdmins[id][String(userId)] = level;
+              }
+            }
+          });
           return;
         }
 
-        normalizedBotAdmins[chatId] = admins
-          .map((entry) => {
-            if (typeof entry === 'number' || typeof entry === 'string') {
-              return { userId: Number(entry), level: 1 };
+        // If it's already an object map like {"123":1}
+        if (admins && typeof admins === 'object') {
+          Object.entries(admins).forEach(([userKey, value]) => {
+            const userId = Number(userKey);
+            const level = Number(value) || 1;
+            if (Number.isFinite(userId)) {
+              normalizedBotAdmins[id][String(userId)] = level;
             }
-            if (entry && typeof entry === 'object') {
-              return { userId: Number(entry.userId), level: Number(entry.level) || 1 };
-            }
-            return null;
-          })
-          .filter(Boolean);
+          });
+          return;
+        }
+
+        // Fallback: leave as empty map
       });
 
       return {
@@ -134,49 +152,44 @@ class Database {
   }
 
   addBotAdmin(chatId, userId, level = 1) {
-    const id = Number(chatId);
-    const user = Number(userId);
-    if (this.isPrimaryBotAdmin(id, user)) {
+    const id = String(Number(chatId));
+    const user = String(Number(userId));
+    if (this.isPrimaryBotAdmin(id, Number(user))) {
       return;
     }
 
     const normalizedLevel = Number(level) || 1;
     if (!this.data.botAdmins[id]) {
-      this.data.botAdmins[id] = [];
+      this.data.botAdmins[id] = {};
     }
 
-    const existing = this.data.botAdmins[id].find((item) => Number(item.userId) === user);
-    if (existing) {
-      existing.level = normalizedLevel;
-    } else {
-      this.data.botAdmins[id].push({ userId: user, level: normalizedLevel });
-    }
+    this.data.botAdmins[id][user] = normalizedLevel;
     this._save();
   }
 
   removeBotAdmin(chatId, userId) {
-    const id = Number(chatId);
-    const user = Number(userId);
-    if (!this.data.botAdmins[id]) {
+    const id = String(Number(chatId));
+    const user = String(Number(userId));
+    if (!this.data.botAdmins[id] || this.data.botAdmins[id][user] === undefined) {
       return false;
     }
-    const index = this.data.botAdmins[id].findIndex((item) => Number(item.userId) === user);
-    if (index === -1) {
-      return false;
+    delete this.data.botAdmins[id][user];
+    // cleanup empty object
+    if (Object.keys(this.data.botAdmins[id]).length === 0) {
+      delete this.data.botAdmins[id];
     }
-    this.data.botAdmins[id].splice(index, 1);
     this._save();
     return true;
   }
 
   getBotAdminLevel(chatId, userId) {
-    const id = Number(chatId);
-    const user = Number(userId);
-    const entry = this.data.botAdmins[id]?.find((item) => Number(item.userId) === user);
-    if (entry) {
-      return Number(entry.level);
+    const id = String(Number(chatId));
+    const user = String(Number(userId));
+    const entry = this.data.botAdmins[id]?.[user];
+    if (entry !== undefined) {
+      return Number(entry);
     }
-    return this.isPrimaryBotAdmin(id, user) ? 1 : null;
+    return this.isPrimaryBotAdmin(id, Number(user)) ? 1 : null;
   }
 
   canManageBotAdmin(chatId, actorUserId, targetUserId) {
@@ -214,9 +227,9 @@ class Database {
   }
 
   isBotAdmin(chatId, userId) {
-    const id = Number(chatId);
+    const id = String(Number(chatId));
     const user = Number(userId);
-    return this.isPrimaryBotAdmin(chatId, user) || Boolean(this.data.botAdmins[id]?.some((item) => Number(item.userId) === user));
+    return this.isPrimaryBotAdmin(chatId, user) || Boolean(this.data.botAdmins[id] && this.data.botAdmins[id][String(user)] !== undefined);
   }
 
   getPrimaryBotAdmin(chatId) {
@@ -227,17 +240,18 @@ class Database {
   }
 
   getAuxiliaryBotAdmins(chatId) {
-    const id = Number(chatId);
+    const id = String(Number(chatId));
     const primaryAdminId = this.getPrimaryBotAdmin(id);
-    return (this.data.botAdmins[id] || [])
-      .filter((item) => Number(item.userId) !== Number(primaryAdminId))
-      .map((item) => Number(item.userId));
+    const map = this.data.botAdmins[id] || {};
+    return Object.keys(map)
+      .map((k) => Number(k))
+      .filter((uid) => uid !== Number(primaryAdminId));
   }
 
   getBotAdmins(chatId) {
-    const id = Number(chatId);
+    const id = String(Number(chatId));
     const ownerId = this.data.groups[id]?.ownerId;
-    const admins = [...(this.data.botAdmins[id] || [])].map((item) => Number(item.userId));
+    const admins = Object.keys(this.data.botAdmins[id] || {}).map((k) => Number(k));
     if (ownerId !== undefined && ownerId !== null && !admins.includes(Number(ownerId))) {
       admins.unshift(Number(ownerId));
     }
