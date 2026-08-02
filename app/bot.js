@@ -480,6 +480,23 @@ function createBot() {
     return Number(targetLevel) > Number(callerLevel);
   }
 
+  function replyCannotPunishHigher(ctx, targetId) {
+    const chatId = ctx.chat.id;
+    const callerId = ctx.from?.id;
+    const callerIsPrimary = database.isPrimaryBotAdmin(chatId, callerId) || config.adminIds.includes(callerId);
+    const callerLevel = database.getBotAdminLevel(chatId, callerId) || (callerIsPrimary ? 1 : null);
+    const targetIsPrimary = database.isPrimaryBotAdmin(chatId, targetId);
+    const targetLevel = database.getBotAdminLevel(chatId, targetId);
+
+    // If target is primary or has a strictly higher privilege (lower numeric level) than caller,
+    // show the requested message.
+    if (targetIsPrimary || (targetLevel !== null && callerLevel !== null && Number(targetLevel) < Number(callerLevel))) {
+      ctx.reply('Ты не можешь наказывать админов выше себя');
+    } else {
+      ctx.reply('Нельзя наказать этого пользователя — он админ с уровнем не ниже вашего.');
+    }
+  }
+
   function buildAdminLevelName(level) {
     switch (Number(level)) {
       case 1:
@@ -1313,7 +1330,7 @@ function createBot() {
 
     const details = parsePunishmentDetails(targetData.remainingArgs, !!ctx.message.reply_to_message);
     if (!canActOnTarget(ctx, targetData.target.id)) {
-      ctx.reply('Нельзя наказать этого пользователя — он админ с уровнем не ниже вашего.');
+      replyCannotPunishHigher(ctx, targetData.target.id);
       return;
     }
 
@@ -1376,7 +1393,7 @@ function createBot() {
     const untilDate = details.durationHours ? Math.floor(Date.now() / 1000) + Math.round(details.durationHours * 3600) : undefined;
 
     if (!canActOnTarget(ctx, targetData.target.id)) {
-      ctx.reply('Нельзя наказать этого пользователя — он админ с уровнем не ниже вашего.');
+      replyCannotPunishHigher(ctx, targetData.target.id);
       return;
     }
 
@@ -1465,7 +1482,7 @@ function createBot() {
     const untilDate = details.durationHours ? Math.floor(Date.now() / 1000) + Math.round(details.durationHours * 3600) : undefined;
 
     if (!canActOnTarget(ctx, targetData.target.id)) {
-      ctx.reply('Нельзя наказать этого пользователя — он админ с уровнем не ниже вашего.');
+      replyCannotPunishHigher(ctx, targetData.target.id);
       return;
     }
 
