@@ -340,12 +340,12 @@ class Database {
     return {
       userId: user,
       displayName: userData?.displayName || null,
-      username: userData?.username ? `@${userData.username}` : null,
-      description: this.data.userDescriptions[id]?.[user] || null,
-      messageCount,
-      topPosition: topPosition > 0 ? topPosition : null,
-      punishments: [...punishments, ...activePunishments],
-      lastSeenAt: userData?.lastSeenAt || null,
+    username: userData?.username ? `@${userData.username}` : null,
+    description: this.data.userDescriptions[id]?.[user] || null,
+    messageCount,
+    topPosition: topPosition > 0 ? topPosition : null,
+    punishments: [...punishments, ...activePunishments],
+    lastSeenAt: userData?.lastSeenAt || null,
     };
   }
 
