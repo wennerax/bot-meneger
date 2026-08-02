@@ -60,6 +60,15 @@ function buildModerationAlertMessage(userLabel, durationHours, reason) {
   return `⚠️ Пользователь ${userLabel} замучен на ${durationLabel} по причине: ${reason}.`;
 }
 
+function buildPardonKeyboard(chatId, userId) {
+  return {
+    inline_keyboard: [[{
+      text: 'Помиловать',
+      callback_data: `pardon_mute:${chatId}:${userId}`,
+    }]],
+  };
+}
+
 function getCaptchaEmojiSet() {
   const emojis = ['🐶', '🐱', '🦊', '🐼'];
   const target = emojis[Math.floor(Math.random() * emojis.length)];
@@ -573,7 +582,9 @@ function createBot() {
 
     if (isGroupChat(ctx)) {
       const userLabel = getMentionText(ctx.from || { id: userId });
-      await ctx.reply(buildModerationAlertMessage(userLabel, durationHours, reason));
+      await ctx.reply(buildModerationAlertMessage(userLabel, durationHours, reason), {
+        reply_markup: buildPardonKeyboard(ctx.chat.id, userId),
+      });
     }
 
     try {
@@ -1680,6 +1691,38 @@ function createBot() {
     const helpPage = buildHelpPage(pageIndex);
     await ctx.answerCbQuery();
     await ctx.editMessageText(helpPage.text, { reply_markup: helpPage.reply_markup });
+  });
+
+  bot.action(/^pardon_mute:(-?\d+):(-?\d+)$/, async (ctx) => {
+    const chatId = Number(ctx.match[1]);
+    const userId = Number(ctx.match[2]);
+    const currentChatId = Number(ctx.chat?.id ?? ctx.callbackQuery?.message?.chat?.id ?? chatId);
+    const currentUserId = Number(ctx.from?.id);
+
+    if (!Number.isFinite(chatId) || !Number.isFinite(userId) || !Number.isFinite(currentUserId)) {
+      await ctx.answerCbQuery('Не удалось обработать запрос.');
+      return;
+    }
+
+    const isAllowed = database.isBotAdmin(currentChatId, currentUserId) || config.adminIds.includes(currentUserId);
+    if (!isAllowed) {
+      await ctx.answerCbQuery('У вас нет прав на размут.');
+      return;
+    }
+
+    try {
+      await ctx.telegram.restrictChatMember(currentChatId, userId, buildMutePermissions(true));
+      database.removeActivePunishment(currentChatId, userId, 'mute');
+      clearScheduledPunishment(currentChatId, userId, 'mute');
+      await ctx.answerCbQuery('Пользователь размучен.');
+      try {
+        await ctx.deleteMessage();
+      } catch (error) {
+        // ignore delete errors if the message is already unavailable
+      }
+    } catch (error) {
+      await ctx.answerCbQuery('Не удалось размутить пользователя.');
+    }
   });
 
   bot.command(['id', 'айди'], (ctx) => {
