@@ -626,24 +626,30 @@ function createBot() {
       return;
     }
 
-    let ownerId = chatData.owner_id ?? null;
-    if (!ownerId) {
-      try {
-        const chat = await ctx.telegram.getChat(chatId);
-        ownerId = chat?.owner_id ?? null;
-      } catch (error) {
-        ownerId = null;
+    let ownerId = null;
+    let candidateOwnerId = Number.isFinite(chatData.owner_id) ? chatData.owner_id : null;
+
+    try {
+      const chat = await ctx.telegram.getChat(chatId);
+      if (chat?.owner_id !== undefined && chat?.owner_id !== null) {
+        candidateOwnerId = Number(chat.owner_id);
       }
+    } catch (error) {
+      // ignore failures retrieving chat info
     }
 
-    if (!ownerId) {
-      try {
-        const admins = await ctx.telegram.getChatAdministrators(chatId);
-        const creator = admins.find((member) => member.status === 'creator');
-        ownerId = creator?.user?.id ?? null;
-      } catch (error) {
-        ownerId = null;
+    try {
+      const admins = await ctx.telegram.getChatAdministrators(chatId);
+      const creator = admins.find((member) => member.status === 'creator');
+      if (creator?.user?.id) {
+        ownerId = creator.user.id;
       }
+    } catch (error) {
+      // ignore failures retrieving chat administrators
+    }
+
+    if (!ownerId && Number.isFinite(candidateOwnerId)) {
+      ownerId = candidateOwnerId;
     }
 
     database.ensureGroup(chatId, title, ownerId);
@@ -1322,22 +1328,29 @@ function createBot() {
       return;
     }
 
-    const targetData = await resolveCommandTarget(ctx, args, '/addbotadmin @юз');
+    const targetData = await resolveCommandTarget(ctx, args, '/addadmin @юз [уровень]');
     if (!targetData) {
       return;
     }
 
     const target = targetData.target;
+    const argRest = (targetData.remainingArgs || '').trim();
+    const requestedLevel = argRest ? Number(argRest.split(/\s+/)[0]) : null;
     const isPrimary = database.isPrimaryBotAdmin(ctx.chat.id, ctx.from.id);
-    const actorLevel = isPrimary ? 3 : database.getBotAdminLevel(ctx.chat.id, ctx.from.id);
+    const actorLevel = isPrimary ? 1 : database.getBotAdminLevel(ctx.chat.id, ctx.from.id);
 
     if (!isPrimary && target.id === ctx.from.id) {
       ctx.reply('Нельзя назначить себя дополнительным администратором.');
       return;
     }
 
-    if (!isPrimary && (!actorLevel || actorLevel < 2)) {
-      ctx.reply('Только главный или помощник уровня 2 может назначать новых админов.');
+    if (database.isPrimaryBotAdmin(ctx.chat.id, target.id)) {
+      ctx.reply('Нельзя изменить уровень главного администратора.');
+      return;
+    }
+
+    if (!isPrimary && (!actorLevel || actorLevel > 2)) {
+      ctx.reply('Только главный или ведущий админ уровня 2 может назначать новых админов.');
       return;
     }
 
@@ -1347,9 +1360,34 @@ function createBot() {
       return;
     }
 
-    const assignedLevel = isPrimary ? 2 : 1;
+    if (targetAlreadyAdmin && !Number.isFinite(requestedLevel)) {
+      const existingLevel = database.getBotAdminLevel(ctx.chat.id, target.id);
+      ctx.reply(`Пользователь ${getMentionText(target)} уже является админом уровня ${existingLevel}.`);
+      return;
+    }
+
+    let assignedLevel = 5;
+    if (Number.isFinite(requestedLevel)) {
+      assignedLevel = Number(requestedLevel);
+    }
+
+    if (assignedLevel < 2 || assignedLevel > 5) {
+      ctx.reply('Уровень должен быть от 2 до 5.');
+      return;
+    }
+
+    if (!isPrimary && assignedLevel <= actorLevel) {
+      ctx.reply('Вы не можете назначить администратора уровня не выше своего.');
+      return;
+    }
+
     database.addBotAdmin(ctx.chat.id, target.id, assignedLevel);
-    ctx.reply(`Пользователь ${target.first_name || target.username || target.id} добавлен как вспомогательный администратор бота.`);
+
+    if (targetAlreadyAdmin) {
+      ctx.reply(`Пользователь ${getMentionText(target)} теперь админ уровня ${assignedLevel}.`);
+    } else {
+      ctx.reply(`Пользователь ${getMentionText(target)} назначен админом уровня ${assignedLevel}.`);
+    }
   }
 
   async function removeBotAdminCommand(ctx, args = '') {
@@ -1429,11 +1467,10 @@ function createBot() {
     }
 
     const currentLevel = database.getBotAdminLevel(ctx.chat.id, target.id);
-    // treat non-admins as level 6 (below all) for promotion/demotion math
     const baseline = currentLevel === null ? 6 : Number(currentLevel);
     let newLevel = baseline;
 
-    if (requestedLevel && Number.isFinite(requestedLevel)) {
+    if (Number.isFinite(requestedLevel)) {
       newLevel = Number(requestedLevel);
     } else {
       if (action === 'promote') {
@@ -1448,33 +1485,41 @@ function createBot() {
       return;
     }
 
-    // Cannot set level equal or higher (i.e., numerically <=) than actor's level
-    if (!isPrimary && newLevel <= actorLevel) {
-      ctx.reply('Нельзя повысить/понизить до уровня не ниже вашего или выше вас.');
+    if (newLevel === baseline) {
+      ctx.reply(`У пользователя ${getMentionText(target)} уже уровень ${newLevel}.`);
       return;
     }
 
-    // If target not admin and actor is not allowed to add admins (only actorLevel <=2 can add)
+    if (newLevel <= actorLevel) {
+      ctx.reply('Нельзя повысить или понизить администратора до уровня, равного или выше вашего.');
+      return;
+    }
+
     if (currentLevel === null) {
       if (!isPrimary && actorLevel > 2) {
         ctx.reply('У вас нет прав назначать новых админов.');
         return;
       }
-      // add as admin with newLevel
+
+      if (action === 'demote') {
+        ctx.reply('Нельзя понижать пользователя, который ещё не является администратором.');
+        return;
+      }
+
       database.addBotAdmin(ctx.chat.id, target.id, newLevel);
       ctx.reply(`Пользователь ${getMentionText(target)} назначен админом уровня ${newLevel}.`);
       return;
     }
 
-    // target is existing admin; ensure caller has manage rights
     if (!isPrimary && !database.canManageBotAdmin(ctx.chat.id, ctx.from.id, target.id)) {
       ctx.reply('У вас нет прав управлять этим администратором.');
       return;
     }
 
-    // apply new level
     database.addBotAdmin(ctx.chat.id, target.id, newLevel);
-    ctx.reply(`Уровень пользователя ${getMentionText(target)} изменён на ${newLevel}.`);
+
+    const actionLabel = action === 'promote' ? 'повышен' : 'понижен';
+    ctx.reply(`Пользователь ${getMentionText(target)} ${actionLabel} с уровня ${currentLevel} до уровня ${newLevel}.`);
   }
 
   async function handleRussianCommand(ctx, text) {
