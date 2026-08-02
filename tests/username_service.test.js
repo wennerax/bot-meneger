@@ -30,7 +30,7 @@ test('resolveUsernameTarget resolves a stored username to a target object', asyn
   const result = await resolveUsernameTarget(ctx, '@alice', '/warn @username', database);
 
   assert.deepEqual(result, {
-    target: { id: 42, first_name: 'Alice', username: '@alice' },
+    target: { id: 42, first_name: 'Alice', username: 'alice' },
     remainingArgs: '',
   });
 });

@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, getCaptchaEmojiSet } = require('../app/bot');
+const { getMentionText } = require('../app/services/username_service');
 const { buildAiRequestPayload } = require('../app/ai');
 
 test('parsePunishmentDetails extracts duration and reason', () => {
@@ -76,6 +77,11 @@ test('getCaptchaEmojiSet returns a target and unique answer options', () => {
   assert.equal(options.includes(target), false);
   assert.equal(new Set(options).size, options.length);
   assert.equal(options.length, 3);
+});
+
+test('getMentionText does not produce double @ signs', () => {
+  assert.equal(getMentionText({ username: '@alice' }), '@alice');
+  assert.equal(getMentionText({ username: 'bob' }), '@bob');
 });
 
 test('buildAiRequestPayload builds an OpenAI-compatible request body', async () => {
