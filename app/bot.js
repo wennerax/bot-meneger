@@ -1932,6 +1932,35 @@ function createBot() {
     await removeBotAdminCommand(ctx, args);
   });
 
+  // reload command: available to group owner or ids configured in config.reloadAdminIds
+  bot.command(['reload', 'перезагрузить'], async (ctx) => {
+    try {
+      const fromId = Number(ctx.from?.id);
+      const chatId = ctx.chat?.id;
+      const isOwner = chatId && database.isPrimaryBotAdmin(chatId, fromId);
+      const allowedGlobal = Array.isArray(config.reloadAdminIds) && config.reloadAdminIds.includes(fromId);
+
+      if (!isOwner && !allowedGlobal) {
+        ctx.reply('Команда /reload доступна только владельцу группы или ID, указанным в конфигурации.');
+        return;
+      }
+
+      await ctx.reply('Перезапускаюсь...');
+      // give the reply a moment to be delivered
+      setTimeout(() => {
+        // exit process to allow external supervisor to restart the bot
+        process.exit(0);
+      }, 500);
+    } catch (error) {
+      console.error('reload command failed:', error);
+      try {
+        ctx.reply('Не удалось выполнить перезапуск: ' + (error?.message || String(error)));
+      } catch (e) {
+        // ignore
+      }
+    }
+  });
+
   async function handleIncomingMessage(ctx) {
     const message = ctx.message;
     if (!message) {
