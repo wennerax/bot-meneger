@@ -1949,30 +1949,30 @@ function createBot() {
       const progressMessage = await ctx.reply('Перезапускаюсь...\n10%');
       const steps = ['10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%', '100%'];
 
-      let index = 0;
-      const progressTimer = setInterval(async () => {
-        if (index >= steps.length) {
-          clearInterval(progressTimer);
-          try {
-            await ctx.telegram.editMessageText(ctx.chat.id, progressMessage.message_id, undefined, 'Перезапуск прошел успешно');
-          } catch (error) {
-            // ignore edit errors if the message is already unavailable
-          }
-          return;
-        }
-
-        const label = steps[index];
-        index += 1;
-
+      const updateProgress = async (label) => {
         try {
           await ctx.telegram.editMessageText(ctx.chat.id, progressMessage.message_id, undefined, `Перезапускаюсь...\n${label}`);
         } catch (error) {
           // ignore edit errors if the message is already unavailable
         }
-      }, 400);
+      };
 
-      setTimeout(() => {
-        clearInterval(progressTimer);
+      const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+      try {
+        for (const [index, label] of steps.entries()) {
+          if (index > 0) {
+            await delay(300);
+          }
+          await updateProgress(label);
+        }
+
+        try {
+          await ctx.telegram.editMessageText(ctx.chat.id, progressMessage.message_id, undefined, 'Перезапуск прошел успешно');
+        } catch (error) {
+          // ignore edit errors if the message is already unavailable
+        }
+      } finally {
         const mainScript = path.resolve(__dirname, 'main.js');
         const child = spawn(process.execPath, [mainScript], {
           cwd: path.resolve(__dirname, '..'),
@@ -1985,7 +1985,7 @@ function createBot() {
         setTimeout(() => {
           process.exit(0);
         }, 200);
-      }, 4000);
+      }
     } catch (error) {
       console.error('reload command failed:', error);
       try {
