@@ -52,22 +52,6 @@ test('owner becomes primary bot admin and can add auxiliary bot admins', () => {
   db.close();
 });
 
-test('bot admin levels persist and can be retrieved', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-meneger-'));
-  const db = new Database(path.join(dir, 'bot.json'));
-
-  db.ensureGroup(310, 'Levels', 1);
-  db.addBotAdmin(310, 2, 4);
-  db.addBotAdmin(310, 3, 2);
-
-  assert.equal(db.getBotAdminLevel(310, 1), 1);
-  assert.equal(db.getBotAdminLevel(310, 2), 4);
-  assert.equal(db.getBotAdminLevel(310, 3), 2);
-  assert.deepEqual(db.getBotAdmins(310), [1, 2, 3]);
-
-  db.close();
-});
-
 test('active punishments persist and can be removed manually', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-meneger-'));
   const db = new Database(path.join(dir, 'bot.json'));

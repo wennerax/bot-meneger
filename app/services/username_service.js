@@ -7,7 +7,7 @@ function getMentionText(user) {
     return 'пользователь';
   }
   if (user.username) {
-    return `@${normalizeUsername(user.username)}`;
+    return `@${user.username}`;
   }
   return user.first_name || 'пользователь';
 }
@@ -30,7 +30,7 @@ async function resolveUsernameTarget(ctx, input, usage, database) {
     const resolved = database.resolveUsername(ctx.chat.id, first);
     if (resolved) {
       return {
-          target: { id: Number(resolved.userId), first_name: resolved.displayName, username: normalizeUsername(first) },
+        target: { id: Number(resolved.userId), first_name: resolved.displayName, username: first },
         remainingArgs: parts.slice(1).join(' '),
       };
     }
@@ -43,7 +43,7 @@ async function resolveUsernameTarget(ctx, input, usage, database) {
           target: {
             id: member.user.id,
             first_name: member.user.first_name || member.user.username || String(member.user.id),
-            username: normalizeUsername(first),
+            username: first,
           },
           remainingArgs: parts.slice(1).join(' '),
         };
