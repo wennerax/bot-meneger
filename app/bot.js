@@ -1946,21 +1946,46 @@ function createBot() {
         return;
       }
 
-      await ctx.reply('Перезапускаюсь...');
+      const progressMessage = await ctx.reply('Перезапускаюсь...\n10%');
+      const steps = ['10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%', '100%'];
 
-      const mainScript = path.resolve(__dirname, 'main.js');
-      const child = spawn(process.execPath, [mainScript], {
-        stdio: 'inherit',
-        env: { ...process.env, BOT_RELOAD: '1' },
-      });
+      let index = 0;
+      const progressTimer = setInterval(async () => {
+        if (index >= steps.length) {
+          clearInterval(progressTimer);
+          try {
+            await ctx.telegram.editMessageText(ctx.chat.id, progressMessage.message_id, undefined, 'Перезапуск прошел успешно');
+          } catch (error) {
+            // ignore edit errors if the message is already unavailable
+          }
+          return;
+        }
 
-      child.on('error', (error) => {
-        console.error('Reload process startup failed:', error?.message || error);
-      });
+        const label = steps[index];
+        index += 1;
+
+        try {
+          await ctx.telegram.editMessageText(ctx.chat.id, progressMessage.message_id, undefined, `Перезапускаюсь...\n${label}`);
+        } catch (error) {
+          // ignore edit errors if the message is already unavailable
+        }
+      }, 400);
 
       setTimeout(() => {
-        process.exit(0);
-      }, 500);
+        clearInterval(progressTimer);
+        const mainScript = path.resolve(__dirname, 'main.js');
+        const child = spawn(process.execPath, [mainScript], {
+          cwd: path.resolve(__dirname, '..'),
+          detached: true,
+          stdio: 'inherit',
+          env: { ...process.env, BOT_RELOAD: '1' },
+        });
+
+        child.unref();
+        setTimeout(() => {
+          process.exit(0);
+        }, 200);
+      }, 4000);
     } catch (error) {
       console.error('reload command failed:', error);
       try {
