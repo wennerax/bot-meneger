@@ -1216,36 +1216,60 @@ function createBot() {
     ctx.reply(buildPunishmentListMessage(kind, punishments, page, 10));
   }
 
-  function buildBotAdminLabel(ctx, userId) {
+  function getBotAdminDisplayName(ctx, userId) {
     const profile = database.getUserProfile(ctx.chat.id, userId);
-    const label = profile?.username || profile?.displayName || `User ${userId}`;
-    const level = database.getBotAdminLevel(ctx.chat.id, userId);
-    const levelLabel = level ? ` (уровень ${level})` : '';
-    return `${label}${levelLabel}`;
+    if (profile?.username) {
+      return `@${profile.username}`;
+    }
+    if (profile?.displayName) {
+      return profile.displayName;
+    }
+    return 'Пользователь';
   }
 
   function listBotAdminsCommand(ctx) {
     ensureGroup(ctx);
     const primaryAdminId = database.getPrimaryBotAdmin(ctx.chat.id);
-    const auxiliaryAdminIds = database.getAuxiliaryBotAdmins(ctx.chat.id);
+    const adminIds = database.getBotAdmins(ctx.chat.id);
 
-    const primaryLabel = primaryAdminId === null || primaryAdminId === undefined
-      ? 'нет'
-      : `${buildBotAdminLabel(ctx, primaryAdminId)}`;
+    const roleNames = {
+      2: 'Ведущий администратор',
+      3: 'Старший админ',
+      4: 'Средний админ',
+      5: 'Младший админ',
+    };
 
-    const lines = [
-      '🤖 Администраторы бота',
-      `Главный администратор: ${primaryLabel}`,
-    ];
+    const roleGroups = {
+      2: [],
+      3: [],
+      4: [],
+      5: [],
+    };
 
-    if (auxiliaryAdminIds.length) {
-      lines.push('Вспомогательные администраторы:');
-      auxiliaryAdminIds.forEach((userId, index) => {
-        lines.push(`${index + 1}. ${buildBotAdminLabel(ctx, userId)}`);
-      });
-    } else {
-      lines.push('Вспомогательные администраторы: нет');
+    for (const userId of adminIds) {
+      if (userId === primaryAdminId) {
+        continue;
+      }
+      const level = database.getBotAdminLevel(ctx.chat.id, userId) || 5;
+      if (roleGroups[level]) {
+        roleGroups[level].push(getBotAdminDisplayName(ctx, userId));
+      }
     }
+
+    const lines = ['🤖 Администраторы бота'];
+    if (primaryAdminId === null || primaryAdminId === undefined) {
+      lines.push('Главный администратор: нет');
+    } else {
+      lines.push(`Главный администратор: ${getBotAdminDisplayName(ctx, primaryAdminId)} - владелец группы`);
+    }
+
+    Object.keys(roleNames).forEach((levelKey) => {
+      const level = Number(levelKey);
+      const users = roleGroups[level] || [];
+      if (users.length > 0) {
+        lines.push(`${roleNames[level]}: ${users.join(', ')}`);
+      }
+    });
 
     ctx.reply(lines.join('\n'));
   }
