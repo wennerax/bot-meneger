@@ -24,10 +24,26 @@ class Database {
 
     try {
       const parsed = JSON.parse(raw);
+
+      // botAdmins used to be an array in older versions. Convert to an object mapping userId->level
+      let botAdminsObj = {};
+      if (Array.isArray(parsed.botAdmins)) {
+        (parsed.botAdmins || []).forEach((entry) => {
+          const id = Number(entry);
+          if (!Number.isNaN(id)) {
+            // default legacy level for existing entries: 5 (младший админ)
+            botAdminsObj[id] = 5;
+          }
+        });
+      } else {
+        botAdminsObj = parsed.botAdmins || {};
+      }
+
       return {
         groups: parsed.groups || {},
         groupAdmins: parsed.groupAdmins || {},
-        botAdmins: parsed.botAdmins || {},
+        botAdmins: botAdminsObj,
+
         punishments: parsed.punishments || [],
         activePunishments: parsed.activePunishments || [],
         blacklist: parsed.blacklist || [],
@@ -83,20 +99,23 @@ class Database {
     }
 
     if (ownerId !== null) {
-      this.addAdmin(id, Number(ownerId));
-      this.addBotAdmin(id, Number(ownerId));
+      // owner becomes admin with top level (1)
+      this.addAdmin(id, Number(ownerId), 1);
+      this.addBotAdmin(id, Number(ownerId), 1);
     }
 
     this._save();
   }
 
-  addAdmin(chatId, userId) {
+  addAdmin(chatId, userId, level = 5) {
     const id = Number(chatId);
     const user = Number(userId);
+    const lvl = Number(level) || 5;
     if (!this.data.groupAdmins[id]) {
       this.data.groupAdmins[id] = {};
     }
-    this.data.groupAdmins[id][user] = true;
+    // store numeric level for the admin (1..5), lower = more privileges
+    this.data.groupAdmins[id][user] = lvl;
     this._save();
   }
 
@@ -108,18 +127,26 @@ class Database {
       return true;
     }
 
-    return Boolean(this.data.groupAdmins[id]?.[user]);
+    const val = this.data.groupAdmins[id]?.[user];
+    if (val === undefined || val === null) {
+      return false;
+    }
+    // legacy boolean true -> treat as admin (default level)
+    if (val === true) {
+      return true;
+    }
+    const num = Number(val);
+    return Number.isFinite(num) && num >= 1;
   }
 
-  addBotAdmin(chatId, userId) {
+  addBotAdmin(chatId, userId, level = 5) {
     const id = Number(chatId);
     const user = Number(userId);
+    const lvl = Number(level) || 5;
     if (!this.data.botAdmins[id]) {
-      this.data.botAdmins[id] = [];
+      this.data.botAdmins[id] = {};
     }
-    if (!this.data.botAdmins[id].includes(user)) {
-      this.data.botAdmins[id].push(user);
-    }
+    this.data.botAdmins[id][user] = lvl;
     this._save();
   }
 
@@ -129,11 +156,10 @@ class Database {
     if (!this.data.botAdmins[id]) {
       return false;
     }
-    const index = this.data.botAdmins[id].indexOf(user);
-    if (index === -1) {
+    if (this.data.botAdmins[id][user] === undefined) {
       return false;
     }
-    this.data.botAdmins[id].splice(index, 1);
+    delete this.data.botAdmins[id][user];
     this._save();
     return true;
   }
@@ -147,7 +173,17 @@ class Database {
   isBotAdmin(chatId, userId) {
     const id = Number(chatId);
     const user = Number(userId);
-    return this.isPrimaryBotAdmin(chatId, user) || Boolean(this.data.botAdmins[id]?.includes(user));
+    if (this.isPrimaryBotAdmin(chatId, user)) {
+      return true;
+    }
+    const val = this.data.botAdmins[id]?.[user];
+    if (val === undefined || val === null) {
+      // legacy: if botAdmins was an array, fallback handled in _load conversion
+      return false;
+    }
+    // numeric level > 0 means admin
+    const num = Number(val);
+    return Number.isFinite(num) && num >= 1;
   }
 
   getPrimaryBotAdmin(chatId) {
@@ -160,17 +196,52 @@ class Database {
   getAuxiliaryBotAdmins(chatId) {
     const id = Number(chatId);
     const primaryAdminId = this.getPrimaryBotAdmin(id);
-    return (this.data.botAdmins[id] || []).filter((userId) => Number(userId) !== Number(primaryAdminId));
+    const mapping = this.data.botAdmins[id] || {};
+    return Object.keys(mapping).map((k) => Number(k)).filter((userId) => Number(userId) !== Number(primaryAdminId));
   }
 
   getBotAdmins(chatId) {
     const id = Number(chatId);
     const ownerId = this.data.groups[id]?.ownerId;
-    const admins = [...(this.data.botAdmins[id] || [])];
+    const mapping = this.data.botAdmins[id] || {};
+    const admins = Object.keys(mapping).map((k) => Number(k));
     if (ownerId !== undefined && ownerId !== null && !admins.includes(Number(ownerId))) {
       admins.unshift(Number(ownerId));
+    } else if (ownerId !== undefined && ownerId !== null && admins.includes(Number(ownerId))) {
+      // ensure primary is first in list
+      const idx = admins.indexOf(Number(ownerId));
+      if (idx > 0) {
+        admins.splice(idx, 1);
+        admins.unshift(Number(ownerId));
+      }
     }
     return admins;
+  }
+
+  getBotAdminLevel(chatId, userId) {
+    const id = Number(chatId);
+    const user = Number(userId);
+    if (this.isPrimaryBotAdmin(chatId, user)) {
+      return 1;
+    }
+    const val = this.data.botAdmins[id]?.[user];
+    if (val === undefined || val === null) {
+      return null;
+    }
+    return Number(val);
+  }
+
+  getAdminLevel(chatId, userId) {
+    const id = Number(chatId);
+    const user = Number(userId);
+    const val = this.data.groupAdmins[id]?.[user];
+    if (val === undefined || val === null) {
+      return null;
+    }
+    if (val === true) {
+      return null; // legacy boolean, unspecified
+    }
+    return Number(val);
   }
 
   recordMessage(chatId, userId, displayName, username = null) {
