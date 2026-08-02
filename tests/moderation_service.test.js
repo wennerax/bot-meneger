@@ -57,6 +57,13 @@ test('flood protection can be toggled per chat', () => {
   assert.equal(service.isFloodProtectionEnabled(100), false);
 });
 
+test('allowed links accept exact URLs and default domains', () => {
+  const service = new ModerationService();
+
+  assert.equal(service.isAllowedLink(100, 'https://t.me/wwhisbot?start=faq'), true);
+  assert.equal(service.isAllowedLink(100, 'https://example.com/shop'), false);
+});
+
 test('moderation settings persist across restarts', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-meneger-'));
   const filePath = path.join(dir, 'bot.json');

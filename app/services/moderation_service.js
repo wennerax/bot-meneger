@@ -347,14 +347,31 @@ class ModerationService {
   }
 
   isAllowedLink(chatId, value) {
-    const normalized = String(value || '').trim().toLowerCase();
+    const normalized = String(value || '').trim().toLowerCase().replace(/^['"]+|['"]+$/g, '');
     if (!normalized) {
       return false;
     }
-    const hostname = normalized.replace(/^https?:\/\//i, '').replace(/^www\./i, '').split(/[/?#]/)[0];
+
+    const hostname = normalized
+      .replace(/^https?:\/\//i, '')
+      .replace(/^www\./i, '')
+      .split(/[/?#]/)[0];
+
     return this._getChat(chatId).allowedLinks.some((item) => {
-      const normalizedItem = String(item || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '');
-      return hostname === normalizedItem || hostname.endsWith(`.${normalizedItem}`);
+      const normalizedItem = String(item || '').trim().toLowerCase().replace(/^['"]+|['"]+$/g, '');
+      if (!normalizedItem) {
+        return false;
+      }
+
+      const itemHostname = normalizedItem
+        .replace(/^https?:\/\//i, '')
+        .replace(/^www\./i, '')
+        .split(/[/?#]/)[0];
+
+      return normalized === normalizedItem
+        || hostname === itemHostname
+        || hostname.endsWith(`.${itemHostname}`)
+        || itemHostname.endsWith(`.${hostname}`);
     });
   }
 }
