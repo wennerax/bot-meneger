@@ -2443,10 +2443,10 @@ function createBot() {
       return;
     }
 
-    const hasAllowedLink = (link) => moderationService.isAllowedLink(ctx.chat.id, link) || isAllowedLinkUrl(link);
+    const hasAllowedLink = (link) => moderationService.isAllowedLink(ctx.chat.id, link);
     if (isGroupChat(ctx) && moderationService.isLinkProtectionEnabled(ctx.chat.id) && isLinkMessage(text, hasAllowedLink)) {
       await deleteMessageSafely(ctx, ctx.message.message_id);
-      await applyAutomaticMute(ctx, ctx.from.id, 24 * 7, 'Ссылка');
+      await applyAutomaticMute(ctx, ctx.from.id, 24, 'Ссылка');
       return;
     }
 
