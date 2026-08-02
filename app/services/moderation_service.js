@@ -1,6 +1,58 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const DEFAULT_BAN_WORDS = [
+  'наркот', 'нарко', 'нарк', 'травка', 'гашиш', 'шишка', 'конопл', 'кокаин', 'кокс', 'героин', 'метадон',
+  'амфетамин', 'метамфетамин', 'экстази', 'мдма', 'лсд', 'допинг', 'доза', 'weed', 'cocaine', 'meth',
+  'amphetamine', 'mdma', 'lsd', 'hash', 'hashish', 'heroin', 'dope', 'drug', 'drugs', 'selfharm', 'self-harm',
+  'suicide', 'самоубийство', 'суицид', 'срезать', 'резать', 'порез', 'нож', 'knife', 'razor', 'blade', 'cutting',
+  'смерть', 'умирать', 'хочуумереть', 'selfcut', 'selfcutting', 'помочь себе', 'убить себя'
+];
+
+const DEFAULT_ALLOWED_LINKS = [
+  't.me', 'telegram.me', 'telegram.org', 'youtube.com', 'youtu.be', 'vk.com', 'x.com', 'twitter.com',
+  'reddit.com', 'github.com', 'gitlab.com', 'stackoverflow.com', 'google.com', 'drive.google.com', 'gmail.com',
+  'yandex.ru', 'ya.ru', 'discord.com', 'discord.gg', 'steamcommunity.com', 'apple.com', 'microsoft.com'
+];
+
+function normalizeListEntry(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^['"]/g, '')
+    .replace(/['"]$/g, '')
+    .replace(/^[\uFEFF]+/, '');
+}
+
+function loadDefaultList(fileName, fallbackValues) {
+  const filePath = path.join(__dirname, '..', 'data', fileName);
+  try {
+    if (!fs.existsSync(filePath)) {
+      return [...fallbackValues];
+    }
+
+    const content = fs.readFileSync(filePath, 'utf8').trim();
+    if (!content) {
+      return [...fallbackValues];
+    }
+
+    const parsed = JSON.parse(content);
+    if (!Array.isArray(parsed)) {
+      return [...fallbackValues];
+    }
+
+    return [...new Set(parsed.map((item) => normalizeListEntry(item)).filter(Boolean))];
+  } catch (error) {
+    return [...fallbackValues];
+  }
+}
+
+const BAN_WORDS_FILE = path.join(__dirname, '..', 'data', 'ban_words.json');
+const ALLOWED_LINKS_FILE = path.join(__dirname, '..', 'data', 'allowed_links.json');
+
+const DEFAULT_BAN_WORDS_FILE = loadDefaultList('ban_words.json', DEFAULT_BAN_WORDS);
+const DEFAULT_ALLOWED_LINKS_FILE = loadDefaultList('allowed_links.json', DEFAULT_ALLOWED_LINKS);
+
 class ModerationService {
   constructor(filePath = null) {
     this.filePath = filePath || null;
@@ -16,6 +68,12 @@ class ModerationService {
         ? Object.fromEntries(Object.entries(chat.warnings).map(([key, value]) => [String(key), Number(value)]))
         : {},
       filters: chat.filters && typeof chat.filters === 'object' ? { ...chat.filters } : {},
+      banWords: Array.isArray(chat.banWords)
+        ? [...new Set(chat.banWords.map((item) => String(item).trim().toLowerCase()).filter(Boolean))]
+        : [...DEFAULT_BAN_WORDS_FILE],
+      allowedLinks: Array.isArray(chat.allowedLinks)
+        ? [...new Set(chat.allowedLinks.map((item) => String(item).trim().toLowerCase()).filter(Boolean))]
+        : [...DEFAULT_ALLOWED_LINKS_FILE],
       spamProtectionEnabled: Boolean(chat.spamProtectionEnabled),
       linkProtectionEnabled: Boolean(chat.linkProtectionEnabled),
       floodProtectionEnabled: Boolean(chat.floodProtectionEnabled),
@@ -118,6 +176,11 @@ class ModerationService {
     this._save();
   }
 
+  resetAllWarnings(chatId) {
+    this._getChat(chatId).warnings = {};
+    this._save();
+  }
+
   enableSpamProtection(chatId) {
     this._getChat(chatId).spamProtectionEnabled = true;
     this._save();
@@ -185,6 +248,114 @@ class ModerationService {
       }
     }
     return null;
+  }
+
+  getBanWords(chatId) {
+    return [...this._getChat(chatId).banWords];
+  }
+
+  addBanWord(chatId, word) {
+    const chat = this._getChat(chatId);
+    const normalized = String(word || '').trim().toLowerCase();
+    if (!normalized || chat.banWords.includes(normalized)) {
+      return false;
+    }
+    chat.banWords.push(normalized);
+    this._save();
+    return true;
+  }
+
+  removeBanWord(chatId, word) {
+    const chat = this._getChat(chatId);
+    const normalized = String(word || '').trim().toLowerCase();
+    const before = chat.banWords.length;
+    chat.banWords = chat.banWords.filter((item) => item !== normalized);
+    if (chat.banWords.length === before) {
+      return false;
+    }
+    this._save();
+    return true;
+  }
+
+  findBanWord(chatId, text) {
+    const normalizedText = String(text || '').toLowerCase().replace(/[^a-zа-я0-9]/g, '');
+    if (!normalizedText) {
+      return null;
+    }
+
+    const textVariants = new Set([
+      normalizedText,
+      normalizedText.replace(/(.)\1+/g, '$1'),
+    ]);
+
+    for (const word of this._getChat(chatId).banWords) {
+      const normalizedWord = String(word || '').toLowerCase().replace(/[^a-zа-я0-9]/g, '');
+      if (!normalizedWord) {
+        continue;
+      }
+
+      const wordVariants = new Set([
+        normalizedWord,
+        normalizedWord.replace(/(.)\1+/g, '$1'),
+      ]);
+      if (normalizedWord.length > 3) {
+        const trimmed = normalizedWord.replace(/(а|я|ы|и|ов|ев|ин|ой|ий|ый|ое|ые|ь|ка|ки|ок|ик|с|т|н)$/g, '');
+        if (trimmed && trimmed.length >= 3) {
+          wordVariants.add(trimmed);
+        }
+      }
+
+      for (const textVariant of textVariants) {
+        for (const variant of wordVariants) {
+          if (!variant || variant.length < 3) {
+            continue;
+          }
+          if (textVariant.includes(variant) || variant.includes(textVariant)) {
+            return word;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  getAllowedLinks(chatId) {
+    return [...this._getChat(chatId).allowedLinks];
+  }
+
+  addAllowedLink(chatId, value) {
+    const chat = this._getChat(chatId);
+    const normalized = String(value || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '');
+    if (!normalized || chat.allowedLinks.includes(normalized)) {
+      return false;
+    }
+    chat.allowedLinks.push(normalized);
+    this._save();
+    return true;
+  }
+
+  removeAllowedLink(chatId, value) {
+    const chat = this._getChat(chatId);
+    const normalized = String(value || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '');
+    const before = chat.allowedLinks.length;
+    chat.allowedLinks = chat.allowedLinks.filter((item) => item !== normalized);
+    if (chat.allowedLinks.length === before) {
+      return false;
+    }
+    this._save();
+    return true;
+  }
+
+  isAllowedLink(chatId, value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (!normalized) {
+      return false;
+    }
+    const hostname = normalized.replace(/^https?:\/\//i, '').replace(/^www\./i, '').split(/[/?#]/)[0];
+    return this._getChat(chatId).allowedLinks.some((item) => {
+      const normalizedItem = String(item || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '');
+      return hostname === normalizedItem || hostname.endsWith(`.${normalizedItem}`);
+    });
   }
 }
 

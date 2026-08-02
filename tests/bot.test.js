@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage } = require('../app/bot');
+const { parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl } = require('../app/bot');
 const { buildAiRequestPayload } = require('../app/ai');
 
 test('parsePunishmentDetails extracts duration and reason', () => {
@@ -67,6 +67,22 @@ test('buildBotAdminListMessage separates primary and auxiliary admins', () => {
   assert.match(message, /Главный админ:\s*\n1\. @alice/);
   assert.match(message, /1\. @bob/);
   assert.match(message, /2\. @carol/);
+});
+
+test('detectForbiddenWord catches drugs and self-harm variants', () => {
+  assert.equal(detectForbiddenWord('сегодня курю weed'), 'weed');
+  assert.equal(detectForbiddenWord('наркоыыыыыы'), 'нарко');
+  assert.equal(detectForbiddenWord('наркофирма'), 'нарко');
+  assert.equal(detectForbiddenWord('метсоленый'), 'мет');
+  assert.ok(['self-harm', 'selfharm'].includes(detectForbiddenWord('хочу self-harm')));
+  assert.equal(detectForbiddenWord('доброе утро друзья'), null);
+});
+
+test('allowed links bypass link protection while suspicious ones trigger it', () => {
+  assert.equal(isAllowedLinkUrl('https://t.me/testgroup'), true);
+  assert.equal(isAllowedLinkUrl('https://example.com/shop'), false);
+  assert.equal(isLinkMessage('https://t.me/testgroup'), false);
+  assert.equal(isLinkMessage('https://example.com/shop'), true);
 });
 
 test('buildAiRequestPayload builds an OpenAI-compatible request body', async () => {
