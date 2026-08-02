@@ -168,12 +168,11 @@ function isLinkMessage(text, isAllowed = null) {
     return false;
   }
 
-  return links.some((link) => {
-    if (typeof isAllowed === 'function' && isAllowed(link)) {
-      return false;
-    }
-    return !isAllowedLinkUrl(link);
-  });
+  if (typeof isAllowed === 'function') {
+    return links.some((link) => !isAllowed(link));
+  }
+
+  return links.some((link) => !isAllowedLinkUrl(link));
 }
 
 function buildPardonKeyboard(chatId, userId) {

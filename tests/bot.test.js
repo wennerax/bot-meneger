@@ -83,6 +83,8 @@ test('allowed links bypass link protection while suspicious ones trigger it', ()
   assert.equal(isAllowedLinkUrl('https://example.com/shop'), false);
   assert.equal(isLinkMessage('https://t.me/testgroup'), false);
   assert.equal(isLinkMessage('https://example.com/shop'), true);
+  assert.equal(isLinkMessage('https://t.me/testgroup', (link) => link.includes('t.me')), false);
+  assert.equal(isLinkMessage('https://example.com/shop', (link) => link.includes('t.me')), true);
 });
 
 test('buildAiRequestPayload builds an OpenAI-compatible request body', async () => {
