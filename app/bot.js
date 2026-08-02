@@ -134,7 +134,7 @@ function detectForbiddenWord(text) {
 
 function extractLinkCandidates(text) {
   return [...String(text || '').matchAll(/https?:\/\/[^\s]+|www\.[^\s]+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s]*)?/gi)]
-    .map((match) => match[0].trim())
+    .map((match) => match[0].trim().replace(/[),.;]+$/g, ''))
     .filter(Boolean);
 }
 
