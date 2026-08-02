@@ -170,20 +170,33 @@ function buildPunishmentListMessage(kind, punishments, page, pageSize = 10) {
 }
 
 function buildBotAdminListMessage(primaryAdminLabel, auxiliaryAdminLabels = []) {
-    const primaryLabel = primaryAdminLabel || 'нет';
-    const auxiliaryLabels = Array.isArray(auxiliaryAdminLabels) ? auxiliaryAdminLabels : [];
-  const lines = [
-    '🤖 Администраторы бота',
-    `Главный администратор: ${primaryLabel}`,
-  ];
+  // Backwards-compatible: if called with two args (primaryLabel, auxLabelsArray)
+  if (typeof primaryAdminLabel === 'string' && Array.isArray(auxiliaryAdminLabels)) {
+    const grouped = { '1': [], '2': [], '3': [], '4': [], '5': [] };
+    if (primaryAdminLabel) grouped['1'].push(String(primaryAdminLabel));
+    (auxiliaryAdminLabels || []).forEach((lbl) => grouped['2'].push(lbl));
+    primaryAdminLabel = grouped;
+  }
 
-  if (auxiliaryLabels.length) {
-    lines.push('Вспомогательные администраторы:');
-    auxiliaryLabels.forEach((label, index) => {
-      lines.push(`${index + 1}. ${label}`);
-    });
-  } else {
-    lines.push('Вспомогательные администраторы: нет');
+  const groupedByLevel = primaryAdminLabel || { '1': [], '2': [], '3': [], '4': [], '5': [] };
+  const levelNames = {
+    1: 'Главный админ',
+    2: 'Ведущий админ',
+    3: 'Старший админ',
+    4: 'Средний админ',
+    5: 'Младший',
+  };
+
+  const lines = ['🤖 Администраторы бота'];
+  for (let level = 1; level <= 5; level += 1) {
+    const labels = Array.isArray(groupedByLevel[String(level)]) ? groupedByLevel[String(level)] : [];
+    const stars = '⭐️'.repeat(level);
+    lines.push(`${stars}${levelNames[level]}:`);
+    if (labels.length) {
+      labels.forEach((label, idx) => lines.push(`${idx + 1}. ${label}`));
+    } else {
+      lines.push('1. —');
+    }
   }
 
   return lines.join('\n');
@@ -458,7 +471,7 @@ function createBot() {
   }
 
   function isKnownCommandText(text) {
-    const slashCommand = /^\/(start|help|id|about|whoami|stats|rules|hug|kiss|slap|poke|coin|dice|fate|compliment|insult|top|admins|banlist|mutelist|setrules|warn|warnings|unwarn|mute|unmute|ban|unban|setgreeting|addbotadmin|ai)(\s|$)/i;
+    const slashCommand = /^\/(start|help|id|about|whoami|stats|rules|hug|kiss|slap|poke|coin|dice|fate|compliment|insult|top|admins|banlist|mutelist|setrules|warn|warnings|unwarn|mute|unmute|ban|unban|setgreeting|addadmin|removeadmin|promote|demote|ai)(\s|$)/i;
     const bangCommand = /^!(начало|помощь|айди|информация|кто\s*я|статистика|правила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|инсульт)(\s|$)/i;
     const plusMinusCommand = /^(\+антиспам|\+antispam|\+антифлуд|\+antiflood|\-антиспам|\-antispam|\-антифлуд|\-antiflood|\+ссылки|\+links|\-ссылки|\-links|\+описание|\+description|\+rules|\+правила|\+greeting|\+приветствие)(\s|$)/i;
     return slashCommand.test(text) || bangCommand.test(text) || plusMinusCommand.test(text);
@@ -697,7 +710,7 @@ function createBot() {
         '/banlist, !баны [страница] - список активных банов',
         '/mutelist, !муты [страница] - список активных мутов',
         '/admins, !админы - список администраторов бота',
-        '/addbotadmin @юз, !добавить админа @юз - назначить админа бота',
+        '/addadmin @юз, !добавить админа @юз - назначить админа бота',
         '/removebotadmin @юз, !снять админа @юз - снять вспомогательного администратора бота',
       ].join('\n'),
       [
@@ -1017,26 +1030,23 @@ function createBot() {
 
   function listBotAdminsCommand(ctx) {
     ensureGroup(ctx);
-    const primaryAdminId = database.getPrimaryBotAdmin(ctx.chat.id);
-    const auxiliaryAdminIds = database.getAuxiliaryBotAdmins(ctx.chat.id);
+    const allAdminIds = database.getBotAdmins(ctx.chat.id);
 
-    const buildAdminLabel = (userId) => {
+    // group by level
+    const grouped = { '1': [], '2': [], '3': [], '4': [], '5': [] };
+
+    allAdminIds.forEach((userId) => {
+      const level = database.getBotAdminLevel(ctx.chat.id, userId) || 5;
       const profile = database.getUserProfile(ctx.chat.id, userId);
-      if (profile?.username) {
-        return profile.username;
+      let label = profile?.username || profile?.displayName || `User ${userId}`;
+      // Normalize label to single @ if it's a username
+      if (String(label).startsWith('@')) {
+        label = `@${String(label).replace(/^@+/, '')}`;
       }
-      if (profile?.displayName) {
-        return profile.displayName;
-      }
-      return `User ${userId}`;
-    };
+      grouped[String(level)].push(label);
+    });
 
-    const labels = auxiliaryAdminIds.map(buildAdminLabel);
-    const primaryLabel = primaryAdminId === null || primaryAdminId === undefined
-      ? 'нет'
-      : buildAdminLabel(primaryAdminId);
-
-    ctx.reply(buildBotAdminListMessage(primaryLabel, labels));
+    ctx.reply(buildBotAdminListMessage(grouped));
   }
 
   function rulesCommand(ctx) {
@@ -1306,14 +1316,14 @@ function createBot() {
       return;
     }
 
-    const targetData = await resolveCommandTarget(ctx, args, '/removebotadmin @юз');
+    const targetData = await resolveCommandTarget(ctx, args, '/removeadmin @юз');
     if (!targetData) {
       return;
     }
 
     const target = targetData.target;
     const isPrimary = database.isPrimaryBotAdmin(ctx.chat.id, ctx.from.id);
-    const actorLevel = isPrimary ? 3 : database.getBotAdminLevel(ctx.chat.id, ctx.from.id);
+    const actorLevel = isPrimary ? 1 : database.getBotAdminLevel(ctx.chat.id, ctx.from.id);
 
     if (database.isPrimaryBotAdmin(ctx.chat.id, target.id)) {
       ctx.reply('Нельзя снять главного администратора бота.');
@@ -1330,8 +1340,8 @@ function createBot() {
       return;
     }
 
-    if (!isPrimary && (!actorLevel || actorLevel < 2)) {
-      ctx.reply('Только главный или помощник уровня 2 может снимать админов.');
+    if (!isPrimary && (!actorLevel || actorLevel > 2)) {
+      ctx.reply('Только главный или ведущий админ уровня 2 может снимать админов.');
       return;
     }
 
@@ -1346,6 +1356,82 @@ function createBot() {
     }
 
     ctx.reply(`Пользователь ${target.first_name || target.username || target.id} больше не является вспомогательным администратором бота.`);
+  }
+
+  async function adjustBotAdminLevelCommand(ctx, args = '', action = 'promote') {
+    // action: 'promote' (уменьшить numeric level) or 'demote' (увеличить numeric level)
+    ensureGroup(ctx);
+    if (!isBotAdmin(ctx)) {
+      ctx.reply('Эта команда доступна только администраторам.');
+      return;
+    }
+
+    const targetData = await resolveCommandTarget(ctx, args, `/${action} @юз [уровень]`);
+    if (!targetData) return;
+    const target = targetData.target;
+    const argRest = (targetData.remainingArgs || '').trim();
+    const requestedLevel = argRest ? Number(argRest.split(/\s+/)[0]) : null;
+
+    const isPrimary = database.isPrimaryBotAdmin(ctx.chat.id, ctx.from.id);
+    const actorLevel = isPrimary ? 1 : database.getBotAdminLevel(ctx.chat.id, ctx.from.id);
+
+    if (!isPrimary && (!actorLevel)) {
+      ctx.reply('Нельзя выполнять эту команду.');
+      return;
+    }
+
+    if (database.isPrimaryBotAdmin(ctx.chat.id, target.id)) {
+      ctx.reply('Нельзя изменять уровень главному администратору.');
+      return;
+    }
+
+    const currentLevel = database.getBotAdminLevel(ctx.chat.id, target.id);
+    // treat non-admins as level 6 (below all) for promotion/demotion math
+    const baseline = currentLevel === null ? 6 : Number(currentLevel);
+    let newLevel = baseline;
+
+    if (requestedLevel && Number.isFinite(requestedLevel)) {
+      newLevel = Number(requestedLevel);
+    } else {
+      if (action === 'promote') {
+        newLevel = Math.max(1, baseline - 1);
+      } else {
+        newLevel = Math.min(5, baseline + 1);
+      }
+    }
+
+    if (newLevel < 1 || newLevel > 5) {
+      ctx.reply('Уровень должен быть в диапазоне 1-5.');
+      return;
+    }
+
+    // Cannot set level equal or higher (i.e., numerically <=) than actor's level
+    if (!isPrimary && newLevel <= actorLevel) {
+      ctx.reply('Нельзя повысить/понизить до уровня не ниже вашего или выше вас.');
+      return;
+    }
+
+    // If target not admin and actor is not allowed to add admins (only actorLevel <=2 can add)
+    if (currentLevel === null) {
+      if (!isPrimary && actorLevel > 2) {
+        ctx.reply('У вас нет прав назначать новых админов.');
+        return;
+      }
+      // add as admin with newLevel
+      database.addBotAdmin(ctx.chat.id, target.id, newLevel);
+      ctx.reply(`Пользователь ${getMentionText(target)} назначен админом уровня ${newLevel}.`);
+      return;
+    }
+
+    // target is existing admin; ensure caller has manage rights
+    if (!isPrimary && !database.canManageBotAdmin(ctx.chat.id, ctx.from.id, target.id)) {
+      ctx.reply('У вас нет прав управлять этим администратором.');
+      return;
+    }
+
+    // apply new level
+    database.addBotAdmin(ctx.chat.id, target.id, newLevel);
+    ctx.reply(`Уровень пользователя ${getMentionText(target)} изменён на ${newLevel}.`);
   }
 
   async function handleRussianCommand(ctx, text) {
@@ -1748,13 +1834,13 @@ function createBot() {
     ctx.reply('Приветствие чата обновлено.');
   });
 
-  bot.command(['addbotadmin', 'добавить_админа'], async (ctx) => {
-    const args = ctx.message.text.replace(/^\/(?:addbotadmin|добавить_админа)(?:@[\w_]+)?\s*/i, '');
+  bot.command(['addadmin', 'добавить_админа'], async (ctx) => {
+    const args = ctx.message.text.replace(/^\/(?:addadmin|добавить_админа)(?:@[\w_]+)?\s*/i, '');
     await addBotAdminCommand(ctx, args);
   });
 
-  bot.command(['removebotadmin', 'снять_админа'], async (ctx) => {
-    const args = ctx.message.text.replace(/^\/(?:removebotadmin|снять_админа)(?:@[\w_]+)?\s*/i, '');
+  bot.command(['removeadmin', 'снять_админа'], async (ctx) => {
+    const args = ctx.message.text.replace(/^\/(?:removeadmin|снять_админа)(?:@[\w_]+)?\s*/i, '');
     await removeBotAdminCommand(ctx, args);
   });
 
@@ -1946,6 +2032,17 @@ function createBot() {
 
   bot.on(['text', 'photo', 'video', 'document', 'animation', 'audio', 'voice', 'sticker', 'video_note'], async (ctx) => {
     await handleIncomingMessage(ctx);
+  });
+
+  // promote/demote commands
+  bot.command(['promote', 'повышение'], async (ctx) => {
+    const args = ctx.message.text.replace(/^\/(?:promote|повышение)(?:@[\w_]+)?\s*/i, '');
+    await adjustBotAdminLevelCommand(ctx, args, 'promote');
+  });
+
+  bot.command(['demote', 'разжалование'], async (ctx) => {
+    const args = ctx.message.text.replace(/^\/(?:demote|разжалование)(?:@[\w_]+)?\s*/i, '');
+    await adjustBotAdminLevelCommand(ctx, args, 'demote');
   });
 
   return { bot, config, userService, moderationService, database };

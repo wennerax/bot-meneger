@@ -217,7 +217,8 @@ class Database {
       return false;
     }
 
-    return actorLevel > targetLevel;
+    // Lower numeric level = higher privileges (1 = owner). Actor can manage target when actor has a higher privilege
+    return Number(actorLevel) < Number(targetLevel);
   }
 
   isPrimaryBotAdmin(chatId, userId) {

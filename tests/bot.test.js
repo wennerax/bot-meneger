@@ -64,7 +64,7 @@ test('buildPunishmentListMessage paginates active bans and mutes', () => {
 test('buildBotAdminListMessage separates primary and auxiliary admins', () => {
   const message = buildBotAdminListMessage('@alice', ['@bob', '@carol']);
 
-  assert.match(message, /Главный администратор: @alice/);
+  assert.match(message, /Главный админ:\s*\n1\. @alice/);
   assert.match(message, /1\. @bob/);
   assert.match(message, /2\. @carol/);
 });

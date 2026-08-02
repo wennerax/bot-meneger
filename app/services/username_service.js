@@ -7,8 +7,12 @@ function getMentionText(user) {
     return 'пользователь';
   }
   if (user.username) {
-    return `@${user.username}`;
+    // Ensure exactly one leading @ and normalized casing
+    const name = String(user.username).trim().replace(/^@+/, '');
+    return `@${name}`;
   }
+  // If object has displayName or first_name, use it
+  if (user.displayName) return user.displayName;
   return user.first_name || 'пользователь';
 }
 
@@ -28,22 +32,22 @@ async function resolveUsernameTarget(ctx, input, usage, database) {
   const first = parts[0];
   if (first.startsWith('@')) {
     const resolved = database.resolveUsername(ctx.chat.id, first);
+    const normalized = normalizeUsername(first);
     if (resolved) {
       return {
-        target: { id: Number(resolved.userId), first_name: resolved.displayName, username: first },
+        target: { id: Number(resolved.userId), first_name: resolved.displayName, username: normalized },
         remainingArgs: parts.slice(1).join(' '),
       };
     }
 
-    const username = normalizeUsername(first);
     try {
-      const member = await ctx.telegram.getChatMember(ctx.chat.id, username);
+      const member = await ctx.telegram.getChatMember(ctx.chat.id, normalized);
       if (member?.user) {
         return {
           target: {
             id: member.user.id,
             first_name: member.user.first_name || member.user.username || String(member.user.id),
-            username: first,
+            username: normalized,
           },
           remainingArgs: parts.slice(1).join(' '),
         };

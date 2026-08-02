@@ -26,7 +26,7 @@ test('level 2 bot admin can only manage level 1 admins', () => {
 
   db.ensureGroup(600, 'Hierarchy', 10);
   db.addBotAdmin(600, 20, 2);
-  db.addBotAdmin(600, 30, 1);
+  db.addBotAdmin(600, 30, 3);
 
   assert.equal(db.canManageBotAdmin(600, 20, 30), true);
   assert.equal(db.canManageBotAdmin(600, 20, 20), false);
