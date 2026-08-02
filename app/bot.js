@@ -1,4 +1,5 @@
 const path = require('node:path');
+const { spawn } = require('node:child_process');
 const { Telegraf } = require('telegraf');
 const sharp = require('sharp');
 const { loadConfig } = require('./config');
@@ -1937,7 +1938,7 @@ function createBot() {
     try {
       const fromId = Number(ctx.from?.id);
       const chatId = ctx.chat?.id;
-      const isOwner = chatId && database.isPrimaryBotAdmin(chatId, fromId);
+      const isOwner = Boolean(chatId && database.isPrimaryBotAdmin(chatId, fromId));
       const allowedGlobal = Array.isArray(config.reloadAdminIds) && config.reloadAdminIds.includes(fromId);
 
       if (!isOwner && !allowedGlobal) {
@@ -1946,9 +1947,18 @@ function createBot() {
       }
 
       await ctx.reply('Перезапускаюсь...');
-      // give the reply a moment to be delivered
+
+      const mainScript = path.resolve(__dirname, 'main.js');
+      const child = spawn(process.execPath, [mainScript], {
+        stdio: 'inherit',
+        env: { ...process.env, BOT_RELOAD: '1' },
+      });
+
+      child.on('error', (error) => {
+        console.error('Reload process startup failed:', error?.message || error);
+      });
+
       setTimeout(() => {
-        // exit process to allow external supervisor to restart the bot
         process.exit(0);
       }, 500);
     } catch (error) {
@@ -2171,6 +2181,10 @@ function startBot() {
     return;
   }
   bot.launch().then(() => {
+    if (process.env.BOT_RELOAD === '1') {
+      console.log('Перезапуск прошел успешно');
+      return;
+    }
     console.log('Bot started');
   }).catch((error) => {
     console.error(error);
