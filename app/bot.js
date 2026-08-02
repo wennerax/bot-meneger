@@ -2118,11 +2118,6 @@ function createBot() {
     }
   }
 
-  bot.on(['text', 'photo', 'video', 'document', 'animation', 'audio', 'voice', 'sticker', 'video_note'], async (ctx) => {
-    await handleIncomingMessage(ctx);
-  });
-
-  // promote/demote commands
   bot.command(['promote', 'повышение'], async (ctx) => {
     const args = ctx.message.text.replace(/^\/(?:promote|повышение)(?:@[\w_]+)?\s*/i, '');
     await adjustBotAdminLevelCommand(ctx, args, 'promote');
@@ -2131,6 +2126,10 @@ function createBot() {
   bot.command(['demote', 'разжалование'], async (ctx) => {
     const args = ctx.message.text.replace(/^\/(?:demote|разжалование)(?:@[\w_]+)?\s*/i, '');
     await adjustBotAdminLevelCommand(ctx, args, 'demote');
+  });
+
+  bot.on(['text', 'photo', 'video', 'document', 'animation', 'audio', 'voice', 'sticker', 'video_note'], async (ctx) => {
+    await handleIncomingMessage(ctx);
   });
 
   return { bot, config, userService, moderationService, database };
