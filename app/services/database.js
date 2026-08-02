@@ -24,26 +24,32 @@ class Database {
 
     try {
       const parsed = JSON.parse(raw);
+      const normalizedBotAdmins = {};
+      const rawBotAdmins = parsed.botAdmins || {};
 
-      // botAdmins used to be an array in older versions. Convert to an object mapping userId->level
-      let botAdminsObj = {};
-      if (Array.isArray(parsed.botAdmins)) {
-        (parsed.botAdmins || []).forEach((entry) => {
-          const id = Number(entry);
-          if (!Number.isNaN(id)) {
-            // default legacy level for existing entries: 5 (младший админ)
-            botAdminsObj[id] = 5;
-          }
-        });
-      } else {
-        botAdminsObj = parsed.botAdmins || {};
-      }
+      Object.entries(rawBotAdmins).forEach(([chatId, admins]) => {
+        if (!Array.isArray(admins)) {
+          normalizedBotAdmins[chatId] = [];
+          return;
+        }
+
+        normalizedBotAdmins[chatId] = admins
+          .map((entry) => {
+            if (typeof entry === 'number' || typeof entry === 'string') {
+              return { userId: Number(entry), level: 1 };
+            }
+            if (entry && typeof entry === 'object') {
+              return { userId: Number(entry.userId), level: Number(entry.level) || 1 };
+            }
+            return null;
+          })
+          .filter(Boolean);
+      });
 
       return {
         groups: parsed.groups || {},
         groupAdmins: parsed.groupAdmins || {},
-        botAdmins: botAdminsObj,
-
+        botAdmins: normalizedBotAdmins,
         punishments: parsed.punishments || [],
         activePunishments: parsed.activePunishments || [],
         blacklist: parsed.blacklist || [],
@@ -99,23 +105,20 @@ class Database {
     }
 
     if (ownerId !== null) {
-      // owner becomes admin with top level (1)
-      this.addAdmin(id, Number(ownerId), 1);
+      this.addAdmin(id, Number(ownerId));
       this.addBotAdmin(id, Number(ownerId), 1);
     }
 
     this._save();
   }
 
-  addAdmin(chatId, userId, level = 5) {
+  addAdmin(chatId, userId) {
     const id = Number(chatId);
     const user = Number(userId);
-    const lvl = Number(level) || 5;
     if (!this.data.groupAdmins[id]) {
       this.data.groupAdmins[id] = {};
     }
-    // store numeric level for the admin (1..5), lower = more privileges
-    this.data.groupAdmins[id][user] = lvl;
+    this.data.groupAdmins[id][user] = true;
     this._save();
   }
 
@@ -127,26 +130,27 @@ class Database {
       return true;
     }
 
-    const val = this.data.groupAdmins[id]?.[user];
-    if (val === undefined || val === null) {
-      return false;
-    }
-    // legacy boolean true -> treat as admin (default level)
-    if (val === true) {
-      return true;
-    }
-    const num = Number(val);
-    return Number.isFinite(num) && num >= 1;
+    return Boolean(this.data.groupAdmins[id]?.[user]);
   }
 
-  addBotAdmin(chatId, userId, level = 5) {
+  addBotAdmin(chatId, userId, level = 1) {
     const id = Number(chatId);
     const user = Number(userId);
-    const lvl = Number(level) || 5;
-    if (!this.data.botAdmins[id]) {
-      this.data.botAdmins[id] = {};
+    if (this.isPrimaryBotAdmin(id, user)) {
+      return;
     }
-    this.data.botAdmins[id][user] = lvl;
+
+    const normalizedLevel = Number(level) || 1;
+    if (!this.data.botAdmins[id]) {
+      this.data.botAdmins[id] = [];
+    }
+
+    const existing = this.data.botAdmins[id].find((item) => Number(item.userId) === user);
+    if (existing) {
+      existing.level = normalizedLevel;
+    } else {
+      this.data.botAdmins[id].push({ userId: user, level: normalizedLevel });
+    }
     this._save();
   }
 
@@ -156,12 +160,51 @@ class Database {
     if (!this.data.botAdmins[id]) {
       return false;
     }
-    if (this.data.botAdmins[id][user] === undefined) {
+    const index = this.data.botAdmins[id].findIndex((item) => Number(item.userId) === user);
+    if (index === -1) {
       return false;
     }
-    delete this.data.botAdmins[id][user];
+    this.data.botAdmins[id].splice(index, 1);
     this._save();
     return true;
+  }
+
+  getBotAdminLevel(chatId, userId) {
+    const id = Number(chatId);
+    const user = Number(userId);
+    const entry = this.data.botAdmins[id]?.find((item) => Number(item.userId) === user);
+    if (entry) {
+      return Number(entry.level);
+    }
+    return this.isPrimaryBotAdmin(id, user) ? 1 : null;
+  }
+
+  canManageBotAdmin(chatId, actorUserId, targetUserId) {
+    const id = Number(chatId);
+    const actorId = Number(actorUserId);
+    const targetId = Number(targetUserId);
+    const primaryAdminId = this.getPrimaryBotAdmin(id);
+
+    if (actorId === targetId) {
+      return false;
+    }
+
+    if (this.isPrimaryBotAdmin(id, actorId)) {
+      return targetId !== Number(primaryAdminId);
+    }
+
+    const actorLevel = this.getBotAdminLevel(id, actorId);
+    const targetLevel = this.getBotAdminLevel(id, targetId);
+
+    if (!actorLevel || !targetLevel) {
+      return false;
+    }
+
+    if (targetId === Number(primaryAdminId)) {
+      return false;
+    }
+
+    return actorLevel > targetLevel;
   }
 
   isPrimaryBotAdmin(chatId, userId) {
@@ -173,17 +216,7 @@ class Database {
   isBotAdmin(chatId, userId) {
     const id = Number(chatId);
     const user = Number(userId);
-    if (this.isPrimaryBotAdmin(chatId, user)) {
-      return true;
-    }
-    const val = this.data.botAdmins[id]?.[user];
-    if (val === undefined || val === null) {
-      // legacy: if botAdmins was an array, fallback handled in _load conversion
-      return false;
-    }
-    // numeric level > 0 means admin
-    const num = Number(val);
-    return Number.isFinite(num) && num >= 1;
+    return this.isPrimaryBotAdmin(chatId, user) || Boolean(this.data.botAdmins[id]?.some((item) => Number(item.userId) === user));
   }
 
   getPrimaryBotAdmin(chatId) {
@@ -196,52 +229,19 @@ class Database {
   getAuxiliaryBotAdmins(chatId) {
     const id = Number(chatId);
     const primaryAdminId = this.getPrimaryBotAdmin(id);
-    const mapping = this.data.botAdmins[id] || {};
-    return Object.keys(mapping).map((k) => Number(k)).filter((userId) => Number(userId) !== Number(primaryAdminId));
+    return (this.data.botAdmins[id] || [])
+      .filter((item) => Number(item.userId) !== Number(primaryAdminId))
+      .map((item) => Number(item.userId));
   }
 
   getBotAdmins(chatId) {
     const id = Number(chatId);
     const ownerId = this.data.groups[id]?.ownerId;
-    const mapping = this.data.botAdmins[id] || {};
-    const admins = Object.keys(mapping).map((k) => Number(k));
+    const admins = [...(this.data.botAdmins[id] || [])].map((item) => Number(item.userId));
     if (ownerId !== undefined && ownerId !== null && !admins.includes(Number(ownerId))) {
       admins.unshift(Number(ownerId));
-    } else if (ownerId !== undefined && ownerId !== null && admins.includes(Number(ownerId))) {
-      // ensure primary is first in list
-      const idx = admins.indexOf(Number(ownerId));
-      if (idx > 0) {
-        admins.splice(idx, 1);
-        admins.unshift(Number(ownerId));
-      }
     }
     return admins;
-  }
-
-  getBotAdminLevel(chatId, userId) {
-    const id = Number(chatId);
-    const user = Number(userId);
-    if (this.isPrimaryBotAdmin(chatId, user)) {
-      return 1;
-    }
-    const val = this.data.botAdmins[id]?.[user];
-    if (val === undefined || val === null) {
-      return null;
-    }
-    return Number(val);
-  }
-
-  getAdminLevel(chatId, userId) {
-    const id = Number(chatId);
-    const user = Number(userId);
-    const val = this.data.groupAdmins[id]?.[user];
-    if (val === undefined || val === null) {
-      return null;
-    }
-    if (val === true) {
-      return null; // legacy boolean, unspecified
-    }
-    return Number(val);
   }
 
   recordMessage(chatId, userId, displayName, username = null) {
@@ -340,12 +340,12 @@ class Database {
     return {
       userId: user,
       displayName: userData?.displayName || null,
-    username: userData?.username ? `@${userData.username}` : null,
-    description: this.data.userDescriptions[id]?.[user] || null,
-    messageCount,
-    topPosition: topPosition > 0 ? topPosition : null,
-    punishments: [...punishments, ...activePunishments],
-    lastSeenAt: userData?.lastSeenAt || null,
+      username: userData?.username ? `@${userData.username}` : null,
+      description: this.data.userDescriptions[id]?.[user] || null,
+      messageCount,
+      topPosition: topPosition > 0 ? topPosition : null,
+      punishments: [...punishments, ...activePunishments],
+      lastSeenAt: userData?.lastSeenAt || null,
     };
   }
 

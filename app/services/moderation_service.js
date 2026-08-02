@@ -1,20 +1,84 @@
+const fs = require('node:fs');
+const path = require('node:path');
+
 class ModerationService {
-  constructor() {
+  constructor(filePath = null) {
+    this.filePath = filePath || null;
     this.chats = new Map();
+    this._load();
+  }
+
+  _normalizeChat(chat = {}) {
+    return {
+      rules: chat.rules ?? 'Правила чата пока не настроены.',
+      greeting: chat.greeting ?? 'Добро пожаловать в чат! Ознакомьтесь с правилами через /rules.',
+      warnings: chat.warnings && typeof chat.warnings === 'object'
+        ? Object.fromEntries(Object.entries(chat.warnings).map(([key, value]) => [String(key), Number(value)]))
+        : {},
+      filters: chat.filters && typeof chat.filters === 'object' ? { ...chat.filters } : {},
+      spamProtectionEnabled: Boolean(chat.spamProtectionEnabled),
+      linkProtectionEnabled: Boolean(chat.linkProtectionEnabled),
+      floodProtectionEnabled: Boolean(chat.floodProtectionEnabled),
+    };
+  }
+
+  _load() {
+    if (!this.filePath) {
+      return;
+    }
+
+    try {
+      if (!fs.existsSync(this.filePath)) {
+        return;
+      }
+
+      const raw = fs.readFileSync(this.filePath, 'utf8');
+      if (!raw.trim()) {
+        return;
+      }
+
+      const parsed = JSON.parse(raw);
+      const source = parsed.moderation?.chats || parsed.chats || parsed;
+      const entries = Object.entries(source || {}).filter(([, value]) => value && typeof value === 'object');
+      this.chats = new Map(entries.map(([chatId, chat]) => [Number(chatId), this._normalizeChat(chat)]));
+    } catch (error) {
+      this.chats = new Map();
+    }
+  }
+
+  _save() {
+    if (!this.filePath) {
+      return;
+    }
+
+    fs.mkdirSync(path.dirname(this.filePath), { recursive: true });
+
+    let payload = {};
+    try {
+      const existing = fs.readFileSync(this.filePath, 'utf8').trim();
+      if (existing) {
+        const parsed = JSON.parse(existing);
+        if (parsed && typeof parsed === 'object') {
+          payload = parsed;
+        }
+      }
+    } catch (error) {
+      payload = {};
+    }
+
+    payload.moderation = {
+      chats: Object.fromEntries(
+        Array.from(this.chats.entries()).map(([chatId, chat]) => [String(chatId), this._normalizeChat(chat)])
+      ),
+    };
+
+    fs.writeFileSync(this.filePath, JSON.stringify(payload, null, 2));
   }
 
   _getChat(chatId) {
     const id = Number(chatId);
     if (!this.chats.has(id)) {
-      this.chats.set(id, {
-        rules: 'Правила чата пока не настроены.',
-        greeting: 'Добро пожаловать в чат! Ознакомьтесь с правилами через /rules.',
-        warnings: {},
-        filters: {},
-        spamProtectionEnabled: false,
-        linkProtectionEnabled: false,
-        floodProtectionEnabled: false,
-      });
+      this.chats.set(id, this._normalizeChat());
     }
     return this.chats.get(id);
   }
@@ -25,6 +89,7 @@ class ModerationService {
 
   setRules(chatId, rules) {
     this._getChat(chatId).rules = rules;
+    this._save();
   }
 
   getGreeting(chatId) {
@@ -33,12 +98,14 @@ class ModerationService {
 
   setGreeting(chatId, greeting) {
     this._getChat(chatId).greeting = greeting;
+    this._save();
   }
 
   addWarning(chatId, userId) {
     const chat = this._getChat(chatId);
     const id = Number(userId);
     chat.warnings[id] = (chat.warnings[id] || 0) + 1;
+    this._save();
     return chat.warnings[id];
   }
 
@@ -48,14 +115,17 @@ class ModerationService {
 
   resetWarnings(chatId, userId) {
     delete this._getChat(chatId).warnings[Number(userId)];
+    this._save();
   }
 
   enableSpamProtection(chatId) {
     this._getChat(chatId).spamProtectionEnabled = true;
+    this._save();
   }
 
   disableSpamProtection(chatId) {
     this._getChat(chatId).spamProtectionEnabled = false;
+    this._save();
   }
 
   isSpamProtectionEnabled(chatId) {
@@ -64,10 +134,12 @@ class ModerationService {
 
   enableLinkProtection(chatId) {
     this._getChat(chatId).linkProtectionEnabled = true;
+    this._save();
   }
 
   disableLinkProtection(chatId) {
     this._getChat(chatId).linkProtectionEnabled = false;
+    this._save();
   }
 
   isLinkProtectionEnabled(chatId) {
@@ -76,10 +148,12 @@ class ModerationService {
 
   enableFloodProtection(chatId) {
     this._getChat(chatId).floodProtectionEnabled = true;
+    this._save();
   }
 
   disableFloodProtection(chatId) {
     this._getChat(chatId).floodProtectionEnabled = false;
+    this._save();
   }
 
   isFloodProtectionEnabled(chatId) {
@@ -88,6 +162,7 @@ class ModerationService {
 
   addFilter(chatId, keyword, response) {
     this._getChat(chatId).filters[String(keyword).trim().toLowerCase()] = response;
+    this._save();
   }
 
   removeFilter(chatId, keyword) {
@@ -97,6 +172,7 @@ class ModerationService {
       return false;
     }
     delete chat.filters[normalized];
+    this._save();
     return true;
   }
 
