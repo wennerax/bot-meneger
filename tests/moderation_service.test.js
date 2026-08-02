@@ -57,11 +57,16 @@ test('flood protection can be toggled per chat', () => {
   assert.equal(service.isFloodProtectionEnabled(100), false);
 });
 
-test('allowed links accept exact URLs and default domains', () => {
+test('allowed links accept only exact configured URLs', () => {
   const service = new ModerationService();
 
   assert.equal(service.isAllowedLink(100, 'https://t.me/wwhisbot?start=faq'), true);
+  assert.equal(service.isAllowedLink(100, 'https://t.me/wwhisbot?start=faq/extra'), false);
   assert.equal(service.isAllowedLink(100, 'https://example.com/shop'), false);
+
+  service.addAllowedLink(100, 'https://t.me/mir_supercell');
+  assert.equal(service.isAllowedLink(100, 'https://t.me/mir_supercell'), true);
+  assert.equal(service.isAllowedLink(100, 'https://t.me/mir_supercell/other'), false);
 });
 
 test('moderation settings persist across restarts', () => {

@@ -10,9 +10,7 @@ const DEFAULT_BAN_WORDS = [
 ];
 
 const DEFAULT_ALLOWED_LINKS = [
-  't.me', 'telegram.me', 'telegram.org', 'youtube.com', 'youtu.be', 'vk.com', 'x.com', 'twitter.com',
-  'reddit.com', 'github.com', 'gitlab.com', 'stackoverflow.com', 'google.com', 'drive.google.com', 'gmail.com',
-  'yandex.ru', 'ya.ru', 'discord.com', 'discord.gg', 'steamcommunity.com', 'apple.com', 'microsoft.com'
+  'https://t.me/wwhisbot?start=faq'
 ];
 
 function normalizeListEntry(value) {
@@ -325,7 +323,10 @@ class ModerationService {
 
   addAllowedLink(chatId, value) {
     const chat = this._getChat(chatId);
-    const normalized = String(value || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '');
+    const normalized = normalizeListEntry(value)
+      .replace(/^https?:\/\//i, '')
+      .replace(/^www\./i, '')
+      .replace(/\/+$/g, '');
     if (!normalized || chat.allowedLinks.includes(normalized)) {
       return false;
     }
@@ -336,7 +337,10 @@ class ModerationService {
 
   removeAllowedLink(chatId, value) {
     const chat = this._getChat(chatId);
-    const normalized = String(value || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '');
+    const normalized = normalizeListEntry(value)
+      .replace(/^https?:\/\//i, '')
+      .replace(/^www\./i, '')
+      .replace(/\/+$/g, '');
     const before = chat.allowedLinks.length;
     chat.allowedLinks = chat.allowedLinks.filter((item) => item !== normalized);
     if (chat.allowedLinks.length === before) {
@@ -347,31 +351,24 @@ class ModerationService {
   }
 
   isAllowedLink(chatId, value) {
-    const normalized = String(value || '').trim().toLowerCase().replace(/^['"]+|['"]+$/g, '');
+    const normalized = normalizeListEntry(value)
+      .replace(/^https?:\/\//i, '')
+      .replace(/^www\./i, '')
+      .replace(/\/+$/g, '');
     if (!normalized) {
       return false;
     }
 
-    const hostname = normalized
-      .replace(/^https?:\/\//i, '')
-      .replace(/^www\./i, '')
-      .split(/[/?#]/)[0];
-
     return this._getChat(chatId).allowedLinks.some((item) => {
-      const normalizedItem = String(item || '').trim().toLowerCase().replace(/^['"]+|['"]+$/g, '');
+      const normalizedItem = normalizeListEntry(item)
+        .replace(/^https?:\/\//i, '')
+        .replace(/^www\./i, '')
+        .replace(/\/+$/g, '');
       if (!normalizedItem) {
         return false;
       }
 
-      const itemHostname = normalizedItem
-        .replace(/^https?:\/\//i, '')
-        .replace(/^www\./i, '')
-        .split(/[/?#]/)[0];
-
-      return normalized === normalizedItem
-        || hostname === itemHostname
-        || hostname.endsWith(`.${itemHostname}`)
-        || itemHostname.endsWith(`.${hostname}`);
+      return normalized === normalizedItem;
     });
   }
 }
