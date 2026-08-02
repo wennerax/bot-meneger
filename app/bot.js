@@ -175,6 +175,13 @@ function buildBotAdminListMessage(primaryAdminLabel, auxiliaryAdminLabels = []) 
   return lines.join('\n');
 }
 
+function getCaptchaEmojiSet() {
+  const emojis = ['🐶', '🐱', '🦊', '🐼'];
+  const target = emojis[Math.floor(Math.random() * emojis.length)];
+  const options = emojis.filter((emoji) => emoji !== target);
+  return { target, options };
+}
+
 const ai = require('./ai');
 
 function createBot() {
@@ -213,14 +220,6 @@ function createBot() {
       can_pin_messages: false,
       can_manage_topics: false,
     };
-  }
-
-  function getCaptchaEmojiSet() {
-    const emojis = ['🐶', '🐱', '🦊', '🐼'];
-    const target = emojis[Math.floor(Math.random() * emojis.length)];
-    const options = emojis.filter((emoji) => emoji !== target);
-    const shuffled = [...options, target].sort(() => Math.random() - 0.5);
-    return { target, options: shuffled };
   }
 
   function isCapsFlood(text) {
@@ -2276,5 +2275,6 @@ module.exports = {
   parsePageNumber,
   buildPunishmentListMessage,
   buildBotAdminListMessage,
+  getCaptchaEmojiSet,
   startBot,
 };
