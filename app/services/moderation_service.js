@@ -1,19 +1,101 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const DEFAULT_BAN_WORDS = [
+function readJsonList(filePath, fallback) {
+  try {
+    if (!filePath || !fs.existsSync(filePath)) {
+      return fallback;
+    }
+
+    const raw = fs.readFileSync(filePath, 'utf8');
+    if (!raw.trim()) {
+      return fallback;
+    }
+
+    const normalizedRaw = raw.replace(/^\uFEFF/, '');
+    const parsed = JSON.parse(normalizedRaw);
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+
+    if (parsed && typeof parsed === 'object') {
+      const candidate = parsed.allowedLinks || parsed.allowed_links || parsed.links || parsed.banWords || parsed.ban_words || parsed.words;
+      if (Array.isArray(candidate)) {
+        return candidate;
+      }
+    }
+  } catch (error) {
+    // fall back to embedded defaults
+  }
+
+  return fallback;
+}
+
+const DEFAULT_BAN_WORDS = readJsonList(path.join(__dirname, '..', 'data', 'ban_words.json'), [
   'наркот', 'нарко', 'нарк', 'травка', 'гашиш', 'шишка', 'конопл', 'кокаин', 'кокс', 'героин', 'метадон',
   'амфетамин', 'метамфетамин', 'экстази', 'мдма', 'лсд', 'допинг', 'доза', 'weed', 'cocaine', 'meth',
   'amphetamine', 'mdma', 'lsd', 'hash', 'hashish', 'heroin', 'dope', 'drug', 'drugs', 'selfharm', 'self-harm',
   'suicide', 'самоубийство', 'суицид', 'срезать', 'резать', 'порез', 'нож', 'knife', 'razor', 'blade', 'cutting',
   'смерть', 'умирать', 'хочуумереть', 'selfcut', 'selfcutting', 'убить себя'
-];
+]);
 
-const DEFAULT_ALLOWED_LINKS = [
+const DEFAULT_ALLOWED_LINKS = readJsonList(path.join(__dirname, '..', 'data', 'allowed_links.json'), [
   't.me', 'telegram.me', 'telegram.org', 'youtube.com', 'youtu.be', 'vk.com', 'x.com', 'twitter.com',
   'reddit.com', 'github.com', 'gitlab.com', 'stackoverflow.com', 'google.com', 'drive.google.com', 'gmail.com',
   'yandex.ru', 'ya.ru', 'discord.com', 'discord.gg', 'steamcommunity.com', 'apple.com', 'microsoft.com'
-];
+]);
+
+function normalizeAllowedLinkPattern(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) {
+    return null;
+  }
+
+  const hasHostnameLikeValue = /\.|\//.test(raw) || /^https?:\/\//i.test(raw) || /^www\./i.test(raw);
+  if (!hasHostnameLikeValue) {
+    return null;
+  }
+
+  const fullUrl = /^https?:\/\//i.test(raw) ? raw : /^www\./i.test(raw) ? `https://${raw}` : `https://${raw}`;
+
+  let parsed;
+  try {
+    parsed = new URL(fullUrl);
+  } catch (error) {
+    return null;
+  }
+
+  const host = parsed.hostname.toLowerCase();
+  const pathname = parsed.pathname === '/' ? '/' : parsed.pathname.replace(/\/+$/, '') || '/';
+  const search = parsed.search || '';
+  const hash = parsed.hash || '';
+  const isHostOnly = (pathname === '/' || pathname === '') && !search && !hash;
+
+  return {
+    host,
+    pathname,
+    search,
+    hash,
+    isHostOnly,
+    raw,
+  };
+}
+
+function isLinkPatternMatch(candidate, allowedPattern) {
+  if (!candidate || !allowedPattern) {
+    return false;
+  }
+
+  if (candidate.host !== allowedPattern.host && !candidate.host.endsWith(`.${allowedPattern.host}`)) {
+    return false;
+  }
+
+  if (allowedPattern.isHostOnly) {
+    return true;
+  }
+
+  return candidate.pathname === allowedPattern.pathname && candidate.search === allowedPattern.search && candidate.hash === allowedPattern.hash;
+}
 
 class ModerationService {
   constructor(filePath = null) {
@@ -263,10 +345,28 @@ class ModerationService {
 
   addAllowedLink(chatId, value) {
     const chat = this._getChat(chatId);
-    const normalized = String(value || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '');
-    if (!normalized || chat.allowedLinks.includes(normalized)) {
+    const normalized = String(value || '').trim().toLowerCase();
+    const pattern = normalizeAllowedLinkPattern(normalized);
+    if (!pattern) {
       return false;
     }
+
+    const alreadyExists = chat.allowedLinks.some((item) => {
+      const existingPattern = normalizeAllowedLinkPattern(String(item || '').trim().toLowerCase());
+      if (!existingPattern) {
+        return false;
+      }
+      return existingPattern.host === pattern.host
+        && existingPattern.pathname === pattern.pathname
+        && existingPattern.search === pattern.search
+        && existingPattern.hash === pattern.hash
+        && existingPattern.isHostOnly === pattern.isHostOnly;
+    });
+
+    if (alreadyExists) {
+      return false;
+    }
+
     chat.allowedLinks.push(normalized);
     this._save();
     return true;
@@ -274,9 +374,22 @@ class ModerationService {
 
   removeAllowedLink(chatId, value) {
     const chat = this._getChat(chatId);
-    const normalized = String(value || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '');
+    const normalized = String(value || '').trim().toLowerCase();
+    const pattern = normalizeAllowedLinkPattern(normalized);
     const before = chat.allowedLinks.length;
-    chat.allowedLinks = chat.allowedLinks.filter((item) => item !== normalized);
+
+    chat.allowedLinks = chat.allowedLinks.filter((item) => {
+      const existingPattern = normalizeAllowedLinkPattern(String(item || '').trim().toLowerCase());
+      if (!existingPattern || !pattern) {
+        return String(item || '').trim().toLowerCase() !== normalized;
+      }
+      return !(existingPattern.host === pattern.host
+        && existingPattern.pathname === pattern.pathname
+        && existingPattern.search === pattern.search
+        && existingPattern.hash === pattern.hash
+        && existingPattern.isHostOnly === pattern.isHostOnly);
+    });
+
     if (chat.allowedLinks.length === before) {
       return false;
     }
@@ -285,14 +398,14 @@ class ModerationService {
   }
 
   isAllowedLink(chatId, value) {
-    const normalized = String(value || '').trim().toLowerCase();
-    if (!normalized) {
+    const candidate = normalizeAllowedLinkPattern(String(value || '').trim().toLowerCase());
+    if (!candidate) {
       return false;
     }
-    const hostname = normalized.replace(/^https?:\/\//i, '').replace(/^www\./i, '').split(/[/?#]/)[0];
+
     return this._getChat(chatId).allowedLinks.some((item) => {
-      const normalizedItem = String(item || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '');
-      return hostname === normalizedItem || hostname.endsWith(`.${normalizedItem}`);
+      const allowedPattern = normalizeAllowedLinkPattern(String(item || '').trim().toLowerCase());
+      return allowedPattern ? isLinkPatternMatch(candidate, allowedPattern) : false;
     });
   }
 }
