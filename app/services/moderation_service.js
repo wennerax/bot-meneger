@@ -10,9 +10,10 @@ const DEFAULT_BAN_WORDS = [
 ];
 
 const DEFAULT_ALLOWED_LINKS = [
-  'https://t.me/wwhisbot?start=faq',
-  'https://www.getaiperks.com/ru/blogs/40-free-ai-api-keys-master-guide-2026',
-  'https://t.me/mir_supercell'
+  'https://m.youtube.com',
+  'https://spotify.com',
+  'https://t.me/buddy_music_bot?start=inv5008792526',
+  'https://t.me/DigitalMusikBot?start=from_inline_caption'
 ];
 
 function normalizeListEntry(value) {
@@ -30,6 +31,49 @@ function normalizeAllowedLinkValue(value) {
     .replace(/^www\./i, '')
     .replace(/\/+$/g, '')
     .replace(/[),.;]+$/g, '');
+}
+
+function getAllowedLinkHost(value) {
+  const normalized = normalizeAllowedLinkValue(value);
+  if (!normalized) {
+    return null;
+  }
+
+  try {
+    const url = new URL(`https://${normalized}`);
+    return String(url.hostname || '').toLowerCase().replace(/^www\./i, '');
+  } catch (error) {
+    const match = normalized.match(/^[a-z0-9.-]+\.[a-z]{2,}(?::\d+)?/i);
+    return match ? match[0].toLowerCase().replace(/^www\./i, '') : null;
+  }
+}
+
+function isDomainOnlyAllowedLink(value) {
+  const normalized = normalizeAllowedLinkValue(value);
+  if (!normalized) {
+    return false;
+  }
+  return !/[/?#]/.test(normalized);
+}
+
+function linkMatchesAllowedRule(candidate, allowedRule) {
+  const normalizedCandidate = normalizeAllowedLinkValue(candidate);
+  const normalizedRule = normalizeAllowedLinkValue(allowedRule);
+  if (!normalizedCandidate || !normalizedRule) {
+    return false;
+  }
+
+  if (normalizedCandidate === normalizedRule) {
+    return true;
+  }
+
+  const candidateHost = getAllowedLinkHost(normalizedCandidate);
+  const ruleHost = getAllowedLinkHost(normalizedRule);
+  if (!candidateHost || !ruleHost || candidateHost !== ruleHost) {
+    return false;
+  }
+
+  return isDomainOnlyAllowedLink(normalizedRule);
 }
 
 function loadDefaultList(fileName, fallbackValues) {
@@ -366,7 +410,11 @@ class ModerationService {
         return false;
       }
 
-      return normalized === normalizedItem;
+      if (normalized === normalizedItem) {
+        return true;
+      }
+
+      return linkMatchesAllowedRule(normalized, normalizedItem);
     });
   }
 }
