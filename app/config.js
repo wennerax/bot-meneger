@@ -69,15 +69,13 @@ function loadConfig(overrides = {}, options = {}) {
   return {
     botToken: merged.BOT_TOKEN || '',
     adminIds: parseAdminIds(merged.ADMIN_IDS),
-  // Optional: ids allowed to call the /reload command (comma-separated)
-  reloadAdminIds: parseAdminIds(merged.RELOAD_ADMIN_IDS),
-  botName: merged.BOT_NAME || 'Telegram Bot Manager',
-  databasePath: merged.DATABASE_PATH || 'data/bot.json',
-  // Support generic AI provider env and OpenRouter-specific env names.
-  aiApiKey,
-  aiModel: merged.AI_MODEL || merged.OPENROUTER_MODEL || 'openrouter',
-  aiApiBaseUrl: merged.OPENROUTER_API_BASE_URL || merged.AI_API_BASE_URL || 'https://api.openrouter.ai',
-  weatherLocation: merged.WEATHER_LOCATION || 'Moscow',
+    botName: merged.BOT_NAME || 'Telegram Bot Manager',
+    databasePath: merged.DATABASE_PATH || 'data/bot.json',
+    // Support generic AI provider env and OpenRouter-specific env names.
+    aiApiKey,
+    aiModel: merged.AI_MODEL || merged.OPENROUTER_MODEL || 'openrouter',
+    aiApiBaseUrl: merged.OPENROUTER_API_BASE_URL || merged.AI_API_BASE_URL || 'https://api.openrouter.ai',
+    weatherLocation: merged.WEATHER_LOCATION || 'Moscow',
   };
 }
 

@@ -1,5 +1,4 @@
 const path = require('node:path');
-const { spawn } = require('node:child_process');
 const { Telegraf } = require('telegraf');
 const sharp = require('sharp');
 const { loadConfig } = require('./config');
@@ -58,130 +57,6 @@ function buildPunishmentNotification(action, chatTitle, reason, durationHours) {
 function buildModerationAlertMessage(userLabel, durationHours, reason) {
   const durationLabel = formatDurationLabel(durationHours);
   return `⚠️ Пользователь ${userLabel} замучен на ${durationLabel} по причине: ${reason}.`;
-}
-
-const FORBIDDEN_WORD_PATTERNS = [
-  'нарко', 'наркот', 'нарк', 'наркота', 'наркотик', 'мет', 'метадон', 'доза', 'драг', 'дрога', 'травка', 'трав', 'марихуана', 'каннабис', 'конопля', 'конопл', 'гашиш', 'шишка', 'хэш', 'hash', 'hashish', 'weed', 'кокаин', 'кокс', 'героин', 'амф', 'амфет', 'амфетамин', 'метамф', 'метамфетамин', 'экстази', 'мдма', 'лсд', 'допинг', 'синтетик', 'синт', 'психоактив', 'псих', 'план', 'спайс', 'меф', 'мефедрон', 'соль', 'синтети', 'синтетика',
-  'cocaine', 'meth', 'amphetamine', 'mdma', 'lsd', 'heroin', 'dope', 'drug', 'drugs', 'weed', 'hash', 'hashish', 'kush', 'bud', 'pills', 'speed', 'crack', 'opioid', 'opioids',
-  'selfharm', 'self-harm', 'self harm', 'suicide', 'самоубийство', 'суицид', 'самоубий', 'срезать', 'резать', 'порез', 'нож', 'knife', 'razor', 'blade', 'cutting', 'cut', 'selfcut', 'selfcutting', 'прошвырнуть', 'смерть', 'умирать', 'хочуумереть', 'умираю', 'сдохнуть', 'помереть', 'хочуумереть', 'себяубить'
-];
-
-const ALLOWED_LINK_HOSTS = [
-  't.me', 'telegram.me', 'telegram.org', 'youtube.com', 'youtu.be', 'vk.com', 'x.com', 'twitter.com',
-  'reddit.com', 'github.com', 'gitlab.com', 'stackoverflow.com', 'google.com', 'drive.google.com', 'gmail.com',
-  'yandex.ru', 'ya.ru', 'discord.com', 'discord.gg', 'steamcommunity.com', 'apple.com', 'microsoft.com'
-];
-
-function normalizeProhibitedText(value) {
-  return String(value || '')
-    .toLowerCase()
-    .replace(/0/g, 'o')
-    .replace(/1/g, 'i')
-    .replace(/3/g, 'e')
-    .replace(/4/g, 'a')
-    .replace(/5/g, 's')
-    .replace(/7/g, 't')
-    .replace(/@/g, 'a')
-    .replace(/[^a-zа-я]/g, '')
-    .replace(/(.)\1+/g, '$1');
-}
-
-function detectForbiddenWord(text) {
-  const rawText = String(text || '');
-  if (!rawText.trim()) {
-    return null;
-  }
-
-  const normalizedText = normalizeProhibitedText(rawText);
-  const variants = new Set([
-    normalizedText,
-    normalizedText.replace(/(.)\1+/g, '$1'),
-  ]);
-
-  for (const candidate of variants) {
-    if (!candidate) {
-      continue;
-    }
-
-    for (const pattern of FORBIDDEN_WORD_PATTERNS) {
-      const patternNormalized = normalizeProhibitedText(pattern);
-      if (!patternNormalized) {
-        continue;
-      }
-
-      if (candidate.includes(patternNormalized)) {
-        return pattern;
-      }
-
-      const stemCandidates = new Set([patternNormalized]);
-      if (patternNormalized.length > 3) {
-        const truncated = patternNormalized.replace(/(а|я|ы|и|ов|ев|ин|ой|ий|ый|ое|ые|ь|ка|ки|кии|ок|ик|с|т|н)$/g, '');
-        if (truncated && truncated.length >= 3) {
-          stemCandidates.add(truncated);
-        }
-      }
-
-      for (const stem of stemCandidates) {
-        if (stem && stem.length >= 3 && candidate.includes(stem)) {
-          return stem;
-        }
-      }
-    }
-  }
-
-  return null;
-}
-
-function extractLinkCandidates(text) {
-  return [...String(text || '').matchAll(/https?:\/\/[^\s]+|www\.[^\s]+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s]*)?/gi)]
-    .map((match) => match[0].trim().replace(/[),.;]+$/g, ''))
-    .filter(Boolean);
-}
-
-function getHostnameFromLink(value) {
-  const raw = String(value || '').trim();
-  if (!raw) {
-    return null;
-  }
-
-  const candidate = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
-  try {
-    const url = new URL(candidate);
-    return String(url.hostname || '').toLowerCase().replace(/^www\./i, '');
-  } catch (error) {
-    const match = raw.toLowerCase().match(/^(?:https?:\/\/)?(?:www\.)?([a-z0-9.-]+\.[a-z]{2,})/i);
-    return match ? match[1] : null;
-  }
-}
-
-function isAllowedLinkUrl(value) {
-  const hostname = getHostnameFromLink(value);
-  if (!hostname) {
-    return false;
-  }
-  return ALLOWED_LINK_HOSTS.some((allowed) => hostname === allowed || hostname.endsWith(`.${allowed}`));
-}
-
-function isLinkMessage(text, isAllowed = null) {
-  const links = extractLinkCandidates(text);
-  if (!links.length) {
-    return false;
-  }
-
-  if (typeof isAllowed === 'function') {
-    return links.some((link) => !isAllowed(link));
-  }
-
-  return links.some((link) => !isAllowedLinkUrl(link));
-}
-
-function buildPardonKeyboard(chatId, userId) {
-  return {
-    inline_keyboard: [[{
-      text: 'Помиловать',
-      callback_data: `pardon_mute:${chatId}:${userId}`,
-    }]],
-  };
 }
 
 function getCaptchaEmojiSet() {
@@ -596,14 +471,18 @@ function createBot() {
   }
 
   function isKnownCommandText(text) {
-    const slashCommand = /^\/(start|help|id|about|whoami|stats|rules|hug|kiss|slap|poke|coin|dice|fate|compliment|insult|top|admins|banlist|mutelist|setrules|warn|warnings|unwarn|mute|unmute|amnesty|ban|unban|setgreeting|addadmin|removeadmin|promote|demote|addbanword|removebanword|banwords|addallowedlink|removeallowedlink|allowedlinks|ai)(\s|$)/i;
-    const bangCommand = /^!(начало|помощь|айди|информация|кто\s*я|статистика|правила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|инсульт|амнистия|amnesty)(\s|$)/i;
+    const slashCommand = /^\/(start|help|id|about|whoami|stats|rules|hug|kiss|slap|poke|coin|dice|fate|compliment|insult|top|admins|banlist|mutelist|setrules|warn|warnings|unwarn|mute|unmute|ban|unban|setgreeting|addadmin|removeadmin|promote|demote|ai)(\s|$)/i;
+    const bangCommand = /^!(начало|помощь|айди|информация|кто\s*я|статистика|правила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|инсульт)(\s|$)/i;
     const plusMinusCommand = /^(\+антиспам|\+antispam|\+антифлуд|\+antiflood|\-антиспам|\-antispam|\-антифлуд|\-antiflood|\+ссылки|\+links|\-ссылки|\-links|\+описание|\+description|\+rules|\+правила|\+greeting|\+приветствие)(\s|$)/i;
     return slashCommand.test(text) || bangCommand.test(text) || plusMinusCommand.test(text);
   }
 
   function ensureGroup(ctx) {
     database.ensureGroup(ctx.chat.id, ctx.chat.title || String(ctx.chat.id), ctx.chat?.owner_id || null);
+  }
+
+  function isLinkMessage(text) {
+    return /(?:https?:\/\/|www\.)\S+/i.test(text) || /(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/\S*)?/i.test(text);
   }
 
   async function deleteMessageSafely(ctx, messageId) {
@@ -672,19 +551,14 @@ function createBot() {
     await Promise.all(toDelete.map((messageId) => deleteMessageSafely(ctx, messageId)));
   }
 
-  async function applyAutomaticMute(ctx, userId, durationHours, reason, options = {}) {
+  async function applyAutomaticMute(ctx, userId, durationHours, reason) {
     const untilDate = Math.floor(Date.now() / 1000) + Math.round(durationHours * 3600);
-    const { addWarning = false } = options;
     await deleteRecentMessages(ctx, ctx.chat.id, userId, 5);
 
     try {
       await ctx.telegram.restrictChatMember(ctx.chat.id, userId, buildMutePermissions(false), untilDate);
     } catch (error) {
       return;
-    }
-
-    if (addWarning) {
-      moderationService.addWarning(ctx.chat.id, userId);
     }
 
     database.addPunishment(ctx.chat.id, userId, 'mute', reason, untilDate || null);
@@ -698,9 +572,7 @@ function createBot() {
 
     if (isGroupChat(ctx)) {
       const userLabel = getMentionText(ctx.from || { id: userId });
-      await ctx.reply(buildModerationAlertMessage(userLabel, durationHours, reason), {
-        reply_markup: buildPardonKeyboard(ctx.chat.id, userId),
-      });
+      await ctx.reply(buildModerationAlertMessage(userLabel, durationHours, reason));
     }
 
     try {
@@ -839,13 +711,6 @@ function createBot() {
         '/unwarn, !снять предупреждение @юз - снять предупреждения',
         '/mute, !мут @юз <время> <причина> - ограничить сообщения',
         '/unmute, !размут - снять ограничение',
-        '/addbanword <слово> - добавить банворд',
-        '/removebanword <слово> - удалить банворд',
-        '/banwords - список банвордов',
-        '/addallowedlink <ссылка> - добавить разрешённую ссылку',
-        '/removeallowedlink <ссылка> - удалить разрешённую ссылку',
-        '/allowedlinks - список разрешённых ссылок',
-        '/amnesty, !амнистия - снять все предупреждения в чате',
         '/ban, !бан <время> <причина> - заблокировать пользователя',
         '/unban, !разбан - разблокировать пользователя',
         '/banlist, !баны [страница] - список активных банов',
@@ -1370,20 +1235,6 @@ function createBot() {
     ctx.reply(`Ограничения с пользователя ${targetData.target.first_name || targetData.target.username || targetData.target.id} сняты.`);
   }
 
-  async function amnestyCommand(ctx) {
-    ensureGroup(ctx);
-
-    const isPrimary = database.isPrimaryBotAdmin(ctx.chat.id, ctx.from.id);
-    const actorLevel = isPrimary ? 1 : database.getBotAdminLevel(ctx.chat.id, ctx.from.id);
-    if (!isPrimary && (!actorLevel || actorLevel > 2)) {
-      ctx.reply('Эта команда доступна только владельцу группы или ведущему администратору.');
-      return;
-    }
-
-    moderationService.resetAllWarnings(ctx.chat.id);
-    ctx.reply('✅ Амнистия: все предупреждения в чате сняты.');
-  }
-
   async function banCommand(ctx, args) {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
@@ -1731,9 +1582,6 @@ function createBot() {
       case 'размут':
         await unmuteCommand(ctx, args);
         return true;
-      case 'амнистия':
-        await amnestyCommand(ctx);
-        return true;
       case 'бан':
         await banCommand(ctx, args);
         return true;
@@ -1831,38 +1679,6 @@ function createBot() {
     const helpPage = buildHelpPage(pageIndex);
     await ctx.answerCbQuery();
     await ctx.editMessageText(helpPage.text, { reply_markup: helpPage.reply_markup });
-  });
-
-  bot.action(/^pardon_mute:(-?\d+):(-?\d+)$/, async (ctx) => {
-    const chatId = Number(ctx.match[1]);
-    const userId = Number(ctx.match[2]);
-    const currentChatId = Number(ctx.chat?.id ?? ctx.callbackQuery?.message?.chat?.id ?? chatId);
-    const currentUserId = Number(ctx.from?.id);
-
-    if (!Number.isFinite(chatId) || !Number.isFinite(userId) || !Number.isFinite(currentUserId)) {
-      await ctx.answerCbQuery('Не удалось обработать запрос.');
-      return;
-    }
-
-    const isAllowed = database.isBotAdmin(currentChatId, currentUserId) || config.adminIds.includes(currentUserId);
-    if (!isAllowed) {
-      await ctx.answerCbQuery('У вас нет прав на размут.');
-      return;
-    }
-
-    try {
-      await ctx.telegram.restrictChatMember(currentChatId, userId, buildMutePermissions(true));
-      database.removeActivePunishment(currentChatId, userId, 'mute');
-      clearScheduledPunishment(currentChatId, userId, 'mute');
-      await ctx.answerCbQuery('Пользователь размучен.');
-      try {
-        await ctx.deleteMessage();
-      } catch (error) {
-        // ignore delete errors if the message is already unavailable
-      }
-    } catch (error) {
-      await ctx.answerCbQuery('Не удалось размутить пользователя.');
-    }
   });
 
   bot.command(['id', 'айди'], (ctx) => {
@@ -2083,94 +1899,6 @@ function createBot() {
     await unmuteCommand(ctx, ctx.message.text.replace(/^\/(?:unmute|размут)\s*/i, ''));
   });
 
-  bot.command(['amnesty', 'амнистия'], async (ctx) => {
-    await amnestyCommand(ctx);
-  });
-
-  bot.command(['addbanword', 'добавить_банворд'], async (ctx) => {
-    ensureGroup(ctx);
-    if (!isBotAdmin(ctx)) {
-      ctx.reply('Эта команда доступна только администраторам.');
-      return;
-    }
-    const word = ctx.message.text.replace(/^\/(?:addbanword|добавить_банворд)(?:@[_\w]+)?\s*/i, '').trim();
-    if (!word) {
-      ctx.reply('Использование: /addbanword слово');
-      return;
-    }
-    if (moderationService.addBanWord(ctx.chat.id, word)) {
-      ctx.reply(`✅ Банворд добавлен: ${word}`);
-    } else {
-      ctx.reply(`Слово "${word}" уже есть в списке банвордов.`);
-    }
-  });
-
-  bot.command(['removebanword', 'удалить_банворд'], async (ctx) => {
-    ensureGroup(ctx);
-    if (!isBotAdmin(ctx)) {
-      ctx.reply('Эта команда доступна только администраторам.');
-      return;
-    }
-    const word = ctx.message.text.replace(/^\/(?:removebanword|удалить_банворд)(?:@[_\w]+)?\s*/i, '').trim();
-    if (!word) {
-      ctx.reply('Использование: /removebanword слово');
-      return;
-    }
-    if (moderationService.removeBanWord(ctx.chat.id, word)) {
-      ctx.reply(`✅ Банворд удалён: ${word}`);
-    } else {
-      ctx.reply(`Слово "${word}" не найдено в списке банвордов.`);
-    }
-  });
-
-  bot.command(['banwords', 'банворды'], async (ctx) => {
-    ensureGroup(ctx);
-    const words = moderationService.getBanWords(ctx.chat.id);
-    ctx.reply(words.length ? `📋 Банворды:\n${words.slice(0, 30).join(', ')}` : '📋 Банворды пока не добавлены.');
-  });
-
-  bot.command(['addallowedlink', 'добавить_разрешённую_ссылку'], async (ctx) => {
-    ensureGroup(ctx);
-    if (!isBotAdmin(ctx)) {
-      ctx.reply('Эта команда доступна только администраторам.');
-      return;
-    }
-    const value = ctx.message.text.replace(/^\/(?:addallowedlink|добавить_разрешённую_ссылку)(?:@[_\w]+)?\s*/i, '').trim();
-    if (!value) {
-      ctx.reply('Использование: /addallowedlink domain.com или https://example.com');
-      return;
-    }
-    if (moderationService.addAllowedLink(ctx.chat.id, value)) {
-      ctx.reply(`✅ Разрешённая ссылка добавлена: ${value}`);
-    } else {
-      ctx.reply(`Ссылка "${value}" уже есть в списке разрешённых.`);
-    }
-  });
-
-  bot.command(['removeallowedlink', 'удалить_разрешённую_ссылку'], async (ctx) => {
-    ensureGroup(ctx);
-    if (!isBotAdmin(ctx)) {
-      ctx.reply('Эта команда доступна только администраторам.');
-      return;
-    }
-    const value = ctx.message.text.replace(/^\/(?:removeallowedlink|удалить_разрешённую_ссылку)(?:@[_\w]+)?\s*/i, '').trim();
-    if (!value) {
-      ctx.reply('Использование: /removeallowedlink domain.com');
-      return;
-    }
-    if (moderationService.removeAllowedLink(ctx.chat.id, value)) {
-      ctx.reply(`✅ Разрешённая ссылка удалена: ${value}`);
-    } else {
-      ctx.reply(`Ссылка "${value}" не найдена в списке разрешённых.`);
-    }
-  });
-
-  bot.command(['allowedlinks', 'разрешённые_ссылки'], async (ctx) => {
-    ensureGroup(ctx);
-    const links = moderationService.getAllowedLinks(ctx.chat.id);
-    ctx.reply(links.length ? `📋 Разрешённые ссылки:\n${links.slice(0, 30).join('\n')}` : '📋 Разрешённые ссылки пока не добавлены.');
-  });
-
   bot.command(['ban', 'бан'], async (ctx) => {
     await banCommand(ctx, ctx.message.text.replace(/^\/(?:ban|бан)\s*/i, ''));
   });
@@ -2202,69 +1930,6 @@ function createBot() {
   bot.command(['removeadmin', 'снять_админа'], async (ctx) => {
     const args = ctx.message.text.replace(/^\/(?:removeadmin|снять_админа)(?:@[\w_]+)?\s*/i, '');
     await removeBotAdminCommand(ctx, args);
-  });
-
-  // reload command: available to group owner or ids configured in config.reloadAdminIds
-  bot.command(['reload', 'перезагрузить'], async (ctx) => {
-    try {
-      const fromId = Number(ctx.from?.id);
-      const chatId = ctx.chat?.id;
-      const isOwner = Boolean(chatId && database.isPrimaryBotAdmin(chatId, fromId));
-      const allowedGlobal = Array.isArray(config.reloadAdminIds) && config.reloadAdminIds.includes(fromId);
-
-      if (!isOwner && !allowedGlobal) {
-        ctx.reply('Команда /reload доступна только владельцу группы или ID, указанным в конфигурации.');
-        return;
-      }
-
-      const progressMessage = await ctx.reply('Перезапускаюсь...\n10%');
-      const steps = ['10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%', '100%'];
-
-      const updateProgress = async (label) => {
-        try {
-          await ctx.telegram.editMessageText(ctx.chat.id, progressMessage.message_id, undefined, `Перезапускаюсь...\n${label}`);
-        } catch (error) {
-          // ignore edit errors if the message is already unavailable
-        }
-      };
-
-      const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-      try {
-        for (const [index, label] of steps.entries()) {
-          if (index > 0) {
-            await delay(300);
-          }
-          await updateProgress(label);
-        }
-
-        try {
-          await ctx.telegram.editMessageText(ctx.chat.id, progressMessage.message_id, undefined, 'Перезапуск прошел успешно');
-        } catch (error) {
-          // ignore edit errors if the message is already unavailable
-        }
-      } finally {
-        const mainScript = path.resolve(__dirname, 'main.js');
-        const child = spawn(process.execPath, [mainScript], {
-          cwd: path.resolve(__dirname, '..'),
-          detached: true,
-          stdio: 'inherit',
-          env: { ...process.env, BOT_RELOAD: '1' },
-        });
-
-        child.unref();
-        setTimeout(() => {
-          process.exit(0);
-        }, 200);
-      }
-    } catch (error) {
-      console.error('reload command failed:', error);
-      try {
-        ctx.reply('Не удалось выполнить перезапуск: ' + (error?.message || String(error)));
-      } catch (e) {
-        // ignore
-      }
-    }
   });
 
   async function handleIncomingMessage(ctx) {
@@ -2435,17 +2100,9 @@ function createBot() {
       }
     }
 
-    const forbiddenWord = detectForbiddenWord(text) || moderationService.findBanWord(ctx.chat.id, text);
-    if (isGroupChat(ctx) && forbiddenWord) {
+    if (isGroupChat(ctx) && moderationService.isLinkProtectionEnabled(ctx.chat.id) && isLinkMessage(text)) {
       await deleteMessageSafely(ctx, ctx.message.message_id);
-      await applyAutomaticMute(ctx, ctx.from.id, 1, `Запрещённое слово: ${forbiddenWord}`, { addWarning: true });
-      return;
-    }
-
-    const hasAllowedLink = (link) => moderationService.isAllowedLink(ctx.chat.id, link);
-    if (isGroupChat(ctx) && moderationService.isLinkProtectionEnabled(ctx.chat.id) && isLinkMessage(text, hasAllowedLink)) {
-      await deleteMessageSafely(ctx, ctx.message.message_id);
-      await applyAutomaticMute(ctx, ctx.from.id, 24, 'Ссылка');
+      await applyAutomaticMute(ctx, ctx.from.id, 24 * 7, 'Ссылка');
       return;
     }
 
@@ -2485,10 +2142,6 @@ function startBot() {
     return;
   }
   bot.launch().then(() => {
-    if (process.env.BOT_RELOAD === '1') {
-      console.log('Перезапуск прошел успешно');
-      return;
-    }
     console.log('Bot started');
   }).catch((error) => {
     console.error(error);
@@ -2505,9 +2158,6 @@ module.exports = {
   parsePageNumber,
   buildPunishmentListMessage,
   buildBotAdminListMessage,
-  detectForbiddenWord,
-  isLinkMessage,
-  isAllowedLinkUrl,
   startBot,
 };
 

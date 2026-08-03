@@ -57,23 +57,16 @@ test('flood protection can be toggled per chat', () => {
   assert.equal(service.isFloodProtectionEnabled(100), false);
 });
 
-test('allowed links allow only listed domains and exact listed URLs', () => {
+test('allowed links accept only exact configured URLs', () => {
   const service = new ModerationService();
 
-  service.addAllowedLink(100, 'https://m.youtube.com');
-  service.addAllowedLink(100, 'https://spotify.com');
-  service.addAllowedLink(100, 'https://t.me/buddy_music_bot?start=inv5008792526');
-  service.addAllowedLink(100, 'https://t.me/DigitalMusikBot?start=from_inline_caption');
-
-  assert.equal(service.isAllowedLink(100, 'https://m.youtube.com/watch?v=abc'), true);
-  assert.equal(service.isAllowedLink(100, 'https://youtube.com/watch?v=abc'), false);
-  assert.equal(service.isAllowedLink(100, 'https://spotify.com/playlist/1'), true);
-  assert.equal(service.isAllowedLink(100, 'https://spotify.com.evil/playlist/1'), false);
-
-  assert.equal(service.isAllowedLink(100, 'https://t.me/buddy_music_bot?start=inv5008792526'), true);
-  assert.equal(service.isAllowedLink(100, 'https://t.me/buddy_music_bot?start=inv5008792526&foo=1'), false);
-  assert.equal(service.isAllowedLink(100, 'https://t.me/DigitalMusikBot?start=from_inline_caption'), true);
+  assert.equal(service.isAllowedLink(100, 'https://t.me/wwhisbot?start=faq'), true);
+  assert.equal(service.isAllowedLink(100, 'https://t.me/wwhisbot?start=faq/extra'), false);
   assert.equal(service.isAllowedLink(100, 'https://example.com/shop'), false);
+
+  service.addAllowedLink(100, 'https://t.me/mir_supercell');
+  assert.equal(service.isAllowedLink(100, 'https://t.me/mir_supercell'), true);
+  assert.equal(service.isAllowedLink(100, 'https://t.me/mir_supercell/other'), false);
 });
 
 test('moderation settings persist across restarts', () => {

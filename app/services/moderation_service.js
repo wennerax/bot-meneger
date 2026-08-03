@@ -6,104 +6,14 @@ const DEFAULT_BAN_WORDS = [
   'амфетамин', 'метамфетамин', 'экстази', 'мдма', 'лсд', 'допинг', 'доза', 'weed', 'cocaine', 'meth',
   'amphetamine', 'mdma', 'lsd', 'hash', 'hashish', 'heroin', 'dope', 'drug', 'drugs', 'selfharm', 'self-harm',
   'suicide', 'самоубийство', 'суицид', 'срезать', 'резать', 'порез', 'нож', 'knife', 'razor', 'blade', 'cutting',
-  'смерть', 'умирать', 'хочуумереть', 'selfcut', 'selfcutting', 'помочь себе', 'убить себя'
+  'смерть', 'умирать', 'хочуумереть', 'selfcut', 'selfcutting', 'убить себя'
 ];
 
 const DEFAULT_ALLOWED_LINKS = [
-  'https://m.youtube.com',
-  'https://spotify.com',
-  'https://t.me/buddy_music_bot?start=inv5008792526',
-  'https://t.me/DigitalMusikBot?start=from_inline_caption'
+  't.me', 'telegram.me', 'telegram.org', 'youtube.com', 'youtu.be', 'vk.com', 'x.com', 'twitter.com',
+  'reddit.com', 'github.com', 'gitlab.com', 'stackoverflow.com', 'google.com', 'drive.google.com', 'gmail.com',
+  'yandex.ru', 'ya.ru', 'discord.com', 'discord.gg', 'steamcommunity.com', 'apple.com', 'microsoft.com'
 ];
-
-function normalizeListEntry(value) {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/^['"]/g, '')
-    .replace(/['"]$/g, '')
-    .replace(/^[\uFEFF]+/, '');
-}
-
-function normalizeAllowedLinkValue(value) {
-  return normalizeListEntry(value)
-    .replace(/^https?:\/\//i, '')
-    .replace(/^www\./i, '')
-    .replace(/\/+$/g, '')
-    .replace(/[),.;]+$/g, '');
-}
-
-function getAllowedLinkHost(value) {
-  const normalized = normalizeAllowedLinkValue(value);
-  if (!normalized) {
-    return null;
-  }
-
-  try {
-    const url = new URL(`https://${normalized}`);
-    return String(url.hostname || '').toLowerCase().replace(/^www\./i, '');
-  } catch (error) {
-    const match = normalized.match(/^[a-z0-9.-]+\.[a-z]{2,}(?::\d+)?/i);
-    return match ? match[0].toLowerCase().replace(/^www\./i, '') : null;
-  }
-}
-
-function isDomainOnlyAllowedLink(value) {
-  const normalized = normalizeAllowedLinkValue(value);
-  if (!normalized) {
-    return false;
-  }
-  return !/[/?#]/.test(normalized);
-}
-
-function linkMatchesAllowedRule(candidate, allowedRule) {
-  const normalizedCandidate = normalizeAllowedLinkValue(candidate);
-  const normalizedRule = normalizeAllowedLinkValue(allowedRule);
-  if (!normalizedCandidate || !normalizedRule) {
-    return false;
-  }
-
-  if (normalizedCandidate === normalizedRule) {
-    return true;
-  }
-
-  const candidateHost = getAllowedLinkHost(normalizedCandidate);
-  const ruleHost = getAllowedLinkHost(normalizedRule);
-  if (!candidateHost || !ruleHost || candidateHost !== ruleHost) {
-    return false;
-  }
-
-  return isDomainOnlyAllowedLink(normalizedRule);
-}
-
-function loadDefaultList(fileName, fallbackValues) {
-  const filePath = path.join(__dirname, '..', 'data', fileName);
-  try {
-    if (!fs.existsSync(filePath)) {
-      return [...fallbackValues];
-    }
-
-    const content = fs.readFileSync(filePath, 'utf8').trim();
-    if (!content) {
-      return [...fallbackValues];
-    }
-
-    const parsed = JSON.parse(content);
-    if (!Array.isArray(parsed)) {
-      return [...fallbackValues];
-    }
-
-    return [...new Set(parsed.map((item) => normalizeListEntry(item)).filter(Boolean))];
-  } catch (error) {
-    return [...fallbackValues];
-  }
-}
-
-const BAN_WORDS_FILE = path.join(__dirname, '..', 'data', 'ban_words.json');
-const ALLOWED_LINKS_FILE = path.join(__dirname, '..', 'data', 'allowed_links.json');
-
-const DEFAULT_BAN_WORDS_FILE = loadDefaultList('ban_words.json', DEFAULT_BAN_WORDS);
-const DEFAULT_ALLOWED_LINKS_FILE = loadDefaultList('allowed_links.json', DEFAULT_ALLOWED_LINKS);
 
 class ModerationService {
   constructor(filePath = null) {
@@ -122,10 +32,10 @@ class ModerationService {
       filters: chat.filters && typeof chat.filters === 'object' ? { ...chat.filters } : {},
       banWords: Array.isArray(chat.banWords)
         ? [...new Set(chat.banWords.map((item) => String(item).trim().toLowerCase()).filter(Boolean))]
-        : [...DEFAULT_BAN_WORDS_FILE],
+        : [...DEFAULT_BAN_WORDS],
       allowedLinks: Array.isArray(chat.allowedLinks)
         ? [...new Set(chat.allowedLinks.map((item) => String(item).trim().toLowerCase()).filter(Boolean))]
-        : [...DEFAULT_ALLOWED_LINKS_FILE],
+        : [...DEFAULT_ALLOWED_LINKS],
       spamProtectionEnabled: Boolean(chat.spamProtectionEnabled),
       linkProtectionEnabled: Boolean(chat.linkProtectionEnabled),
       floodProtectionEnabled: Boolean(chat.floodProtectionEnabled),
@@ -335,37 +245,13 @@ class ModerationService {
       return null;
     }
 
-    const textVariants = new Set([
-      normalizedText,
-      normalizedText.replace(/(.)\1+/g, '$1'),
-    ]);
-
     for (const word of this._getChat(chatId).banWords) {
       const normalizedWord = String(word || '').toLowerCase().replace(/[^a-zа-я0-9]/g, '');
       if (!normalizedWord) {
         continue;
       }
-
-      const wordVariants = new Set([
-        normalizedWord,
-        normalizedWord.replace(/(.)\1+/g, '$1'),
-      ]);
-      if (normalizedWord.length > 3) {
-        const trimmed = normalizedWord.replace(/(а|я|ы|и|ов|ев|ин|ой|ий|ый|ое|ые|ь|ка|ки|ок|ик|с|т|н)$/g, '');
-        if (trimmed && trimmed.length >= 3) {
-          wordVariants.add(trimmed);
-        }
-      }
-
-      for (const textVariant of textVariants) {
-        for (const variant of wordVariants) {
-          if (!variant || variant.length < 3) {
-            continue;
-          }
-          if (textVariant.includes(variant) || variant.includes(textVariant)) {
-            return word;
-          }
-        }
+      if (normalizedText.includes(normalizedWord) || normalizedWord.includes(normalizedText)) {
+        return word;
       }
     }
     return null;
@@ -377,7 +263,7 @@ class ModerationService {
 
   addAllowedLink(chatId, value) {
     const chat = this._getChat(chatId);
-    const normalized = normalizeAllowedLinkValue(value);
+    const normalized = String(value || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '');
     if (!normalized || chat.allowedLinks.includes(normalized)) {
       return false;
     }
@@ -388,9 +274,9 @@ class ModerationService {
 
   removeAllowedLink(chatId, value) {
     const chat = this._getChat(chatId);
-    const normalized = normalizeAllowedLinkValue(value);
+    const normalized = String(value || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '');
     const before = chat.allowedLinks.length;
-    chat.allowedLinks = chat.allowedLinks.filter((item) => normalizeAllowedLinkValue(item) !== normalized);
+    chat.allowedLinks = chat.allowedLinks.filter((item) => item !== normalized);
     if (chat.allowedLinks.length === before) {
       return false;
     }
@@ -399,22 +285,14 @@ class ModerationService {
   }
 
   isAllowedLink(chatId, value) {
-    const normalized = normalizeAllowedLinkValue(value);
+    const normalized = String(value || '').trim().toLowerCase();
     if (!normalized) {
       return false;
     }
-
+    const hostname = normalized.replace(/^https?:\/\//i, '').replace(/^www\./i, '').split(/[/?#]/)[0];
     return this._getChat(chatId).allowedLinks.some((item) => {
-      const normalizedItem = normalizeAllowedLinkValue(item);
-      if (!normalizedItem) {
-        return false;
-      }
-
-      if (normalized === normalizedItem) {
-        return true;
-      }
-
-      return linkMatchesAllowedRule(normalized, normalizedItem);
+      const normalizedItem = String(item || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '');
+      return hostname === normalizedItem || hostname.endsWith(`.${normalizedItem}`);
     });
   }
 }
