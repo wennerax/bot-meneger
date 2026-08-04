@@ -211,7 +211,7 @@ function extractLinksFromText(text) {
     return [];
   }
 
-  const matches = text.match(/https?:\/\/[^\s<>'")]+|www\.[^\s<>'")]+/gi) || [];
+  const matches = text.match(/https?:\/\/[^ \s<>'")]+|www\.[^ \s<>'")]+|\b(?:[a-z0-9-]+\.)+[a-z]{2,}(?:[^\u0000\s<>'")]*)/gi) || [];
   return matches.map((match) => String(match).replace(/[.,;:!?]+$/, '').trim()).filter(Boolean);
 }
 
@@ -2075,6 +2075,14 @@ function createBot() {
       }
       moderationService.disableLinkProtection(ctx.chat.id);
       ctx.reply('✅ Антиссылки выключены.');
+      return;
+    }
+
+    const forbiddenWord = isGroupChat(ctx) ? moderationService.findBanWord(ctx.chat.id, text) : null;
+    if (forbiddenWord) {
+      await deleteMessageSafely(ctx, ctx.message.message_id);
+      moderationService.addWarning(ctx.chat.id, ctx.from.id);
+      await applyAutomaticMute(ctx, ctx.from.id, 1, `Банворд: ${forbiddenWord}`);
       return;
     }
 
