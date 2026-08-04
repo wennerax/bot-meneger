@@ -204,50 +204,6 @@ function buildBotAdminListMessage(primaryAdminLabel, auxiliaryAdminLabels = []) 
 
 const ai = require('./ai');
 
-const defaultModerationService = new ModerationService();
-
-function extractLinksFromText(text) {
-  if (typeof text !== 'string' || !text.trim()) {
-    return [];
-  }
-
-  const matches = text.match(/https?:\/\/[^ \s<>'")]+|www\.[^ \s<>'")]+|\b(?:[a-z0-9-]+\.)+[a-z]{2,}(?:[^\u0000\s<>'")]*)/gi) || [];
-  return matches.map((match) => String(match).replace(/[.,;:!?]+$/, '').trim()).filter(Boolean);
-}
-
-function detectForbiddenWord(text) {
-  if (typeof text !== 'string' || !text.trim()) {
-    return null;
-  }
-
-  return defaultModerationService.findBanWord(0, text);
-}
-
-function isAllowedLinkUrl(url) {
-  if (typeof url !== 'string' || !url.trim()) {
-    return false;
-  }
-
-  return defaultModerationService.isAllowedLink(0, url);
-}
-
-function isLinkMessage(text, matcher, service = defaultModerationService) {
-  const links = extractLinksFromText(text);
-  if (!links.length) {
-    return false;
-  }
-
-  if (typeof matcher === 'function') {
-    return links.some((link) => !matcher(link));
-  }
-
-  if (matcher === undefined || matcher === null) {
-    return links.some((link) => !service.isAllowedLink(0, link));
-  }
-
-  return links.some((link) => !service.isAllowedLink(matcher, link));
-}
-
 function createBot() {
   const config = loadConfig();
   const bot = new Telegraf(config.botToken || '');
@@ -523,6 +479,10 @@ function createBot() {
 
   function ensureGroup(ctx) {
     database.ensureGroup(ctx.chat.id, ctx.chat.title || String(ctx.chat.id), ctx.chat?.owner_id || null);
+  }
+
+  function isLinkMessage(text) {
+    return /(?:https?:\/\/|www\.)\S+/i.test(text) || /(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/\S*)?/i.test(text);
   }
 
   async function deleteMessageSafely(ctx, messageId) {
@@ -2078,14 +2038,6 @@ function createBot() {
       return;
     }
 
-    const forbiddenWord = isGroupChat(ctx) ? moderationService.findBanWord(ctx.chat.id, text) : null;
-    if (forbiddenWord) {
-      await deleteMessageSafely(ctx, ctx.message.message_id);
-      moderationService.addWarning(ctx.chat.id, ctx.from.id);
-      await applyAutomaticMute(ctx, ctx.from.id, 1, `Банворд: ${forbiddenWord}`);
-      return;
-    }
-
     const descriptionMatch = text.match(/^(\+описание|\+description)(?:\s+(.+))?$/i);
     if (descriptionMatch) {
       const description = (descriptionMatch[2] || '').trim();
@@ -2148,7 +2100,7 @@ function createBot() {
       }
     }
 
-    if (isGroupChat(ctx) && moderationService.isLinkProtectionEnabled(ctx.chat.id) && isLinkMessage(text, ctx.chat.id, moderationService)) {
+    if (isGroupChat(ctx) && moderationService.isLinkProtectionEnabled(ctx.chat.id) && isLinkMessage(text)) {
       await deleteMessageSafely(ctx, ctx.message.message_id);
       await applyAutomaticMute(ctx, ctx.from.id, 24 * 7, 'Ссылка');
       return;
@@ -2206,9 +2158,6 @@ module.exports = {
   parsePageNumber,
   buildPunishmentListMessage,
   buildBotAdminListMessage,
-  detectForbiddenWord,
-  isAllowedLinkUrl,
-  isLinkMessage,
   startBot,
 };
 

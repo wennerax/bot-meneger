@@ -87,13 +87,6 @@ test('allowed links bypass link protection while suspicious ones trigger it', ()
   assert.equal(isLinkMessage('https://example.com/shop', (link) => link.includes('t.me')), true);
 });
 
-test('isLinkMessage detects non-allowed links and supports bare domains', () => {
-  assert.equal(isLinkMessage('https://t.me/wwhisbot?start=faq', (link) => link === 'https://t.me/wwhisbot?start=faq'), false);
-  assert.equal(isLinkMessage('https://t.me/prepodsteam', (link) => link === 'https://t.me/wwhisbot?start=faq'), true);
-  assert.equal(isLinkMessage('t.me/prepodsteam', (link) => link === 'https://t.me/wwhisbot?start=faq'), true);
-  assert.equal(isLinkMessage('https://www.getaiperks.com/ru/blogs/40-free-ai-api-keys-master-guide-2026', (link) => false), true);
-});
-
 test('buildAiRequestPayload builds an OpenAI-compatible request body', async () => {
   const payload = await buildAiRequestPayload('привет', 'gpt-4o-mini');
 
