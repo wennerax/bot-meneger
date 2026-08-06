@@ -315,14 +315,33 @@ class ModerationService {
   }
 
   isAllowedLink(chatId, value) {
-    const normalized = String(value || '').trim().toLowerCase();
-    if (!normalized) {
+    const normalizedValue = String(value || '').trim().toLowerCase();
+    if (!normalizedValue) {
       return false;
     }
-    const hostname = normalized.replace(/^https?:\/\//i, '').replace(/^www\./i, '').split(/[/?#]/)[0];
+
+    const normalizedUrl = normalizedValue.replace(/^https?:\/\//i, '').replace(/^www\./i, '');
+    const targetHost = normalizedUrl.split(/[/?#]/)[0];
+
     return this._getChat(chatId).allowedLinks.some((item) => {
       const normalizedItem = String(item || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '');
-      return hostname === normalizedItem || hostname.endsWith(`.${normalizedItem}`);
+      if (!normalizedItem) {
+        return false;
+      }
+
+      if (normalizedUrl === normalizedItem) {
+        return true;
+      }
+
+      if (normalizedItem.endsWith('/')) {
+        return normalizedUrl.startsWith(normalizedItem);
+      }
+
+      if (normalizedItem.includes('/') || normalizedItem.includes('?') || normalizedItem.includes('#')) {
+        return false;
+      }
+
+      return targetHost === normalizedItem || targetHost.endsWith(`.${normalizedItem}`);
     });
   }
 }

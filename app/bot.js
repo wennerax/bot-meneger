@@ -8,6 +8,35 @@ const Database = require('./services/database');
 const { getFunnyDescription } = require('./services/moderation_service');
 const { getMentionText, resolveUsernameTarget } = require('./services/username_service');
 
+const defaultModerationService = new ModerationService();
+
+function normalizeUrlPattern(value) {
+  return String(value || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '');
+}
+
+function getLinkCandidates(text) {
+  return Array.from(String(text || '').matchAll(/(?:https?:\/\/|www\.)\S+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/\S*)?/ig), (match) => match[0]);
+}
+
+function isLinkMessage(text, allowLinkPredicate) {
+  const links = getLinkCandidates(text);
+  if (links.length === 0) {
+    return false;
+  }
+  const predicate = typeof allowLinkPredicate === 'function'
+    ? allowLinkPredicate
+    : (link) => defaultModerationService.isAllowedLink(0, link);
+  return links.some((link) => !predicate(link));
+}
+
+function isAllowedLinkUrl(value) {
+  return defaultModerationService.isAllowedLink(0, value);
+}
+
+function detectForbiddenWord(text) {
+  return defaultModerationService.findBanWord(0, text);
+}
+
 function parsePunishmentDetails(args, hasReply) {
   const parts = args ? args.trim().split(/\s+/).filter(Boolean) : [];
   let durationHours = null;
@@ -479,10 +508,6 @@ function createBot() {
 
   function ensureGroup(ctx) {
     database.ensureGroup(ctx.chat.id, ctx.chat.title || String(ctx.chat.id), ctx.chat?.owner_id || null);
-  }
-
-  function isLinkMessage(text) {
-    return /(?:https?:\/\/|www\.)\S+/i.test(text) || /(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/\S*)?/i.test(text);
   }
 
   async function deleteMessageSafely(ctx, messageId) {
@@ -2100,7 +2125,7 @@ function createBot() {
       }
     }
 
-    if (isGroupChat(ctx) && moderationService.isLinkProtectionEnabled(ctx.chat.id) && isLinkMessage(text)) {
+    if (isGroupChat(ctx) && moderationService.isLinkProtectionEnabled(ctx.chat.id) && isLinkMessage(text, (link) => moderationService.isAllowedLink(ctx.chat.id, link))) {
       await deleteMessageSafely(ctx, ctx.message.message_id);
       await applyAutomaticMute(ctx, ctx.from.id, 24 * 7, 'Ссылка');
       return;
@@ -2158,6 +2183,9 @@ module.exports = {
   parsePageNumber,
   buildPunishmentListMessage,
   buildBotAdminListMessage,
+  detectForbiddenWord,
+  isLinkMessage,
+  isAllowedLinkUrl,
   startBot,
 };
 
