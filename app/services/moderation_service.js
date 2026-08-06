@@ -446,25 +446,36 @@ class ModerationService {
     const entities = [];
     let result = '';
     let lastIndex = 0;
-    const pattern = /([^\n()]+?)\((https?:\/\/[^\s)]+|www\.[^\s)]+)\)/g;
+    const patterns = [
+      /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+|www\.[^\s)]+)\)/g,
+      /([^\n()]+?)\((https?:\/\/[^\s)]+|www\.[^\s)]+)\)/g,
+    ];
 
-    for (const match of source.matchAll(pattern)) {
-      const [fullMatch, label, url] = match;
-      const startIndex = match.index || 0;
-      result += source.slice(lastIndex, startIndex);
-      const normalizedLabel = String(label || '').trim();
-      const normalizedUrl = String(url || '').trim();
-      if (!normalizedLabel) {
-        result += fullMatch;
-      } else {
-        const urlValue = normalizedUrl.startsWith('http://') || normalizedUrl.startsWith('https://')
-          ? normalizedUrl
-          : `https://${normalizedUrl}`;
-        const offset = result.length;
-        result += normalizedLabel;
-        entities.push({ offset, length: normalizedLabel.length, type: 'text_link', url: urlValue });
+    for (const pattern of patterns) {
+      const matches = Array.from(source.matchAll(pattern));
+      if (!matches.length) {
+        continue;
       }
-      lastIndex = startIndex + fullMatch.length;
+
+      for (const match of matches) {
+        const [fullMatch, label, url] = match;
+        const startIndex = match.index || 0;
+        result += source.slice(lastIndex, startIndex);
+        const normalizedLabel = String(label || '').trim();
+        const normalizedUrl = String(url || '').trim();
+        if (!normalizedLabel) {
+          result += fullMatch;
+        } else {
+          const urlValue = normalizedUrl.startsWith('http://') || normalizedUrl.startsWith('https://')
+            ? normalizedUrl
+            : `https://${normalizedUrl}`;
+          const offset = result.length;
+          result += normalizedLabel;
+          entities.push({ offset, length: normalizedLabel.length, type: 'text_link', url: urlValue });
+        }
+        lastIndex = startIndex + fullMatch.length;
+      }
+      break;
     }
 
     result += source.slice(lastIndex);
