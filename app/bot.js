@@ -161,10 +161,9 @@ function buildSettingsMainKeyboard(chatId) {
     ],
     [
       { text: 'Анти(СФС)', callback_data: `settings:section:anti:${chatId}` },
-      { text: 'Запрещённые слова', callback_data: `settings:section:banwords:${chatId}` },
     ],
     [
-      { text: 'Сообщение', callback_data: `settings:section:first:${chatId}` },
+      { text: 'Сообщение', callback_data: `settings:open_menu:${chatId}` },
     ],
   ];
 }
