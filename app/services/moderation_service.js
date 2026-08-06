@@ -62,10 +62,13 @@ function parseAllowedLinkRule(item) {
     const host = url.hostname;
     const path = url.pathname || '/';
     const query = url.search || '';
+    const hasTrailingSlash = normalized.endsWith('/');
 
-    if (path === '/' && !query) {
-      return { type: 'host', value: host };
-    }
+      if (path === '/' && !query) {
+        return hasTrailingSlash
+          ? { type: 'prefix', value: `${host}/` }
+          : { type: 'exact', value: host };
+      }
 
     const fullPath = `${host}${path}`;
     if (query) {
@@ -77,7 +80,7 @@ function parseAllowedLinkRule(item) {
     }
 
     if (path === '/') {
-      return { type: 'host', value: host };
+      return { type: 'exact', value: host };
     }
 
     if (path.endsWith('/')) {
@@ -121,7 +124,7 @@ function matchesAllowedRule(rule, normalizedUrl) {
 }
 
 const DEFAULT_ALLOWED_LINKS = readJsonList(path.join(__dirname, '..', 'data', 'allowed_links.json'), [
-  't.me', 'telegram.me', 'telegram.org', 'youtube.com', 'youtu.be', 'vk.com', 'x.com', 'twitter.com',
+  'vk.com', 'x.com', 'twitter.com',
   'reddit.com', 'github.com', 'gitlab.com', 'stackoverflow.com', 'google.com', 'drive.google.com', 'gmail.com',
   'yandex.ru', 'ya.ru', 'discord.com', 'discord.gg', 'steamcommunity.com', 'apple.com', 'microsoft.com'
 ]);
