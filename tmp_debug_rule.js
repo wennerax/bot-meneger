@@ -69,7 +69,8 @@ const allowed = svc.getAllowedLinks(0);
 const testUrls = [
   'https://t.me/VoiceShazamBot?start=music_yt_LGDJau8b-wU',
   'https://t.me/VoiceShazamBot',
-  'https://t.me/prepodsteam'
+  'https://t.me/prepodsteam',
+  'https://t.me/Shazambot?start=music_yt_mXKTtXNZ9Iw'
 ];
 
 console.log('Allowed list entries count:', allowed.length);

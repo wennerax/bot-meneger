@@ -503,7 +503,7 @@ function createBot() {
   }
 
   function isKnownCommandText(text) {
-    const slashCommand = /^\/(start|help|id|about|whoami|stats|rules|hug|kiss|slap|poke|coin|dice|fate|compliment|insult|top|admins|banlist|mutelist|setrules|warn|warnings|unwarn|mute|unmute|ban|unban|setgreeting|addadmin|removeadmin|promote|demote|ai)(\s|$)/i;
+    const slashCommand = /^\/(start|help|id|about|whoami|stats|rules|allowed|links|hug|kiss|slap|poke|coin|dice|fate|compliment|insult|top|admins|banlist|mutelist|setrules|warn|warnings|unwarn|mute|unmute|ban|unban|setgreeting|addadmin|removeadmin|promote|demote|ai)(\s|$)/i;
     const bangCommand = /^!(начало|помощь|айди|информация|кто\s*я|статистика|правила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|инсульт)(\s|$)/i;
     const plusMinusCommand = /^(\+антиспам|\+antispam|\+антифлуд|\+antiflood|\-антиспам|\-antispam|\-антифлуд|\-antiflood|\+ссылки|\+links|\-ссылки|\-links|\+описание|\+description|\+rules|\+правила|\+greeting|\+приветствие)(\s|$)/i;
     return slashCommand.test(text) || bangCommand.test(text) || plusMinusCommand.test(text);
@@ -1830,6 +1830,42 @@ function createBot() {
     listPunishmentsCommand(ctx, 'mute', args);
   });
 
+  bot.command(['allowed'], (ctx) => {
+    ensureGroup(ctx);
+    if (!isBotAdmin(ctx)) {
+      ctx.reply('Эта команда доступна только администраторам.');
+      return;
+    }
+    const allowedLinks = moderationService.getAllowedLinks(ctx.chat.id);
+    if (!allowedLinks.length) {
+      ctx.reply('В чате нет разрешённых ссылок. Используйте +links <url>, чтобы добавить.');
+      return;
+    }
+    const message = ['Разрешённые ссылки и домены:'];
+    for (const item of allowedLinks) {
+      message.push(item);
+    }
+    ctx.reply(message.join('\n'));
+  });
+
+  bot.command(['links', 'ссылки'], (ctx) => {
+    ensureGroup(ctx);
+    if (!isBotAdmin(ctx)) {
+      ctx.reply('Эта команда доступна только администраторам.');
+      return;
+    }
+    const args = ctx.message.text.replace(/^\/(?:links|ссылки)(?:@[\w_]+)?\s*/i, '').trim();
+    if (!args) {
+      ctx.reply('Использование: /links <url> — добавить разрешённую ссылку или домен.');
+      return;
+    }
+    if (moderationService.addAllowedLink(ctx.chat.id, args)) {
+      ctx.reply(`✅ Разрешённая ссылка добавлена: ${args}`);
+    } else {
+      ctx.reply('Эта ссылка уже добавлена или формат некорректен.');
+    }
+  });
+
   bot.on('my_chat_member', async (ctx) => {
     const newStatus = ctx.update.my_chat_member.new_chat_member.status;
     if (newStatus === 'member' || newStatus === 'administrator') {
@@ -2049,7 +2085,27 @@ function createBot() {
       return;
     }
 
-    if (lowerText.startsWith('+ссылки') || lowerText.startsWith('+links')) {
+    const addAllowedLinkMatch = text.match(/^\+(?:links|ссылки)\s+(.+)$/i);
+    if (addAllowedLinkMatch) {
+      ensureGroup(ctx);
+      if (!isBotAdmin(ctx)) {
+        ctx.reply('Эта команда доступна только администраторам.');
+        return;
+      }
+      const linkValue = addAllowedLinkMatch[1].trim();
+      if (!linkValue) {
+        ctx.reply('Использование: +links <url> — добавить разрешённую ссылку или домен.');
+        return;
+      }
+      if (moderationService.addAllowedLink(ctx.chat.id, linkValue)) {
+        ctx.reply(`✅ Разрешённая ссылка добавлена: ${linkValue}`);
+      } else {
+        ctx.reply('Эта ссылка уже добавлена или формат некорректен.');
+      }
+      return;
+    }
+
+    if (lowerText === '+ссылки' || lowerText === '+links') {
       ensureGroup(ctx);
       if (!isBotAdmin(ctx)) {
         ctx.reply('Эта команда доступна только администраторам.');
@@ -2060,7 +2116,7 @@ function createBot() {
       return;
     }
 
-    if (lowerText.startsWith('-ссылки') || lowerText.startsWith('-links')) {
+    if (lowerText === '-ссылки' || lowerText === '-links') {
       ensureGroup(ctx);
       if (!isBotAdmin(ctx)) {
         ctx.reply('Эта команда доступна только администраторам.');

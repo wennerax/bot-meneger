@@ -65,9 +65,7 @@ function parseAllowedLinkRule(item) {
     const hasTrailingSlash = normalized.endsWith('/');
 
       if (path === '/' && !query) {
-        return hasTrailingSlash
-          ? { type: 'prefix', value: `${host}/` }
-          : { type: 'exact', value: host };
+        return { type: 'prefix', value: host };
       }
 
     const fullPath = `${host}${path}`;
@@ -108,9 +106,13 @@ function matchesAllowedRule(rule, normalizedUrl) {
   }
 
   if (rule.type === 'prefix') {
-    // allow exact host (without trailing slash) or any path under the prefix
+    // allow exact host (without trailing slash), any path under the prefix,
+    // or a query/fragment directly after the host or path.
     const prefix = rule.value.replace(/\/+$/, '');
-    return normalizedUrl === prefix || normalizedUrl.startsWith(prefix + '/');
+    return normalizedUrl === prefix
+      || normalizedUrl.startsWith(prefix + '/')
+      || normalizedUrl.startsWith(prefix + '?')
+      || normalizedUrl.startsWith(prefix + '#');
   }
 
   if (rule.type === 'exact') {
@@ -386,7 +388,7 @@ class ModerationService {
 
   addAllowedLink(chatId, value) {
     const chat = this._getChat(chatId);
-    const normalized = String(value || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '');
+    const normalized = normalizeAllowedUrl(value);
     if (!normalized || chat.allowedLinks.includes(normalized)) {
       return false;
     }
@@ -397,7 +399,7 @@ class ModerationService {
 
   removeAllowedLink(chatId, value) {
     const chat = this._getChat(chatId);
-    const normalized = String(value || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '');
+    const normalized = normalizeAllowedUrl(value);
     const before = chat.allowedLinks.length;
     chat.allowedLinks = chat.allowedLinks.filter((item) => item !== normalized);
     if (chat.allowedLinks.length === before) {

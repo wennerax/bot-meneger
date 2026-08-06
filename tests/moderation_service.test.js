@@ -87,6 +87,24 @@ test('allowed domain prefixes permit links under the same host', () => {
   assert.equal(service.isAllowedLink(100, 'https://example.com/track/123'), false);
 });
 
+test('allowed domain rules without trailing slash still permit host and subpaths', () => {
+  const service = new ModerationService();
+  service.addAllowedLink(100, 'https://customdomain.test');
+
+  assert.equal(service.isAllowedLink(100, 'https://customdomain.test'), true);
+  assert.equal(service.isAllowedLink(100, 'https://customdomain.test/watch?v=123'), true);
+  assert.equal(service.isAllowedLink(100, 'https://otherdomain.test/watch?v=123'), false);
+});
+
+test('allowed domain rules permit query strings directly after the host', () => {
+  const service = new ModerationService();
+  service.addAllowedLink(100, 'https://example.com');
+
+  assert.equal(service.isAllowedLink(100, 'https://example.com?utm=1'), true);
+  assert.equal(service.isAllowedLink(100, 'https://example.com#section'), true);
+  assert.equal(service.isAllowedLink(100, 'https://example.net?utm=1'), false);
+});
+
 test('username-like allowed links are exempted for all matching variations', () => {
   const service = new ModerationService();
   service.addAllowedLink(100, 'vk_musix_bot');
