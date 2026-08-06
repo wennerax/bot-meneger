@@ -9,6 +9,7 @@ const { getFunnyDescription } = require('./services/moderation_service');
 const { getMentionText, resolveUsernameTarget } = require('./services/username_service');
 
 const defaultModerationService = new ModerationService();
+let activeDatabase = null;
 
 function normalizeUrlPattern(value) {
   return String(value || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '');
@@ -44,6 +45,10 @@ function getGroupDisplayName(chatId, fallback = null) {
   const id = Number(chatId);
   if (!Number.isFinite(id)) {
     return fallback || 'группа';
+  }
+  const database = activeDatabase;
+  if (!database?.data?.groups) {
+    return fallback || String(id);
   }
   const groupRecord = database.data.groups?.[id];
   return groupRecord?.title || fallback || String(id);
@@ -103,7 +108,7 @@ async function getManagedGroupsForUser(ctx) {
     }
   }
 
-  const groups = Object.values(database.data.groups || {});
+  const groups = Object.values(activeDatabase?.data?.groups || {});
   for (const group of groups) {
     const chatId = Number(group.chatId);
     if (!Number.isFinite(chatId)) {
@@ -596,6 +601,7 @@ function createBot() {
   const userService = new UserService(userStoragePath);
   const moderationService = new ModerationService(moderationStoragePath);
   const database = new Database(config.databasePath);
+  activeDatabase = database;
   const punishmentTimers = new Map();
   const spamActivity = new Map();
   const messageHistory = new Map();
@@ -3311,6 +3317,7 @@ module.exports = {
   isLinkMessage,
   isAllowedLinkUrl,
   isGroupMemberWithProfileChangePermission,
+  getGroupDisplayName,
   startBot,
 };
 

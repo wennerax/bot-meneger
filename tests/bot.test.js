@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, parseSettingsAction, isGroupMemberWithProfileChangePermission } = require('../app/bot');
+const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, parseSettingsAction, isGroupMemberWithProfileChangePermission, getGroupDisplayName } = require('../app/bot');
 const { buildAiRequestPayload } = require('../app/ai');
 
 test('parsePunishmentDetails extracts duration and reason', () => {
@@ -92,6 +92,13 @@ test('isGroupMemberWithProfileChangePermission accepts creators and admins with 
   assert.equal(isGroupMemberWithProfileChangePermission({ status: 'administrator', can_change_info: true }), true);
   assert.equal(isGroupMemberWithProfileChangePermission({ status: 'administrator', can_change_info: false }), false);
   assert.equal(isGroupMemberWithProfileChangePermission({ status: 'member', can_change_info: true }), false);
+});
+
+test('getGroupDisplayName resolves the active bot database group title', () => {
+  const { database } = createBot();
+  database.ensureGroup(42, 'Тестовая группа', null);
+
+  assert.equal(getGroupDisplayName(42, 'fallback'), 'Тестовая группа');
 });
 
 test('detectForbiddenWord catches drugs and self-harm variants', () => {

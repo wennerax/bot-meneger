@@ -1,0 +1,20 @@
+{
+  "groups": {
+    "42": {
+      "chatId": 42,
+      "title": "Тестовая группа",
+      "ownerId": null,
+      "linkTrigger": 0,
+      "createdAt": "2026-08-06T19:39:57.212Z"
+    }
+  },
+  "groupAdmins": {},
+  "botAdmins": {},
+  "punishments": [],
+  "activePunishments": [],
+  "blacklist": [],
+  "messageCounts": {},
+  "groupUsers": {},
+  "userDescriptions": {},
+  "dailyActivity": {}
+}
