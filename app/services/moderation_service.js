@@ -39,6 +39,87 @@ const DEFAULT_BAN_WORDS = readJsonList(path.join(__dirname, '..', 'data', 'ban_w
   'смерть', 'умирать', 'хочуумереть', 'selfcut', 'selfcutting', 'убить себя'
 ]);
 
+function normalizeAllowedUrl(value) {
+  return String(value || '').trim().toLowerCase()
+    .replace(/^https?:\/\//i, '')
+    .replace(/^www\./i, '')
+    .replace(/#.*$/, '');
+}
+
+function parseAllowedLinkRule(item) {
+  const normalized = normalizeAllowedUrl(item);
+  if (!normalized) {
+    return null;
+  }
+
+  if (!normalized.includes('.') && !normalized.includes('/')) {
+    return { type: 'substring', value: normalized };
+  }
+
+  const text = normalized.includes('://') ? normalized : `https://${normalized}`;
+  try {
+    const url = new URL(text);
+    const host = url.hostname;
+    const path = url.pathname || '/';
+    const query = url.search || '';
+
+    if (path === '/' && !query) {
+      return { type: 'host', value: host };
+    }
+
+    const fullPath = `${host}${path}`;
+    if (query) {
+      return { type: 'exact', value: `${fullPath}${query}` };
+    }
+
+    if ((host === 't.me' || host === 'telegram.me') && path !== '/') {
+      return { type: 'exact', value: fullPath };
+    }
+
+    if (path === '/') {
+      return { type: 'host', value: host };
+    }
+
+    if (path.endsWith('/')) {
+      return { type: 'prefix', value: `${fullPath}` };
+    }
+
+    return { type: 'exact', value: fullPath };
+  } catch (error) {
+    return { type: 'substring', value: normalized };
+  }
+}
+
+function matchesAllowedRule(rule, normalizedUrl) {
+  if (!rule || !rule.value || !normalizedUrl) {
+    return false;
+  }
+
+  if (rule.type === 'substring') {
+    return normalizedUrl.includes(rule.value);
+  }
+
+  if (rule.type === 'host') {
+    const hostname = normalizedUrl.split('/')[0];
+    return hostname === rule.value || hostname.endsWith(`.${rule.value}`);
+  }
+
+  if (rule.type === 'prefix') {
+    return normalizedUrl === rule.value || normalizedUrl.startsWith(rule.value);
+  }
+
+  if (rule.type === 'exact') {
+    if (normalizedUrl === rule.value) {
+      return true;
+    }
+    const strippedUrl = normalizedUrl.replace(/\/+$/, '');
+    const strippedValue = rule.value.replace(/\/+$/, '');
+    return strippedUrl === strippedValue;
+  }
+
+  return false;
+}
+
 const DEFAULT_ALLOWED_LINKS = readJsonList(path.join(__dirname, '..', 'data', 'allowed_links.json'), [
   't.me', 'telegram.me', 'telegram.org', 'youtube.com', 'youtu.be', 'vk.com', 'x.com', 'twitter.com',
   'reddit.com', 'github.com', 'gitlab.com', 'stackoverflow.com', 'google.com', 'drive.google.com', 'gmail.com',
@@ -320,33 +401,14 @@ class ModerationService {
       return false;
     }
 
-    const normalizedUrl = normalizedValue.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/#.*$/, '');
-    const [urlPath, urlQuery = ''] = normalizedUrl.split('?');
-    const urlHost = urlPath.split('/')[0];
+    const normalizedUrl = normalizeAllowedUrl(normalizedValue);
+    if (!normalizedUrl) {
+      return false;
+    }
 
     return this._getChat(chatId).allowedLinks.some((item) => {
-      const rawItem = String(item || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/#.*$/, '');
-      if (!rawItem) {
-        return false;
-      }
-
-      const [itemPath, itemQuery = ''] = rawItem.split('?');
-      const itemHost = itemPath.split('/')[0];
-      const itemEndsWithSlash = itemPath.endsWith('/');
-
-      if (normalizedUrl === rawItem) {
-        return true;
-      }
-
-      if (!itemPath.includes('/') && !itemQuery) {
-        return urlHost === itemHost || urlHost.endsWith(`.${itemHost}`);
-      }
-
-      if (itemEndsWithSlash && itemQuery === '') {
-        return normalizedUrl.startsWith(itemPath);
-      }
-
-      return false;
+      const rule = parseAllowedLinkRule(item);
+      return matchesAllowedRule(rule, normalizedUrl);
     });
   }
 }

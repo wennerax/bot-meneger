@@ -77,6 +77,26 @@ test('allowed links with query parameters are matched exactly', () => {
   assert.equal(service.isAllowedLink(100, 'https://t.me/DigitalMusikBot?start=from_inline_caption&foo=bar'), false);
 });
 
+test('allowed domain prefixes permit links under the same host', () => {
+  const service = new ModerationService();
+  service.addAllowedLink(100, 'https://zvuk.com/');
+
+  assert.equal(service.isAllowedLink(100, 'https://zvuk.com/track/123'), true);
+  assert.equal(service.isAllowedLink(100, 'https://zvuk.com'), true);
+  assert.equal(service.isAllowedLink(100, 'https://zvuk.com/track?foo=bar'), true);
+  assert.equal(service.isAllowedLink(100, 'https://example.com/track/123'), false);
+});
+
+test('username-like allowed links are exempted for all matching variations', () => {
+  const service = new ModerationService();
+  service.addAllowedLink(100, 'vk_musix_bot');
+
+  assert.equal(service.isAllowedLink(100, 'https://t.me/vk_musix_bot'), true);
+  assert.equal(service.isAllowedLink(100, 'vk_musix_bot'), true);
+  assert.equal(service.isAllowedLink(100, 'https://t.me/vk_musix_bot?start=abc'), true);
+  assert.equal(service.isAllowedLink(100, 'https://t.me/other_bot?start=vk_musix_bot'), true);
+});
+
 test('moderation settings persist across restarts', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-meneger-'));
   const filePath = path.join(dir, 'bot.json');
