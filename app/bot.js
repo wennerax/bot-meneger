@@ -249,6 +249,7 @@ function createBot() {
   const spamActivity = new Map();
   const messageHistory = new Map();
   const captchaStates = new Map();
+  const pendingMenuActions = new Map();
 
   function getPunishmentTimerKey(chatId, userId, action) {
     return `${chatId}:${userId}:${action}`;
@@ -711,126 +712,216 @@ function createBot() {
     ctx.reply(`${status}, ${ctx.from.first_name || 'пользователь'}!\n\nИспользуйте /help или !помощь, чтобы увидеть команды.`);
   }
 
-  function buildPostKeyboard() {
-    const keyboard = [];
-    const ticket1 = config.ticketUrl1 || '';
-    const ticket2 = config.ticketUrl2 || '';
-    const chatUrl = config.chatUrl || '';
-    const rulesUrl = config.rulesUrl || '';
-    const siteUrl = config.siteUrl || '';
-
-    const ticketButtons = [];
-    if (ticket1) {
-      ticketButtons.push({ text: 'БИЛЕТЫ', url: ticket1 });
-    }
-    if (ticket2) {
-      ticketButtons.push({ text: 'БИЛЕТЫ', url: ticket2 });
-    }
-    if (ticketButtons.length === 1) {
-      keyboard.push(ticketButtons);
-    } else if (ticketButtons.length > 1) {
-      keyboard.push(ticketButtons);
-    }
-
-    const secondRow = [];
-    if (chatUrl) {
-      secondRow.push({ text: 'ЧАТ', url: chatUrl });
-    }
-    if (rulesUrl) {
-      secondRow.push({ text: 'ПРАВИЛА', url: rulesUrl });
-    }
-    if (siteUrl) {
-      secondRow.push({ text: 'САЙТ', url: siteUrl });
-    }
-    if (secondRow.length) {
-      keyboard.push(secondRow);
-    }
-
-    if (!keyboard.length) {
-      return null;
-    }
-    return { inline_keyboard: keyboard };
+  function getMenuKey(chatId) {
+    return String(chatId);
   }
 
-  function getPostText() {
-    return [
-      '---',
-      '# 6 АВГУСТА',
-      '**12 АВГУСТА**',
-      '**КНИГОН**',
-      '',
-      '13 АВГУСТА',
-      'Москва',
-      '',
-      'ТЕРРИТОРИЯ',
-      '**БОЛЬШОЙ ЛЕТНИЙ КОНЦЕРТ**',
-      '**ПОД ОТКРЫТЫМ НЕБОМ**',
-      '',
-      '16+',
-      '',
-      '---',
-      '',
-      '**ИЯЙ всем нашим !**',
-      '',
-      '*Не пропусти большие летние концерты в Питере 12 Августа и в Москве 13 Августа.*',
-      '',
-      'И помни: незнание правил не освобождает от ответственности.',
-      '---',
-    ].join('\n');
+  function getPendingMenuAction(ctx) {
+    return pendingMenuActions.get(`${getMenuKey(ctx.chat.id)}:${ctx.from.id}`);
   }
 
-  function getImageSource(ctx) {
+  function setPendingMenuAction(ctx, action) {
+    pendingMenuActions.set(`${getMenuKey(ctx.chat.id)}:${ctx.from.id}`, action);
+  }
+
+  function clearPendingMenuAction(ctx) {
+    pendingMenuActions.delete(`${getMenuKey(ctx.chat.id)}:${ctx.from.id}`);
+  }
+
+  function isChannelPostInGroup(ctx) {
+    const message = ctx.message || {};
+    return isGroupChat(ctx)
+      && (message.sender_chat?.type === 'channel' || message.forward_from_chat?.type === 'channel');
+  }
+
+  function getMenuKeyboard(chatId) {
+    return {
+      inline_keyboard: [
+        [
+          { text: 'Текст сообщения', callback_data: 'menu:text' },
+          { text: 'Настройки кнопок', callback_data: 'menu:buttons' },
+          { text: 'Добавить медиа', callback_data: 'menu:media' },
+        ],
+      ],
+    };
+  }
+
+  function buildMenuButtonsKeyboard(chatId) {
+    const buttons = moderationService.getMenuButtons(chatId);
+    const rows = [];
+    for (let index = 0; index < buttons.length; index += 1) {
+      rows.push([
+        { text: buttons[index].text, url: buttons[index].url },
+        { text: `Удалить ${index + 1}`, callback_data: `menu:remove_button:${index}` },
+      ]);
+    }
+    rows.push([
+      { text: 'Добавить кнопку', callback_data: 'menu:add_button' },
+      { text: 'Очистить кнопки', callback_data: 'menu:clear_buttons' },
+    ]);
+    rows.push([{ text: 'Назад', callback_data: 'menu:overview' }]);
+    return { inline_keyboard: rows };
+  }
+
+  function formatMenuOverview(chatId) {
+    const text = moderationService.getMenuText(chatId) || 'Текст не задан.';
+    const buttons = moderationService.getMenuButtons(chatId);
+    const media = moderationService.getMenuMedia(chatId);
+    const lines = [
+      `📌 Текущий ответ бота на пост канала:\n${text}`,
+      '',
+      `🔘 Кнопок: ${buttons.length}`,
+    ];
+    if (buttons.length) {
+      lines.push(...buttons.map((item, index) => `${index + 1}. ${item.text} → ${item.url}`));
+    }
+    lines.push('');
+    lines.push(`🖼️ Медиа: ${media ? media.type : 'не задано'}`);
+    return lines.join('\n');
+  }
+
+  function getMenuActionInstructions(action) {
+    if (action === 'text') {
+      return 'Отправьте новый текст для первого сообщения бота.';
+    }
+    if (action === 'button_add') {
+      return 'Отправьте новую кнопку в формате: Название | URL';
+    }
+    if (action === 'media') {
+      return 'Отправьте любое медиа (фото, видео, документ, голос, стикер и т.п.), и я сохраню его в качестве первого медиа-сообщения.';
+    }
+    return '';
+  }
+
+  function getMediaPayloadFromMessage(ctx) {
     const message = ctx.message || {};
     if (message.photo && Array.isArray(message.photo) && message.photo.length) {
-      return message.photo[message.photo.length - 1].file_id;
+      return { type: 'photo', fileId: message.photo[message.photo.length - 1].file_id };
     }
-    if (message.document && String(message.document.mime_type || '').startsWith('image/')) {
-      return message.document.file_id;
+    if (message.video && message.video.file_id) {
+      return { type: 'video', fileId: message.video.file_id };
     }
-    const reply = message.reply_to_message || {};
-    if (reply.photo && Array.isArray(reply.photo) && reply.photo.length) {
-      return reply.photo[reply.photo.length - 1].file_id;
+    if (message.animation && message.animation.file_id) {
+      return { type: 'animation', fileId: message.animation.file_id };
     }
-    if (reply.document && String(reply.document.mime_type || '').startsWith('image/')) {
-      return reply.document.file_id;
+    if (message.document && message.document.file_id) {
+      return { type: 'document', fileId: message.document.file_id };
+    }
+    if (message.audio && message.audio.file_id) {
+      return { type: 'audio', fileId: message.audio.file_id };
+    }
+    if (message.voice && message.voice.file_id) {
+      return { type: 'voice', fileId: message.voice.file_id };
+    }
+    if (message.video_note && message.video_note.file_id) {
+      return { type: 'video_note', fileId: message.video_note.file_id };
+    }
+    if (message.sticker && message.sticker.file_id) {
+      return { type: 'sticker', fileId: message.sticker.file_id };
     }
     return null;
   }
 
-  async function postCommand(ctx) {
+  async function sendMenuReplyForChannelPost(ctx) {
+    const chatId = ctx.chat.id;
+    const menuText = moderationService.getMenuText(chatId);
+    const buttons = moderationService.getMenuButtons(chatId);
+    const menuMedia = moderationService.getMenuMedia(chatId);
+    const keyboard = buttons.length ? { inline_keyboard: buttons.map((item) => [{ text: item.text, url: item.url }]) } : null;
+    const replyOptions = { reply_to_message_id: ctx.message.message_id };
+    if (keyboard) {
+      replyOptions.reply_markup = keyboard;
+    }
+
+    let sentMessage = null;
+    try {
+      if (menuMedia && menuMedia.type) {
+        const mediaOptions = { caption: menuText, reply_markup: replyOptions.reply_markup };
+        if (menuMedia.type === 'photo') {
+          sentMessage = await ctx.replyWithPhoto(menuMedia.fileId, mediaOptions);
+        } else if (menuMedia.type === 'video') {
+          sentMessage = await ctx.replyWithVideo(menuMedia.fileId, mediaOptions);
+        } else if (menuMedia.type === 'animation') {
+          sentMessage = await ctx.replyWithAnimation(menuMedia.fileId, mediaOptions);
+        } else if (menuMedia.type === 'document') {
+          sentMessage = await ctx.replyWithDocument(menuMedia.fileId, mediaOptions);
+        } else if (menuMedia.type === 'audio') {
+          sentMessage = await ctx.replyWithAudio(menuMedia.fileId, mediaOptions);
+        } else if (menuMedia.type === 'voice') {
+          sentMessage = await ctx.replyWithVoice(menuMedia.fileId, mediaOptions);
+        } else if (menuMedia.type === 'video_note') {
+          sentMessage = await ctx.replyWithVideoNote(menuMedia.fileId, mediaOptions);
+        } else if (menuMedia.type === 'sticker') {
+          sentMessage = await ctx.replyWithSticker(menuMedia.fileId, mediaOptions);
+        }
+      }
+    } catch (error) {
+      console.warn('sendMenuReplyForChannelPost media failed:', error?.message || error);
+    }
+
+    if (!sentMessage) {
+      sentMessage = await ctx.reply(menuText, replyOptions);
+    }
+
+    try {
+      await ctx.telegram.unpinChatMessage(ctx.chat.id, ctx.message.message_id);
+    } catch (error) {
+      console.warn('unpinChatMessage failed:', error?.response?.description || error?.message || error);
+    }
+    return sentMessage;
+  }
+
+  async function processPendingMenuAction(ctx) {
+    const pending = getPendingMenuAction(ctx);
+    if (!pending) {
+      return false;
+    }
+
+    if (pending.action === 'text' && ctx.message.text) {
+      moderationService.setMenuText(ctx.chat.id, ctx.message.text.trim());
+      await ctx.reply('✅ Текст первого сообщения обновлён.');
+      clearPendingMenuAction(ctx);
+      return true;
+    }
+
+    if (pending.action === 'button_add' && ctx.message.text) {
+      const [title, url] = ctx.message.text.split('|').map((part) => part.trim());
+      if (!title || !url) {
+        await ctx.reply('⚠️ Неверный формат. Отправьте в формате: Название | URL');
+        return true;
+      }
+      if (!moderationService.addMenuButton(ctx.chat.id, title, url)) {
+        await ctx.reply('⚠️ Не удалось добавить кнопку. Возможно, она уже есть или формат некорректен.');
+      } else {
+        await ctx.reply(`✅ Кнопка добавлена: ${title} → ${url}`);
+      }
+      clearPendingMenuAction(ctx);
+      return true;
+    }
+
+    if (pending.action === 'media') {
+      const payload = getMediaPayloadFromMessage(ctx);
+      if (!payload) {
+        await ctx.reply('⚠️ Я не нашёл медиа. Отправьте фото, видео, документ, голос или стикер.');
+        return true;
+      }
+      moderationService.setMenuMedia(ctx.chat.id, payload);
+      await ctx.reply(`✅ Медиа сохранено как ${payload.type}.`);
+      clearPendingMenuAction(ctx);
+      return true;
+    }
+
+    return false;
+  }
+
+  async function menuCommand(ctx) {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
 
-    const postText = getPostText();
-    const keyboard = buildPostKeyboard();
-    const imageSource = getImageSource(ctx);
-    let sentMessage = null;
-
-    const replyOptions = {};
-    if (keyboard) {
-      replyOptions.reply_markup = keyboard;
-    }
-
-    if (!imageSource) {
-      await ctx.reply('⚠️ Изображение не найдено. Публикую пост без картинки.');
-      sentMessage = await ctx.reply(postText, replyOptions);
-    } else {
-      sentMessage = await ctx.replyWithPhoto(imageSource, {
-        caption: postText,
-        ...replyOptions,
-      });
-    }
-
-    if (sentMessage && sentMessage.message_id && ctx.chat && ctx.chat.id) {
-      try {
-        await ctx.telegram.pinChatMessage(ctx.chat.id, sentMessage.message_id, { disable_notification: true });
-      } catch (error) {
-        console.warn('pinChatMessage failed:', error?.response?.description || error?.message || error);
-      }
-    }
+    await ctx.reply(formatMenuOverview(ctx.chat.id), { reply_markup: getMenuKeyboard(ctx.chat.id) });
   }
 
   function getHelpPages() {
@@ -860,7 +951,7 @@ function createBot() {
         '-антифлуд - выключить антифлуд',
         '+ссылки - включить антиссылки',
         '-ссылки - выключить антиссылки',
-        '/post - опубликовать пост с картинкой и кнопками',
+        '/menu - открыть настройки меню для первых сообщений бота',
         '/warn, !предупреждение @юз - выдать предупреждение',
         '/warnings, !варны [@юз] - показать варны пользователя',
         '/unwarn, !снять предупреждение @юз - снять предупреждения',
@@ -1836,6 +1927,68 @@ function createBot() {
     await ctx.editMessageText(helpPage.text, { reply_markup: helpPage.reply_markup });
   });
 
+  bot.action(/^menu:(.+)$/, async (ctx) => {
+    const action = ctx.match[1];
+    const chatId = ctx.chat?.id;
+    if (!chatId) {
+      return;
+    }
+    await ctx.answerCbQuery();
+
+    if (!isBotAdmin(ctx)) {
+      await ctx.reply('Эта команда доступна только администраторам.');
+      return;
+    }
+
+    if (action === 'overview') {
+      await ctx.editMessageText(formatMenuOverview(chatId), { reply_markup: getMenuKeyboard(chatId) });
+      return;
+    }
+
+    if (action === 'text') {
+      setPendingMenuAction(ctx, { action: 'text' });
+      await ctx.reply(getMenuActionInstructions('text'));
+      return;
+    }
+
+    if (action === 'buttons') {
+      await ctx.editMessageText(formatMenuOverview(chatId), { reply_markup: buildMenuButtonsKeyboard(chatId) });
+      return;
+    }
+
+    if (action === 'media') {
+      setPendingMenuAction(ctx, { action: 'media' });
+      await ctx.reply(getMenuActionInstructions('media'));
+      return;
+    }
+
+    if (action === 'add_button') {
+      setPendingMenuAction(ctx, { action: 'button_add' });
+      await ctx.reply(getMenuActionInstructions('button_add'));
+      return;
+    }
+
+    if (action === 'clear_buttons') {
+      moderationService.clearMenuButtons(chatId);
+      await ctx.reply('✅ Все кнопки удалены.');
+      await ctx.editMessageText(formatMenuOverview(chatId), { reply_markup: getMenuKeyboard(chatId) });
+      return;
+    }
+
+    if (action.startsWith('remove_button:')) {
+      const index = Number(action.split(':')[1]);
+      if (Number.isFinite(index)) {
+        if (moderationService.removeMenuButton(chatId, index)) {
+          await ctx.reply(`✅ Кнопка ${index + 1} удалена.`);
+        } else {
+          await ctx.reply('⚠️ Не удалось удалить кнопку. Проверьте номер.');
+        }
+      }
+      await ctx.editMessageText(formatMenuOverview(chatId), { reply_markup: buildMenuButtonsKeyboard(chatId) });
+      return;
+    }
+  });
+
   bot.command(['id', 'айди'], (ctx) => {
     ctx.reply(`Ваш Telegram ID: ${ctx.from.id}`);
   });
@@ -1971,8 +2124,8 @@ function createBot() {
     ctx.reply(message.join('\n'));
   });
 
-  bot.command(['post', 'newpost', 'publish', 'пост'], async (ctx) => {
-    await postCommand(ctx);
+  bot.command(['menu'], async (ctx) => {
+    await menuCommand(ctx);
   });
 
   bot.command(['links', 'ссылки'], (ctx) => {
@@ -2383,6 +2536,18 @@ function createBot() {
   });
 
   bot.on(['text', 'photo', 'video', 'document', 'animation', 'audio', 'voice', 'sticker', 'video_note'], async (ctx) => {
+    if (ctx.chat && isGroupChat(ctx) && getPendingMenuAction(ctx)) {
+      const handled = await processPendingMenuAction(ctx);
+      if (handled) {
+        return;
+      }
+    }
+
+    if (isChannelPostInGroup(ctx)) {
+      await sendMenuReplyForChannelPost(ctx);
+      return;
+    }
+
     await handleIncomingMessage(ctx);
   });
 

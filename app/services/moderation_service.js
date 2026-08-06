@@ -152,6 +152,17 @@ class ModerationService {
         const chatList = chat.allowedLinks.map((item) => String(item).trim().toLowerCase()).filter(Boolean);
         return [...new Set(chatList)];
       })(),
+      menu: {
+        text: (chat.menu && typeof chat.menu.text === 'string')
+          ? chat.menu.text
+          : 'Спасибо за публикацию! Настройте первое сообщение бота через /menu.',
+        buttons: Array.isArray(chat.menu?.buttons)
+          ? chat.menu.buttons.filter((item) => item && typeof item.text === 'string' && typeof item.url === 'string')
+          : [],
+        media: (chat.menu && typeof chat.menu.media === 'object' && chat.menu.media !== null)
+          ? { ...chat.menu.media }
+          : null,
+      },
       spamProtectionEnabled: Boolean(chat.spamProtectionEnabled),
       linkProtectionEnabled: Boolean(chat.linkProtectionEnabled),
       floodProtectionEnabled: Boolean(chat.floodProtectionEnabled),
@@ -406,6 +417,73 @@ class ModerationService {
       return false;
     }
     chat.allowedLinks = [];
+    this._save();
+    return true;
+  }
+
+  getMenuText(chatId) {
+    return String(this._getChat(chatId).menu.text || '');
+  }
+
+  setMenuText(chatId, text) {
+    this._getChat(chatId).menu.text = String(text || '');
+    this._save();
+    return true;
+  }
+
+  getMenuButtons(chatId) {
+    return [...(this._getChat(chatId).menu.buttons || [])];
+  }
+
+  addMenuButton(chatId, title, url) {
+    const chat = this._getChat(chatId);
+    const text = String(title || '').trim();
+    const link = String(url || '').trim();
+    if (!text || !link) {
+      return false;
+    }
+    chat.menu.buttons = chat.menu.buttons || [];
+    chat.menu.buttons.push({ text, url: link });
+    this._save();
+    return true;
+  }
+
+  removeMenuButton(chatId, index) {
+    const chat = this._getChat(chatId);
+    const buttons = Array.isArray(chat.menu.buttons) ? chat.menu.buttons : [];
+    if (index < 0 || index >= buttons.length) {
+      return false;
+    }
+    buttons.splice(index, 1);
+    chat.menu.buttons = buttons;
+    this._save();
+    return true;
+  }
+
+  clearMenuButtons(chatId) {
+    this._getChat(chatId).menu.buttons = [];
+    this._save();
+    return true;
+  }
+
+  getMenuMedia(chatId) {
+    return this._getChat(chatId).menu.media;
+  }
+
+  setMenuMedia(chatId, media) {
+    if (!media || typeof media !== 'object' || !media.type || !media.fileId) {
+      return false;
+    }
+    this._getChat(chatId).menu.media = {
+      type: String(media.type),
+      fileId: String(media.fileId),
+    };
+    this._save();
+    return true;
+  }
+
+  clearMenuMedia(chatId) {
+    this._getChat(chatId).menu.media = null;
     this._save();
     return true;
   }
