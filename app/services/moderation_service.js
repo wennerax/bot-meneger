@@ -156,9 +156,25 @@ class ModerationService {
         text: (chat.menu && typeof chat.menu.text === 'string')
           ? chat.menu.text
           : 'Спасибо за публикацию! Настройте первое сообщение бота через /menu.',
-        buttons: Array.isArray(chat.menu?.buttons)
-          ? chat.menu.buttons.filter((item) => item && typeof item.text === 'string' && typeof item.url === 'string')
-          : [],
+        buttons: (() => {
+          const rawButtons = chat.menu?.buttons;
+          if (!Array.isArray(rawButtons)) {
+            return [];
+          }
+
+          if (!rawButtons.length) {
+            return [];
+          }
+
+          const firstItem = rawButtons[0];
+          if (Array.isArray(firstItem)) {
+            return rawButtons.map((row) => Array.isArray(row)
+              ? row.filter((item) => item && typeof item.text === 'string' && typeof item.url === 'string')
+              : []);
+          }
+
+          return [rawButtons.filter((item) => item && typeof item.text === 'string' && typeof item.url === 'string')];
+        })(),
         media: (chat.menu && typeof chat.menu.media === 'object' && chat.menu.media !== null)
           ? { ...chat.menu.media }
           : null,
@@ -432,10 +448,31 @@ class ModerationService {
   }
 
   getMenuButtons(chatId) {
-    return [...(this._getChat(chatId).menu.buttons || [])];
+    const buttons = this._getChat(chatId).menu.buttons || [];
+    return buttons.map((row) => row.map((item) => ({ ...item })));
   }
 
-  addMenuButton(chatId, title, url) {
+  addMenuRow(chatId) {
+    const chat = this._getChat(chatId);
+    chat.menu.buttons = chat.menu.buttons || [];
+    chat.menu.buttons.push([]);
+    this._save();
+    return true;
+  }
+
+  removeMenuRow(chatId, rowIndex) {
+    const chat = this._getChat(chatId);
+    const rows = Array.isArray(chat.menu.buttons) ? chat.menu.buttons : [];
+    if (rowIndex < 0 || rowIndex >= rows.length) {
+      return false;
+    }
+    rows.splice(rowIndex, 1);
+    chat.menu.buttons = rows;
+    this._save();
+    return true;
+  }
+
+  addMenuButton(chatId, title, url, rowIndex = null) {
     const chat = this._getChat(chatId);
     const text = String(title || '').trim();
     const link = String(url || '').trim();
@@ -443,19 +480,35 @@ class ModerationService {
       return false;
     }
     chat.menu.buttons = chat.menu.buttons || [];
-    chat.menu.buttons.push({ text, url: link });
+    if (!Array.isArray(chat.menu.buttons)) {
+      chat.menu.buttons = [];
+    }
+    if (rowIndex === null || rowIndex === undefined) {
+      if (!chat.menu.buttons.length) {
+        chat.menu.buttons.push([]);
+      }
+      rowIndex = chat.menu.buttons.length - 1;
+    }
+    if (!Array.isArray(chat.menu.buttons[rowIndex])) {
+      return false;
+    }
+    chat.menu.buttons[rowIndex].push({ text, url: link });
     this._save();
     return true;
   }
 
-  removeMenuButton(chatId, index) {
+  removeMenuButton(chatId, rowIndex, buttonIndex) {
     const chat = this._getChat(chatId);
-    const buttons = Array.isArray(chat.menu.buttons) ? chat.menu.buttons : [];
-    if (index < 0 || index >= buttons.length) {
+    const rows = Array.isArray(chat.menu.buttons) ? chat.menu.buttons : [];
+    if (rowIndex < 0 || rowIndex >= rows.length) {
       return false;
     }
-    buttons.splice(index, 1);
-    chat.menu.buttons = buttons;
+    const row = rows[rowIndex];
+    if (!Array.isArray(row) || buttonIndex < 0 || buttonIndex >= row.length) {
+      return false;
+    }
+    row.splice(buttonIndex, 1);
+    chat.menu.buttons = rows;
     this._save();
     return true;
   }

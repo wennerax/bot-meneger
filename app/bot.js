@@ -747,19 +747,53 @@ function createBot() {
   }
 
   function buildMenuButtonsKeyboard(chatId) {
-    const buttons = moderationService.getMenuButtons(chatId);
+    const rowsData = moderationService.getMenuButtons(chatId);
     const rows = [];
-    for (let index = 0; index < buttons.length; index += 1) {
+
+    for (let rowIndex = 0; rowIndex < rowsData.length; rowIndex += 1) {
+      const row = rowsData[rowIndex];
+      const rowLabel = row.length ? row.map((item) => item.text).join(', ') : 'пусто';
       rows.push([
-        { text: buttons[index].text, url: buttons[index].url },
-        { text: `Удалить ${index + 1}`, callback_data: `menu:remove_button:${index}` },
+        { text: `Ряд ${rowIndex + 1}: ${rowLabel}`, callback_data: `menu:row_info:${rowIndex}` },
+      ]);
+      rows.push([
+        { text: 'Добавить кнопку', callback_data: `menu:add_button:${rowIndex}` },
+        { text: 'Удалить ряд', callback_data: `menu:remove_row:${rowIndex}` },
       ]);
     }
+
     rows.push([
-      { text: 'Добавить кнопку', callback_data: 'menu:add_button' },
-      { text: 'Очистить кнопки', callback_data: 'menu:clear_buttons' },
+      { text: 'Добавить ряд', callback_data: 'menu:add_row' },
+      { text: 'Очистить ряды', callback_data: 'menu:clear_buttons' },
     ]);
     rows.push([{ text: 'Назад', callback_data: 'menu:overview' }]);
+    return { inline_keyboard: rows };
+  }
+
+  function buildMenuRowInfoKeyboard(chatId, rowIndex) {
+    const rowsData = moderationService.getMenuButtons(chatId);
+    if (rowIndex < 0 || rowIndex >= rowsData.length) {
+      return getMenuKeyboard(chatId);
+    }
+
+    const row = rowsData[rowIndex];
+    const rows = [];
+    if (row.length) {
+      row.forEach((button, buttonIndex) => {
+        rows.push([
+          { text: `${button.text} → ${button.url}`, callback_data: 'menu:none' },
+          { text: `Удалить ${buttonIndex + 1}`, callback_data: `menu:remove_button:${rowIndex}:${buttonIndex}` },
+        ]);
+      });
+    } else {
+      rows.push([{ text: 'Ряд пуст. Добавьте кнопку.', callback_data: 'menu:none' }]);
+    }
+
+    rows.push([
+      { text: 'Добавить кнопку в ряд', callback_data: `menu:add_button:${rowIndex}` },
+      { text: 'Удалить ряд', callback_data: `menu:remove_row:${rowIndex}` },
+    ]);
+    rows.push([{ text: 'Назад', callback_data: 'menu:buttons' }]);
     return { inline_keyboard: rows };
   }
 
@@ -770,10 +804,14 @@ function createBot() {
     const lines = [
       `📌 Текущий ответ бота на пост канала:\n${text}`,
       '',
-      `🔘 Кнопок: ${buttons.length}`,
+      `🔘 Рядов: ${buttons.length}`,
     ];
     if (buttons.length) {
-      lines.push(...buttons.map((item, index) => `${index + 1}. ${item.text} → ${item.url}`));
+      lines.push('');
+      buttons.forEach((row, rowIndex) => {
+        const rowText = row.length ? row.map((item) => item.text).join(', ') : 'пусто';
+        lines.push(`Ряд ${rowIndex + 1}: ${rowText}`);
+      });
     }
     lines.push('');
     lines.push(`🖼️ Медиа: ${media ? media.type : 'не задано'}`);
@@ -827,7 +865,9 @@ function createBot() {
     const menuText = moderationService.getMenuText(chatId);
     const buttons = moderationService.getMenuButtons(chatId);
     const menuMedia = moderationService.getMenuMedia(chatId);
-    const keyboard = buttons.length ? { inline_keyboard: buttons.map((item) => [{ text: item.text, url: item.url }]) } : null;
+    const keyboard = buttons.length ? { inline_keyboard: buttons
+      .filter((row) => Array.isArray(row) && row.length)
+      .map((row) => row.map((item) => ({ text: item.text, url: item.url }))) } : null;
     const replyOptions = { reply_to_message_id: ctx.message.message_id };
     if (keyboard) {
       replyOptions.reply_markup = keyboard;
@@ -836,7 +876,11 @@ function createBot() {
     let sentMessage = null;
     try {
       if (menuMedia && menuMedia.type) {
-        const mediaOptions = { caption: menuText, reply_markup: replyOptions.reply_markup };
+        const mediaOptions = {
+          caption: menuText,
+          reply_markup: replyOptions.reply_markup,
+          reply_to_message_id: replyOptions.reply_to_message_id,
+        };
         if (menuMedia.type === 'photo') {
           sentMessage = await ctx.replyWithPhoto(menuMedia.fileId, mediaOptions);
         } else if (menuMedia.type === 'video') {
@@ -886,12 +930,13 @@ function createBot() {
 
     if (pending.action === 'button_add' && ctx.message.text) {
       const [title, url] = ctx.message.text.split('|').map((part) => part.trim());
+      const rowIndex = typeof pending.rowIndex === 'number' ? pending.rowIndex : null;
       if (!title || !url) {
         await ctx.reply('⚠️ Неверный формат. Отправьте в формате: Название | URL');
         return true;
       }
-      if (!moderationService.addMenuButton(ctx.chat.id, title, url)) {
-        await ctx.reply('⚠️ Не удалось добавить кнопку. Возможно, она уже есть или формат некорректен.');
+      if (!moderationService.addMenuButton(ctx.chat.id, title, url, rowIndex)) {
+        await ctx.reply('⚠️ Не удалось добавить кнопку. Проверьте ряд и формат.');
       } else {
         await ctx.reply(`✅ Кнопка добавлена: ${title} → ${url}`);
       }
@@ -1962,9 +2007,32 @@ function createBot() {
       return;
     }
 
-    if (action === 'add_button') {
-      setPendingMenuAction(ctx, { action: 'button_add' });
-      await ctx.reply(getMenuActionInstructions('button_add'));
+    if (action === 'add_row') {
+      moderationService.addMenuRow(chatId);
+      await ctx.reply('✅ Ряд добавлен.');
+      await ctx.editMessageText(formatMenuOverview(chatId), { reply_markup: buildMenuButtonsKeyboard(chatId) });
+      return;
+    }
+
+    if (action === 'remove_row') {
+      const rowIndex = Number(action.split(':')[1]);
+      if (Number.isFinite(rowIndex) && moderationService.removeMenuRow(chatId, rowIndex)) {
+        await ctx.reply(`✅ Ряд ${rowIndex + 1} удалён.`);
+      } else {
+        await ctx.reply('⚠️ Не удалось удалить ряд. Проверьте номер.');
+      }
+      await ctx.editMessageText(formatMenuOverview(chatId), { reply_markup: buildMenuButtonsKeyboard(chatId) });
+      return;
+    }
+
+    if (action.startsWith('add_button:')) {
+      const rowIndex = Number(action.split(':')[1]);
+      if (!Number.isFinite(rowIndex)) {
+        await ctx.reply('⚠️ Неверный ряд.');
+        return;
+      }
+      setPendingMenuAction(ctx, { action: 'button_add', rowIndex });
+      await ctx.reply('Отправьте новую кнопку в формате: Название | URL');
       return;
     }
 
@@ -1976,15 +2044,27 @@ function createBot() {
     }
 
     if (action.startsWith('remove_button:')) {
-      const index = Number(action.split(':')[1]);
-      if (Number.isFinite(index)) {
-        if (moderationService.removeMenuButton(chatId, index)) {
-          await ctx.reply(`✅ Кнопка ${index + 1} удалена.`);
+      const parts = action.split(':');
+      const rowIndex = Number(parts[1]);
+      const buttonIndex = Number(parts[2]);
+      if (Number.isFinite(rowIndex) && Number.isFinite(buttonIndex)) {
+        if (moderationService.removeMenuButton(chatId, rowIndex, buttonIndex)) {
+          await ctx.reply(`✅ Кнопка ${buttonIndex + 1} из ряда ${rowIndex + 1} удалена.`);
         } else {
-          await ctx.reply('⚠️ Не удалось удалить кнопку. Проверьте номер.');
+          await ctx.reply('⚠️ Не удалось удалить кнопку. Проверьте номер ряда и кнопку.');
         }
       }
       await ctx.editMessageText(formatMenuOverview(chatId), { reply_markup: buildMenuButtonsKeyboard(chatId) });
+      return;
+    }
+
+    if (action.startsWith('row_info:')) {
+      const rowIndex = Number(action.split(':')[1]);
+      if (!Number.isFinite(rowIndex)) {
+        await ctx.reply('⚠️ Неверный ряд.');
+        return;
+      }
+      await ctx.editMessageText(formatMenuOverview(chatId), { reply_markup: buildMenuRowInfoKeyboard(chatId, rowIndex) });
       return;
     }
   });

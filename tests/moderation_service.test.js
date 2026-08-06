@@ -162,3 +162,30 @@ test('moderation settings persist across restarts', () => {
   assert.equal(second.getWarnings(100, 7), 1);
   assert.equal(second.findFilterResponse(100, 'ПРИВЕТ всем'), 'Привет!');
 });
+
+test('menu buttons support row layout and persistence', () => {
+  const service = new ModerationService();
+
+  assert.equal(service.getMenuButtons(100).length, 0);
+  assert.equal(service.addMenuRow(100), true);
+  assert.deepEqual(service.getMenuButtons(100), [[]]);
+
+  assert.equal(service.addMenuButton(100, 'Google', 'https://google.com', 0), true);
+  assert.deepEqual(service.getMenuButtons(100), [[{ text: 'Google', url: 'https://google.com' }]]);
+
+  assert.equal(service.addMenuRow(100), true);
+  assert.equal(service.addMenuButton(100, 'Yandex', 'https://yandex.ru', 1), true);
+  assert.deepEqual(service.getMenuButtons(100), [
+    [{ text: 'Google', url: 'https://google.com' }],
+    [{ text: 'Yandex', url: 'https://yandex.ru' }],
+  ]);
+
+  assert.equal(service.removeMenuButton(100, 0, 0), true);
+  assert.deepEqual(service.getMenuButtons(100), [[], [{ text: 'Yandex', url: 'https://yandex.ru' }]]);
+
+  assert.equal(service.removeMenuRow(100, 0), true);
+  assert.deepEqual(service.getMenuButtons(100), [[{ text: 'Yandex', url: 'https://yandex.ru' }]]);
+
+  assert.equal(service.clearMenuButtons(100), true);
+  assert.deepEqual(service.getMenuButtons(100), []);
+});
