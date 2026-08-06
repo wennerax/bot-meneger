@@ -149,9 +149,16 @@ class ModerationService {
       banWords: Array.isArray(chat.banWords)
         ? [...new Set(chat.banWords.map((item) => String(item).trim().toLowerCase()).filter(Boolean))]
         : [...DEFAULT_BAN_WORDS],
-      allowedLinks: Array.isArray(chat.allowedLinks)
-        ? [...new Set(chat.allowedLinks.map((item) => String(item).trim().toLowerCase()).filter(Boolean))]
-        : [...DEFAULT_ALLOWED_LINKS],
+      allowedLinks: (() => {
+        const globalList = Array.isArray(DEFAULT_ALLOWED_LINKS)
+          ? DEFAULT_ALLOWED_LINKS.map((item) => String(item).trim().toLowerCase()).filter(Boolean)
+          : [];
+        if (!Array.isArray(chat.allowedLinks)) {
+          return [...new Set(globalList)];
+        }
+        const chatList = chat.allowedLinks.map((item) => String(item).trim().toLowerCase()).filter(Boolean);
+        return [...new Set([...globalList, ...chatList])];
+      })(),
       spamProtectionEnabled: Boolean(chat.spamProtectionEnabled),
       linkProtectionEnabled: Boolean(chat.linkProtectionEnabled),
       floodProtectionEnabled: Boolean(chat.floodProtectionEnabled),
