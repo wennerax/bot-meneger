@@ -104,11 +104,13 @@ function matchesAllowedRule(rule, normalizedUrl) {
 
   if (rule.type === 'host') {
     const hostname = normalizedUrl.split('/')[0];
-    return hostname === rule.value || hostname.endsWith(`.${rule.value}`);
+    return hostname === rule.value;
   }
 
   if (rule.type === 'prefix') {
-    return normalizedUrl === rule.value || normalizedUrl.startsWith(rule.value);
+    // allow exact host (without trailing slash) or any path under the prefix
+    const prefix = rule.value.replace(/\/+$/, '');
+    return normalizedUrl === prefix || normalizedUrl.startsWith(prefix + '/');
   }
 
   if (rule.type === 'exact') {
