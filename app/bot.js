@@ -10,6 +10,7 @@ const { getMentionText, resolveUsernameTarget } = require('./services/username_s
 
 const defaultModerationService = new ModerationService();
 let activeDatabase = null;
+let activeModerationService = null;
 
 function normalizeUrlPattern(value) {
   return String(value || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '');
@@ -169,7 +170,7 @@ function buildSettingsMainKeyboard(chatId) {
 }
 
 function buildSettingsLinksKeyboard(chatId) {
-  const enabled = moderationService.isLinkProtectionEnabled(chatId);
+  const enabled = (activeModerationService || defaultModerationService).isLinkProtectionEnabled(chatId);
   return {
     inline_keyboard: [
       [{ text: enabled ? 'Выключить антиссылки' : 'Включить антиссылки', callback_data: `settings:toggle_links:${chatId}:${enabled ? 'off' : 'on'}` }],
@@ -181,6 +182,7 @@ function buildSettingsLinksKeyboard(chatId) {
 }
 
 function buildSettingsAntiKeyboard(chatId) {
+  const moderationService = activeModerationService || defaultModerationService;
   const spamEnabled = moderationService.isSpamProtectionEnabled(chatId);
   const floodEnabled = moderationService.isFloodProtectionEnabled(chatId);
   const linksEnabled = moderationService.isLinkProtectionEnabled(chatId);
@@ -251,6 +253,7 @@ async function showSettingsLinksMenu(ctx, chatId) {
     return;
   }
 
+  const moderationService = activeModerationService || defaultModerationService;
   const enabled = moderationService.isLinkProtectionEnabled(chatId);
   const links = moderationService.getAllowedLinks(chatId);
   const text = [
@@ -270,6 +273,7 @@ async function showSettingsAntiMenu(ctx, chatId) {
     return;
   }
 
+  const moderationService = activeModerationService || defaultModerationService;
   const spamEnabled = moderationService.isSpamProtectionEnabled(chatId);
   const floodEnabled = moderationService.isFloodProtectionEnabled(chatId);
   const linksEnabled = moderationService.isLinkProtectionEnabled(chatId);
@@ -608,6 +612,7 @@ function createBot() {
   const moderationService = new ModerationService(moderationStoragePath);
   const database = new Database(config.databasePath);
   activeDatabase = database;
+  activeModerationService = moderationService;
   const punishmentTimers = new Map();
   const spamActivity = new Map();
   const messageHistory = new Map();
