@@ -40,6 +40,329 @@ function detectForbiddenWord(text) {
   return defaultModerationService.findBanWord(0, text);
 }
 
+function getGroupDisplayName(chatId, fallback = null) {
+  const id = Number(chatId);
+  if (!Number.isFinite(id)) {
+    return fallback || 'группа';
+  }
+  const groupRecord = database.data.groups?.[id];
+  return groupRecord?.title || fallback || String(id);
+}
+
+async function canManageGroupSettings(ctx, targetChatId) {
+  const userId = Number(ctx.from?.id);
+  const chatId = Number(targetChatId);
+  if (!Number.isFinite(userId) || !Number.isFinite(chatId)) {
+    return false;
+  }
+
+  try {
+    const member = await ctx.telegram.getChatMember(chatId, userId);
+    return member?.status === 'administrator' && Boolean(member?.can_change_info);
+  } catch (error) {
+    return false;
+  }
+}
+
+async function getManagedGroupsForUser(ctx) {
+  const userId = Number(ctx.from?.id);
+  if (!Number.isFinite(userId)) {
+    return [];
+  }
+
+  const managedGroups = [];
+  const seen = new Set();
+
+  const addGroup = (chatId, title) => {
+    const id = Number(chatId);
+    if (!Number.isFinite(id) || seen.has(id)) {
+      return;
+    }
+    seen.add(id);
+    managedGroups.push({ chatId: id, title: title || String(id) });
+  };
+
+  if (ctx.chat?.id && ctx.chat?.type !== 'private') {
+    try {
+      const member = await ctx.telegram.getChatMember(ctx.chat.id, userId);
+      if (member?.status === 'administrator' && Boolean(member?.can_change_info)) {
+        addGroup(ctx.chat.id, ctx.chat.title || String(ctx.chat.id));
+      }
+    } catch (error) {
+      // ignore
+    }
+  }
+
+  const groups = Object.values(database.data.groups || {});
+  for (const group of groups) {
+    const chatId = Number(group.chatId);
+    if (!Number.isFinite(chatId)) {
+      continue;
+    }
+
+    try {
+      const member = await ctx.telegram.getChatMember(chatId, userId);
+      if (member?.status === 'administrator' && Boolean(member?.can_change_info)) {
+        addGroup(chatId, group.title || String(chatId));
+      }
+    } catch (error) {
+      // ignore
+    }
+  }
+
+  return managedGroups.sort((left, right) => String(left.title).localeCompare(String(right.title)));
+}
+
+async function showSettingsGroupSelector(ctx) {
+  const managedGroups = await getManagedGroupsForUser(ctx);
+  if (!managedGroups.length) {
+    await ctx.reply('У вас нет групп, где вы можете менять настройки бота.');
+    return;
+  }
+
+  const keyboard = {
+    inline_keyboard: [
+      ...managedGroups.map((group) => [{ text: group.title, callback_data: `settings:select:${group.chatId}` }]),
+      [{ text: 'Закрыть', callback_data: 'settings:close' }],
+    ],
+  };
+
+  if (ctx.callbackQuery) {
+    await ctx.editMessageText('Выберите группу для настроек:', { reply_markup: keyboard });
+  } else {
+    await ctx.reply('Выберите группу для настроек:', { reply_markup: keyboard });
+  }
+}
+
+function buildSettingsMainKeyboard(chatId) {
+  return [
+    [
+      { text: 'Ссылки', callback_data: `settings:section:links:${chatId}` },
+      { text: 'Правила', callback_data: `settings:section:rules:${chatId}` },
+    ],
+    [
+      { text: 'Запрещённые слова', callback_data: `settings:section:banwords:${chatId}` },
+      { text: 'Сообщение', callback_data: `settings:section:first:${chatId}` },
+    ],
+    [{ text: 'Назад', callback_data: `settings:select_group:${chatId}` }],
+  ];
+}
+
+function buildSettingsLinksKeyboard(chatId) {
+  const enabled = moderationService.isLinkProtectionEnabled(chatId);
+  return {
+    inline_keyboard: [
+      [{ text: enabled ? 'Выключить антиссылки' : 'Включить антиссылки', callback_data: `settings:toggle_links:${chatId}:${enabled ? 'off' : 'on'}` }],
+      [{ text: 'Добавить ссылку/домен', callback_data: `settings:add_link:${chatId}` }],
+      [{ text: 'Удалить ссылку/домен', callback_data: `settings:remove_link:${chatId}` }],
+      [{ text: 'Список разрешённых ссылок', callback_data: `settings:list_links:${chatId}` }],
+      [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
+    ],
+  };
+}
+
+function buildSettingsAntiKeyboard(chatId) {
+  const spamEnabled = moderationService.isSpamProtectionEnabled(chatId);
+  const floodEnabled = moderationService.isFloodProtectionEnabled(chatId);
+  const linksEnabled = moderationService.isLinkProtectionEnabled(chatId);
+  return {
+    inline_keyboard: [
+      [{ text: spamEnabled ? 'Выключить антиспам' : 'Включить антиспам', callback_data: `settings:toggle_spam:${chatId}:${spamEnabled ? 'off' : 'on'}` }],
+      [{ text: floodEnabled ? 'Выключить антифлуд' : 'Включить антифлуд', callback_data: `settings:toggle_flood:${chatId}:${floodEnabled ? 'off' : 'on'}` }],
+      [{ text: linksEnabled ? 'Выключить антиссылки' : 'Включить антиссылки', callback_data: `settings:toggle_links:${chatId}:${linksEnabled ? 'off' : 'on'}` }],
+      [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
+    ],
+  };
+}
+
+function buildSettingsFirstMessageKeyboard(chatId) {
+  return {
+    inline_keyboard: [
+      [{ text: 'Открыть редактор первого сообщения', callback_data: `settings:open_menu:${chatId}` }],
+      [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
+    ],
+  };
+}
+
+function buildSettingsRulesKeyboard(chatId) {
+  return {
+    inline_keyboard: [
+      [{ text: 'Изменить правила', callback_data: `settings:rules_edit:${chatId}` }],
+      [{ text: 'Добавить правила', callback_data: `settings:rules_add:${chatId}` }],
+      [{ text: 'Удалить правила', callback_data: `settings:rules_clear:${chatId}` }],
+      [{ text: 'Посмотреть правила', callback_data: `settings:rules_view:${chatId}` }],
+      [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
+    ],
+  };
+}
+
+function buildSettingsBanwordsKeyboard(chatId) {
+  return {
+    inline_keyboard: [
+      [{ text: 'Добавить слово', callback_data: `settings:banword_add:${chatId}` }],
+      [{ text: 'Удалить слово', callback_data: `settings:banword_remove:${chatId}` }],
+      [{ text: 'Список запрещённых слов', callback_data: `settings:banword_list:${chatId}` }],
+      [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
+    ],
+  };
+}
+
+async function showSettingsMainMenu(ctx, chatId) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  const title = getGroupDisplayName(chatId, String(chatId));
+  const text = `⚙️ Настройки бота для группы:\n${title}`;
+  const replyMarkup = { inline_keyboard: buildSettingsMainKeyboard(chatId) };
+  if (ctx.callbackQuery) {
+    await ctx.editMessageText(text, { reply_markup: replyMarkup });
+  } else {
+    await ctx.reply(text, { reply_markup: replyMarkup });
+  }
+}
+
+async function showSettingsLinksMenu(ctx, chatId) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  const enabled = moderationService.isLinkProtectionEnabled(chatId);
+  const links = moderationService.getAllowedLinks(chatId);
+  const text = [
+    '🔗 Настройки ссылок',
+    '',
+    enabled ? '✅ Антиссылки включены' : '⚪ Антиссылки выключены',
+    `📋 Разрешённых ссылок/доменов: ${links.length}`,
+    links.length ? `• ${links.join('\n• ')}` : 'Список разрешённых ссылок пуст.',
+  ].join('\n');
+
+  await ctx.editMessageText(text, { reply_markup: buildSettingsLinksKeyboard(chatId) });
+}
+
+async function showSettingsAntiMenu(ctx, chatId) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  const spamEnabled = moderationService.isSpamProtectionEnabled(chatId);
+  const floodEnabled = moderationService.isFloodProtectionEnabled(chatId);
+  const linksEnabled = moderationService.isLinkProtectionEnabled(chatId);
+  const text = [
+    '🛡️ Настройки анти-модерации',
+    '',
+    `Антиспам: ${spamEnabled ? 'включён' : 'выключен'}`,
+    `Антифлуд: ${floodEnabled ? 'включён' : 'выключен'}`,
+    `Антиссылки: ${linksEnabled ? 'включены' : 'выключены'}`,
+  ].join('\n');
+
+  await ctx.editMessageText(text, { reply_markup: buildSettingsAntiKeyboard(chatId) });
+}
+
+async function showSettingsFirstMessageMenu(ctx, chatId) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  const text = `📣 Настройка первого сообщения для группы:\n${getGroupDisplayName(chatId, String(chatId))}`;
+  await ctx.editMessageText(text, { reply_markup: buildSettingsFirstMessageKeyboard(chatId) });
+}
+
+async function showSettingsRulesMenu(ctx, chatId) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  const rules = moderationService.getRules(chatId);
+  const text = [
+    '📜 Правила группы',
+    '',
+    rules || 'Правила ещё не заданы.',
+  ].join('\n');
+
+  await ctx.editMessageText(text, { reply_markup: buildSettingsRulesKeyboard(chatId) });
+}
+
+async function showSettingsBanwordsMenu(ctx, chatId) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  const words = moderationService.getBanWords(chatId);
+  const text = [
+    '🚫 Запрещённые слова',
+    '',
+    words.length ? `• ${words.join('\n• ')}` : 'Список пуст.',
+  ].join('\n');
+
+  await ctx.editMessageText(text, { reply_markup: buildSettingsBanwordsKeyboard(chatId) });
+}
+
+function parseSettingsAction(action) {
+  const parts = String(action || '').split(':');
+  const numericPart = parts.find((part) => /^\d+$/.test(part));
+  const type = parts[0] || '';
+  return {
+    type,
+    target: type,
+    chatId: Number(numericPart || 0),
+    section: parts[1] || '',
+    value: parts[parts.length - 1] || '',
+  };
+}
+
+function parseSettingsTarget(action) {
+  const parts = String(action || '').split(':');
+  return Number(parts[parts.length - 1]) || 0;
+}
+
+function parseSettingsValue(action) {
+  const parts = String(action || '').split(':');
+  return parts[parts.length - 1] || '';
+}
+
+function parseSettingsSection(action) {
+  const parts = String(action || '').split(':');
+  return parts[2] || '';
+}
+
+function parseSettingsChatId(action) {
+  const parts = String(action || '').split(':');
+  return Number(parts[parts.length - 1] || 0);
+}
+
+function buildSettingsPendingAction(action, chatId, extra = {}) {
+  return { action, groupId: Number(chatId), ...extra };
+}
+
+function parseSettingsPrompt(action) {
+  if (action === 'settings_message_text') {
+    return 'Отправьте новый текст первого сообщения.';
+  }
+  if (action === 'settings_link_add') {
+    return 'Отправьте ссылку или домен для добавления в список разрешённых.';
+  }
+  if (action === 'settings_link_remove') {
+    return 'Отправьте ссылку или домен для удаления из списка разрешённых.';
+  }
+  if (action === 'settings_rules_set') {
+    return 'Отправьте новые правила для группы.';
+  }
+  if (action === 'settings_banword_add') {
+    return 'Отправьте запрещённое слово для добавления.';
+  }
+  if (action === 'settings_banword_remove') {
+    return 'Отправьте запрещённое слово для удаления.';
+  }
+  return '';
+}
+
 function parsePunishmentDetails(args, hasReply) {
   const parts = args ? args.trim().split(/\s+/).filter(Boolean) : [];
   let durationHours = null;
@@ -250,6 +573,7 @@ function createBot() {
   const messageHistory = new Map();
   const captchaStates = new Map();
   const pendingMenuActions = new Map();
+  const pendingSettingsActions = new Map();
 
   function getPunishmentTimerKey(chatId, userId, action) {
     return `${chatId}:${userId}:${action}`;
@@ -728,6 +1052,21 @@ function createBot() {
     pendingMenuActions.delete(`${getMenuKey(ctx.chat.id)}:${ctx.from.id}`);
   }
 
+  function getPendingSettingsAction(ctx) {
+    return pendingSettingsActions.get(`${ctx.from.id}:${ctx.chat.id}`);
+  }
+
+  function setPendingSettingsAction(ctx, action, groupId = null) {
+    pendingSettingsActions.set(`${ctx.from.id}:${ctx.chat.id}`, {
+      ...action,
+      groupId: Number(groupId ?? action?.groupId ?? ctx.chat.id),
+    });
+  }
+
+  function clearPendingSettingsAction(ctx) {
+    pendingSettingsActions.delete(`${ctx.from.id}:${ctx.chat.id}`);
+  }
+
   function isChannelPostInGroup(ctx) {
     const message = ctx.message || {};
     return isGroupChat(ctx)
@@ -918,6 +1257,103 @@ function createBot() {
       console.warn('unpinChatMessage failed:', error?.response?.description || error?.message || error);
     }
     return sentMessage;
+  }
+
+  async function processPendingSettingsAction(ctx) {
+    const pending = getPendingSettingsAction(ctx);
+    if (!pending) {
+      return false;
+    }
+
+    const groupId = Number(pending.groupId || ctx.chat.id);
+
+    if (pending.action === 'settings_link_add' && ctx.message.text) {
+      const value = String(ctx.message.text).trim();
+      if (!value) {
+        await ctx.reply('⚠️ Пустое значение не сохранено.');
+        return true;
+      }
+      if (moderationService.addAllowedLink(groupId, value)) {
+        await ctx.reply(`✅ Ссылка/домен добавлен: ${value}`);
+      } else {
+        await ctx.reply('⚠️ Это значение уже добавлено или некорректно.');
+      }
+      clearPendingSettingsAction(ctx);
+      return true;
+    }
+
+    if (pending.action === 'settings_link_remove' && ctx.message.text) {
+      const value = String(ctx.message.text).trim();
+      if (!value) {
+        await ctx.reply('⚠️ Пустое значение не удалено.');
+        return true;
+      }
+      if (moderationService.removeAllowedLink(groupId, value)) {
+        await ctx.reply(`✅ Ссылка/домен удалён: ${value}`);
+      } else {
+        await ctx.reply('⚠️ Такого значения нет в списке.');
+      }
+      clearPendingSettingsAction(ctx);
+      return true;
+    }
+
+    if (pending.action === 'settings_rules_set' && ctx.message.text) {
+      moderationService.setRules(groupId, String(ctx.message.text).trim());
+      await ctx.reply('✅ Правила группы обновлены.');
+      clearPendingSettingsAction(ctx);
+      return true;
+    }
+
+    if (pending.action === 'settings_banword_add' && ctx.message.text) {
+      const value = String(ctx.message.text).trim().toLowerCase();
+      if (!value) {
+        await ctx.reply('⚠️ Пустое слово не добавлено.');
+        return true;
+      }
+      if (moderationService.addBanWord(groupId, value)) {
+        await ctx.reply(`✅ Запрещённое слово добавлено: ${value}`);
+      } else {
+        await ctx.reply('⚠️ Это слово уже есть в списке.');
+      }
+      clearPendingSettingsAction(ctx);
+      return true;
+    }
+
+    if (pending.action === 'settings_banword_remove' && ctx.message.text) {
+      const value = String(ctx.message.text).trim().toLowerCase();
+      if (!value) {
+        await ctx.reply('⚠️ Пустое слово не удалено.');
+        return true;
+      }
+      if (moderationService.removeBanWord(groupId, value)) {
+        await ctx.reply(`✅ Запрещённое слово удалено: ${value}`);
+      } else {
+        await ctx.reply('⚠️ Такого слова нет в списке.');
+      }
+      clearPendingSettingsAction(ctx);
+      return true;
+    }
+
+    if (pending.action === 'settings_message_text' && ctx.message.text) {
+      moderationService.setMenuText(groupId, String(ctx.message.text).trim());
+      await ctx.reply('✅ Текст первого сообщения обновлён.');
+      clearPendingSettingsAction(ctx);
+      return true;
+    }
+
+    if (pending.action === 'settings_message_media') {
+      const payload = getMediaPayloadFromMessage(ctx);
+      if (!payload) {
+        await ctx.reply('⚠️ Я не нашёл медиа. Отправьте фото, видео, документ, голос или стикер.');
+        return true;
+      }
+      moderationService.setMenuMedia(groupId, payload);
+      await ctx.reply(`✅ Медиа сохранено как ${payload.type}.`);
+      clearPendingSettingsAction(ctx);
+      return true;
+    }
+
+    return false;
   }
 
   async function processPendingMenuAction(ctx) {
@@ -1980,6 +2416,141 @@ function createBot() {
     await ctx.editMessageText(helpPage.text, { reply_markup: helpPage.reply_markup });
   });
 
+  bot.action(/^settings:(.+)$/, async (ctx) => {
+    const action = ctx.match[1];
+    const parsed = parseSettingsAction(action);
+    const chatId = Number(parsed.chatId || ctx.chat?.id || 0);
+    if (!chatId) {
+      await ctx.answerCbQuery();
+      return;
+    }
+    await ctx.answerCbQuery();
+
+    if (!await canManageGroupSettings(ctx, chatId)) {
+      await ctx.reply('У вас нет прав менять настройки этой группы.');
+      return;
+    }
+
+    if (parsed.target === 'select_group') {
+      await showSettingsGroupSelector(ctx);
+      return;
+    }
+
+    if (parsed.target === 'select') {
+      await showSettingsMainMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'main') {
+      await showSettingsMainMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'section') {
+      if (parsed.section === 'links') {
+        await showSettingsLinksMenu(ctx, chatId);
+      } else if (parsed.section === 'anti') {
+        await showSettingsAntiMenu(ctx, chatId);
+      } else if (parsed.section === 'first') {
+        await showSettingsFirstMessageMenu(ctx, chatId);
+      } else if (parsed.section === 'rules') {
+        await showSettingsRulesMenu(ctx, chatId);
+      } else if (parsed.section === 'banwords') {
+        await showSettingsBanwordsMenu(ctx, chatId);
+      }
+      return;
+    }
+
+    if (parsed.target === 'toggle_links') {
+      if (parsed.value === 'on') {
+        moderationService.enableLinkProtection(chatId);
+      } else {
+        moderationService.disableLinkProtection(chatId);
+      }
+      await showSettingsLinksMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'toggle_spam') {
+      if (parsed.value === 'on') {
+        moderationService.enableSpamProtection(chatId);
+      } else {
+        moderationService.disableSpamProtection(chatId);
+      }
+      await showSettingsAntiMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'toggle_flood') {
+      if (parsed.value === 'on') {
+        moderationService.enableFloodProtection(chatId);
+      } else {
+        moderationService.disableFloodProtection(chatId);
+      }
+      await showSettingsAntiMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'add_link') {
+      setPendingSettingsAction(ctx, { action: 'settings_link_add', groupId: chatId });
+      await ctx.reply(parseSettingsPrompt('settings_link_add'));
+      return;
+    }
+
+    if (parsed.target === 'remove_link') {
+      setPendingSettingsAction(ctx, { action: 'settings_link_remove', groupId: chatId });
+      await ctx.reply(parseSettingsPrompt('settings_link_remove'));
+      return;
+    }
+
+    if (parsed.target === 'list_links') {
+      await showSettingsLinksMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'open_menu') {
+      setPendingSettingsAction(ctx, { action: 'settings_message_text', groupId: chatId });
+      await ctx.reply(parseSettingsPrompt('settings_message_text'));
+      return;
+    }
+
+    if (parsed.target === 'rules_edit' || parsed.target === 'rules_add') {
+      setPendingSettingsAction(ctx, { action: 'settings_rules_set', groupId: chatId });
+      await ctx.reply(parseSettingsPrompt('settings_rules_set'));
+      return;
+    }
+
+    if (parsed.target === 'rules_clear') {
+      moderationService.setRules(chatId, '');
+      await ctx.reply('✅ Правила очищены.');
+      await showSettingsRulesMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'rules_view') {
+      const rules = moderationService.getRules(chatId);
+      await ctx.editMessageText(rules || 'Правила ещё не заданы.', { reply_markup: buildSettingsRulesKeyboard(chatId) });
+      return;
+    }
+
+    if (parsed.target === 'banword_add') {
+      setPendingSettingsAction(ctx, { action: 'settings_banword_add', groupId: chatId });
+      await ctx.reply(parseSettingsPrompt('settings_banword_add'));
+      return;
+    }
+
+    if (parsed.target === 'banword_remove') {
+      setPendingSettingsAction(ctx, { action: 'settings_banword_remove', groupId: chatId });
+      await ctx.reply(parseSettingsPrompt('settings_banword_remove'));
+      return;
+    }
+
+    if (parsed.target === 'banword_list') {
+      await showSettingsBanwordsMenu(ctx, chatId);
+      return;
+    }
+  });
+
   bot.action(/^menu:(.+)$/, async (ctx) => {
     const action = ctx.match[1];
     const chatId = ctx.chat?.id;
@@ -2631,6 +3202,13 @@ function createBot() {
   });
 
   bot.on(['text', 'photo', 'video', 'document', 'animation', 'audio', 'voice', 'sticker', 'video_note'], async (ctx) => {
+    if (ctx.chat && getPendingSettingsAction(ctx)) {
+      const handled = await processPendingSettingsAction(ctx);
+      if (handled) {
+        return;
+      }
+    }
+
     if (ctx.chat && isGroupChat(ctx) && getPendingMenuAction(ctx)) {
       const handled = await processPendingMenuAction(ctx);
       if (handled) {
@@ -2672,6 +3250,7 @@ module.exports = {
   parsePageNumber,
   buildPunishmentListMessage,
   buildBotAdminListMessage,
+  buildSettingsMainKeyboard,
   detectForbiddenWord,
   isLinkMessage,
   isAllowedLinkUrl,

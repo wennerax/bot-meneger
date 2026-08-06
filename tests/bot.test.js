@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl } = require('../app/bot');
+const { parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard } = require('../app/bot');
 const { buildAiRequestPayload } = require('../app/ai');
 
 test('parsePunishmentDetails extracts duration and reason', () => {
@@ -67,6 +67,18 @@ test('buildBotAdminListMessage separates primary and auxiliary admins', () => {
   assert.match(message, /Главный админ:\s*\n1\. @alice/);
   assert.match(message, /1\. @bob/);
   assert.match(message, /2\. @carol/);
+});
+
+test('buildSettingsMainKeyboard returns a grouped layout with section buttons', () => {
+  const keyboard = buildSettingsMainKeyboard(42);
+
+  assert.ok(Array.isArray(keyboard));
+  assert.equal(keyboard.length, 3);
+  assert.deepEqual(keyboard[0].map((button) => button.text), ['Ссылки', 'Правила']);
+  assert.deepEqual(keyboard[1].map((button) => button.text), ['Запрещённые слова', 'Сообщение']);
+  assert.deepEqual(keyboard[2].map((button) => button.text), ['Назад']);
+  assert.equal(keyboard[0][0].callback_data, 'settings:section:links:42');
+  assert.equal(keyboard[1][1].callback_data, 'settings:section:first:42');
 });
 
 test('detectForbiddenWord catches drugs and self-harm variants', () => {
