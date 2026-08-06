@@ -520,7 +520,11 @@ function createBot() {
     try {
       await ctx.telegram.deleteMessage(ctx.chat.id, messageId);
     } catch (error) {
-      // ignore missing permissions or already deleted messages
+      console.warn('deleteMessageSafely failed:', {
+        chatId: ctx.chat?.id,
+        messageId,
+        error: error?.response?.description || error?.message || error,
+      });
     }
   }
 
@@ -1967,6 +1971,7 @@ function createBot() {
     }
 
     const text = getMessageText(ctx);
+    const lowerText = text.toLowerCase();
     const hasMessageContent = Boolean(text || isMediaMessage(ctx));
     if (!hasMessageContent) {
       return;
@@ -2000,7 +2005,7 @@ function createBot() {
       return;
     }
 
-    if (text.startsWith('+антиспам') || text.startsWith('+antispam')) {
+    if (lowerText.startsWith('+антиспам') || lowerText.startsWith('+antispam')) {
       ensureGroup(ctx);
       if (!isBotAdmin(ctx)) {
         ctx.reply('Эта команда доступна только администраторам.');
@@ -2011,7 +2016,7 @@ function createBot() {
       return;
     }
 
-    if (text.startsWith('-антиспам') || text.startsWith('-antispam')) {
+    if (lowerText.startsWith('-антиспам') || lowerText.startsWith('-antispam')) {
       ensureGroup(ctx);
       if (!isBotAdmin(ctx)) {
         ctx.reply('Эта команда доступна только администраторам.');
@@ -2022,7 +2027,7 @@ function createBot() {
       return;
     }
 
-    if (text.startsWith('+антифлуд') || text.startsWith('+antiflood')) {
+    if (lowerText.startsWith('+антифлуд') || lowerText.startsWith('+antiflood')) {
       ensureGroup(ctx);
       if (!isBotAdmin(ctx)) {
         ctx.reply('Эта команда доступна только администраторам.');
@@ -2033,7 +2038,7 @@ function createBot() {
       return;
     }
 
-    if (text.startsWith('-антифлуд') || text.startsWith('-antiflood')) {
+    if (lowerText.startsWith('-антифлуд') || lowerText.startsWith('-antiflood')) {
       ensureGroup(ctx);
       if (!isBotAdmin(ctx)) {
         ctx.reply('Эта команда доступна только администраторам.');
@@ -2044,7 +2049,7 @@ function createBot() {
       return;
     }
 
-    if (text.startsWith('+ссылки') || text.startsWith('+links')) {
+    if (lowerText.startsWith('+ссылки') || lowerText.startsWith('+links')) {
       ensureGroup(ctx);
       if (!isBotAdmin(ctx)) {
         ctx.reply('Эта команда доступна только администраторам.');
@@ -2055,7 +2060,7 @@ function createBot() {
       return;
     }
 
-    if (text.startsWith('-ссылки') || text.startsWith('-links')) {
+    if (lowerText.startsWith('-ссылки') || lowerText.startsWith('-links')) {
       ensureGroup(ctx);
       if (!isBotAdmin(ctx)) {
         ctx.reply('Эта команда доступна только администраторам.');
@@ -2078,13 +2083,13 @@ function createBot() {
       return;
     }
 
-    if (text.startsWith('+rules ') || text.startsWith('+правила ')) {
+    if (lowerText.startsWith('+rules ') || lowerText.startsWith('+правила ')) {
       if (!isBotAdmin(ctx)) {
         ctx.reply('Эта команда доступна только администраторам.');
         return;
       }
       ensureGroup(ctx);
-      const newRules = text.startsWith('+rules') ? text.slice(7) : text.slice(10);
+      const newRules = lowerText.startsWith('+rules') ? text.slice(7) : text.slice(10);
       if (!newRules.trim()) {
         ctx.reply('Использование: +rules новые правила или +правила новые правила');
         return;
@@ -2094,13 +2099,13 @@ function createBot() {
       return;
     }
 
-    if (text.startsWith('+greeting ') || text.startsWith('+приветствие ')) {
+    if (lowerText.startsWith('+greeting ') || lowerText.startsWith('+приветствие ')) {
       if (!isBotAdmin(ctx)) {
         ctx.reply('Эта команда доступна только администраторам.');
         return;
       }
       ensureGroup(ctx);
-      const newGreeting = text.startsWith('+greeting') ? text.slice(10) : text.slice(13);
+      const newGreeting = lowerText.startsWith('+greeting') ? text.slice(10) : text.slice(13);
       if (!newGreeting.trim()) {
         ctx.reply('Использование: +greeting новое приветствие или +приветствие новое приветствие');
         return;
@@ -2129,6 +2134,13 @@ function createBot() {
     }
 
     if (isGroupChat(ctx) && moderationService.isLinkProtectionEnabled(ctx.chat.id) && isLinkMessage(text, (link) => moderationService.isAllowedLink(ctx.chat.id, link))) {
+      console.log('anti-link triggered', {
+        chatId: ctx.chat.id,
+        userId: ctx.from?.id,
+        text,
+        links: getLinkCandidates(text),
+        allowed: getLinkCandidates(text).map((link) => moderationService.isAllowedLink(ctx.chat.id, link)),
+      });
       await deleteMessageSafely(ctx, ctx.message.message_id);
       await applyAutomaticMute(ctx, ctx.from.id, 24 * 7, 'Ссылка');
       return;
