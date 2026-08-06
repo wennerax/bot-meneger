@@ -15,7 +15,10 @@ function normalizeUrlPattern(value) {
 }
 
 function getLinkCandidates(text) {
-  return Array.from(String(text || '').matchAll(/(?:https?:\/\/|www\.)\S+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/\S*)?/ig), (match) => match[0]);
+  return Array.from(String(text || '').matchAll(/(?:https?:\/\/|www\.)\S+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/\S*)?/ig), (match) => {
+    const raw = match[0].replace(/[.,;:!?)+\]}]+$/g, '');
+    return raw;
+  });
 }
 
 function isLinkMessage(text, allowLinkPredicate) {

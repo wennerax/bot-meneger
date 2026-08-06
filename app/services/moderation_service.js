@@ -320,28 +320,35 @@ class ModerationService {
       return false;
     }
 
-    const normalizedUrl = normalizedValue.replace(/^https?:\/\//i, '').replace(/^www\./i, '');
-    const targetHost = normalizedUrl.split(/[/?#]/)[0];
+    const normalizedUrl = normalizedValue.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/#.*$/, '');
+    const [urlWithoutHash] = normalizedUrl.split('#');
+    const [urlWithoutQuery] = urlWithoutHash.split('?');
+    const targetHost = urlWithoutQuery.split('/')[0];
 
     return this._getChat(chatId).allowedLinks.some((item) => {
-      const normalizedItem = String(item || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '');
-      if (!normalizedItem) {
+      const rawItem = String(item || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/#.*$/, '');
+      if (!rawItem) {
         return false;
       }
 
-      if (normalizedUrl === normalizedItem) {
+      const [itemWithoutHash] = rawItem.split('#');
+      const [itemWithoutQuery] = itemWithoutHash.split('?');
+      const allowPrefix = itemWithoutQuery.endsWith('/');
+
+      if (urlWithoutQuery === itemWithoutQuery) {
         return true;
       }
 
-      if (normalizedItem.endsWith('/')) {
-        return normalizedUrl.startsWith(normalizedItem);
+      if (allowPrefix) {
+        return urlWithoutQuery.startsWith(itemWithoutQuery);
       }
 
-      if (normalizedItem.includes('/') || normalizedItem.includes('?') || normalizedItem.includes('#')) {
-        return false;
+      const itemHost = itemWithoutQuery.split('/')[0];
+      if (itemWithoutQuery === itemHost) {
+        return targetHost === itemHost || targetHost.endsWith(`.${itemHost}`);
       }
 
-      return targetHost === normalizedItem || targetHost.endsWith(`.${normalizedItem}`);
+      return false;
     });
   }
 }

@@ -69,6 +69,14 @@ test('allowed links accept only exact configured URLs', () => {
   assert.equal(service.isAllowedLink(100, 'https://t.me/mir_supercell/other'), false);
 });
 
+test('allowed links with query parameters are matched exactly', () => {
+  const service = new ModerationService();
+  service.addAllowedLink(100, 'https://t.me/DigitalMusikBot?start=from_inline_caption');
+
+  assert.equal(service.isAllowedLink(100, 'https://t.me/DigitalMusikBot?start=from_inline_caption'), true);
+  assert.equal(service.isAllowedLink(100, 'https://t.me/DigitalMusikBot?start=from_inline_caption&foo=bar'), false);
+});
+
 test('moderation settings persist across restarts', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-meneger-'));
   const filePath = path.join(dir, 'bot.json');
