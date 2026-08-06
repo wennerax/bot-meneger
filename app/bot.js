@@ -305,16 +305,34 @@ async function showSettingsBanwordsMenu(ctx, chatId) {
 }
 
 function parseSettingsAction(action) {
-  const parts = String(action || '').split(':');
-  const numericPart = parts.find((part) => /^\d+$/.test(part));
-  const type = parts[0] || '';
+  const parts = String(action || '').split(':').filter(Boolean);
+  const isPrefixed = parts[0] === 'settings' && parts.length > 1;
+  const normalizedParts = isPrefixed ? parts.slice(1) : parts;
+  const actionType = normalizedParts[0] || '';
+  const numericPart = normalizedParts.find((part) => /^\d+$/.test(part));
+  const parsedChatId = Number(numericPart || 0);
+  const target = actionType === 'select' ? 'select' : actionType;
   return {
-    type,
-    target: type,
-    chatId: Number(numericPart || 0),
-    section: parts[1] || '',
-    value: parts[parts.length - 1] || '',
+    type: actionType,
+    target,
+    chatId: parsedChatId,
+    section: actionType === 'section' ? normalizedParts[1] || '' : '',
+    value: normalizedParts[normalizedParts.length - 1] || '',
   };
+}
+
+async function openSettingsForCurrentContext(ctx, targetChatId = null) {
+  const chatId = Number(targetChatId || ctx.chat?.id || 0);
+  if (!chatId) {
+    return;
+  }
+
+  if (!await canManageGroupSettings(ctx, chatId)) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  await showSettingsMainMenu(ctx, chatId);
 }
 
 function parseSettingsTarget(action) {
@@ -2437,7 +2455,7 @@ function createBot() {
     }
 
     if (parsed.target === 'select') {
-      await showSettingsMainMenu(ctx, chatId);
+      await openSettingsForCurrentContext(ctx, chatId);
       return;
     }
 
@@ -2785,6 +2803,25 @@ function createBot() {
 
   bot.command(['menu'], async (ctx) => {
     await menuCommand(ctx);
+  });
+
+  bot.command(['gmenu'], async (ctx) => {
+    ensureGroup(ctx);
+    if (!isBotAdmin(ctx)) {
+      await ctx.reply('Эта команда доступна только администраторам.');
+      return;
+    }
+
+    if (ctx.chat?.type === 'private') {
+      await showSettingsGroupSelector(ctx);
+      return;
+    }
+
+    const chatId = Number(ctx.chat?.id || 0);
+    if (!chatId) {
+      return;
+    }
+    await openSettingsForCurrentContext(ctx, chatId);
   });
 
   bot.command(['links', 'ссылки'], (ctx) => {
@@ -3251,6 +3288,7 @@ module.exports = {
   buildPunishmentListMessage,
   buildBotAdminListMessage,
   buildSettingsMainKeyboard,
+  parseSettingsAction,
   detectForbiddenWord,
   isLinkMessage,
   isAllowedLinkUrl,

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard } = require('../app/bot');
+const { parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, parseSettingsAction } = require('../app/bot');
 const { buildAiRequestPayload } = require('../app/ai');
 
 test('parsePunishmentDetails extracts duration and reason', () => {
@@ -79,6 +79,12 @@ test('buildSettingsMainKeyboard returns a grouped layout with section buttons', 
   assert.deepEqual(keyboard[2].map((button) => button.text), ['Назад']);
   assert.equal(keyboard[0][0].callback_data, 'settings:section:links:42');
   assert.equal(keyboard[1][1].callback_data, 'settings:section:first:42');
+});
+
+test('parseSettingsAction extracts the selected group and action type', () => {
+  const parsed = parseSettingsAction('select:42');
+
+  assert.deepEqual(parsed, { type: 'select', target: 'select', chatId: 42, section: '', value: '42' });
 });
 
 test('detectForbiddenWord catches drugs and self-harm variants', () => {
