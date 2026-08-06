@@ -75,10 +75,11 @@ test('buildSettingsMainKeyboard returns a grouped layout with section buttons', 
   assert.ok(Array.isArray(keyboard));
   assert.equal(keyboard.length, 3);
   assert.deepEqual(keyboard[0].map((button) => button.text), ['Ссылки', 'Правила']);
-  assert.deepEqual(keyboard[1].map((button) => button.text), ['Запрещённые слова', 'Сообщение']);
-  assert.deepEqual(keyboard[2].map((button) => button.text), ['Назад']);
+  assert.deepEqual(keyboard[1].map((button) => button.text), ['Анти(СФС)', 'Запрещённые слова']);
+  assert.deepEqual(keyboard[2].map((button) => button.text), ['Сообщение']);
   assert.equal(keyboard[0][0].callback_data, 'settings:section:links:42');
-  assert.equal(keyboard[1][1].callback_data, 'settings:section:first:42');
+  assert.equal(keyboard[1][0].callback_data, 'settings:section:anti:42');
+  assert.equal(keyboard[2][0].callback_data, 'settings:section:first:42');
 });
 
 test('parseSettingsAction extracts the selected group and action type', () => {

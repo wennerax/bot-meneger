@@ -159,10 +159,12 @@ function buildSettingsMainKeyboard(chatId) {
       { text: 'Правила', callback_data: `settings:section:rules:${chatId}` },
     ],
     [
+      { text: 'Анти(СФС)', callback_data: `settings:section:anti:${chatId}` },
       { text: 'Запрещённые слова', callback_data: `settings:section:banwords:${chatId}` },
+    ],
+    [
       { text: 'Сообщение', callback_data: `settings:section:first:${chatId}` },
     ],
-    [{ text: 'Назад', callback_data: `settings:select_group:${chatId}` }],
   ];
 }
 
@@ -172,8 +174,7 @@ function buildSettingsLinksKeyboard(chatId) {
     inline_keyboard: [
       [{ text: enabled ? 'Выключить антиссылки' : 'Включить антиссылки', callback_data: `settings:toggle_links:${chatId}:${enabled ? 'off' : 'on'}` }],
       [{ text: 'Добавить ссылку/домен', callback_data: `settings:add_link:${chatId}` }],
-      [{ text: 'Удалить ссылку/домен', callback_data: `settings:remove_link:${chatId}` }],
-      [{ text: 'Список разрешённых ссылок', callback_data: `settings:list_links:${chatId}` }],
+      [{ text: 'Убрать ссылку/домен', callback_data: `settings:remove_link:${chatId}` }],
       [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
     ],
   };
@@ -185,9 +186,13 @@ function buildSettingsAntiKeyboard(chatId) {
   const linksEnabled = moderationService.isLinkProtectionEnabled(chatId);
   return {
     inline_keyboard: [
-      [{ text: spamEnabled ? 'Выключить антиспам' : 'Включить антиспам', callback_data: `settings:toggle_spam:${chatId}:${spamEnabled ? 'off' : 'on'}` }],
-      [{ text: floodEnabled ? 'Выключить антифлуд' : 'Включить антифлуд', callback_data: `settings:toggle_flood:${chatId}:${floodEnabled ? 'off' : 'on'}` }],
-      [{ text: linksEnabled ? 'Выключить антиссылки' : 'Включить антиссылки', callback_data: `settings:toggle_links:${chatId}:${linksEnabled ? 'off' : 'on'}` }],
+      [
+        { text: spamEnabled ? 'Выключить антиспам' : 'Включить антиспам', callback_data: `settings:toggle_spam:${chatId}:${spamEnabled ? 'off' : 'on'}` },
+        { text: floodEnabled ? 'Выключить антифлуд' : 'Включить антифлуд', callback_data: `settings:toggle_flood:${chatId}:${floodEnabled ? 'off' : 'on'}` },
+      ],
+      [
+        { text: linksEnabled ? 'Выключить антиссылки' : 'Включить антиссылки', callback_data: `settings:toggle_links:${chatId}:${linksEnabled ? 'off' : 'on'}` },
+      ],
       [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
     ],
   };
@@ -208,7 +213,6 @@ function buildSettingsRulesKeyboard(chatId) {
       [{ text: 'Изменить правила', callback_data: `settings:rules_edit:${chatId}` }],
       [{ text: 'Добавить правила', callback_data: `settings:rules_add:${chatId}` }],
       [{ text: 'Удалить правила', callback_data: `settings:rules_clear:${chatId}` }],
-      [{ text: 'Посмотреть правила', callback_data: `settings:rules_view:${chatId}` }],
       [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
     ],
   };
@@ -250,7 +254,7 @@ async function showSettingsLinksMenu(ctx, chatId) {
   const enabled = moderationService.isLinkProtectionEnabled(chatId);
   const links = moderationService.getAllowedLinks(chatId);
   const text = [
-    '🔗 Настройки ссылок',
+    '🔗 Настройки антиссылок',
     '',
     enabled ? '✅ Антиссылки включены' : '⚪ Антиссылки выключены',
     `📋 Разрешённых ссылок/доменов: ${links.length}`,
@@ -296,11 +300,10 @@ async function showSettingsRulesMenu(ctx, chatId) {
     return;
   }
 
-  const rules = moderationService.getRules(chatId);
   const text = [
-    '📜 Правила группы',
+    '📜 Настройки правил группы',
     '',
-    rules || 'Правила ещё не заданы.',
+    'Выберите действие:',
   ].join('\n');
 
   await ctx.editMessageText(text, { reply_markup: buildSettingsRulesKeyboard(chatId) });
