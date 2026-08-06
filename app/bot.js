@@ -2807,12 +2807,13 @@ function createBot() {
 
   bot.command(['gmenu'], async (ctx) => {
     ensureGroup(ctx);
-    if (!isBotAdmin(ctx)) {
-      await ctx.reply('Эта команда доступна только администраторам.');
-      return;
-    }
 
     if (ctx.chat?.type === 'private') {
+      const managedGroups = await getManagedGroupsForUser(ctx);
+      if (!managedGroups.length) {
+        await ctx.reply('У вас нет групп, где вы можете менять настройки бота.');
+        return;
+      }
       await showSettingsGroupSelector(ctx);
       return;
     }
@@ -2821,6 +2822,13 @@ function createBot() {
     if (!chatId) {
       return;
     }
+
+    const canUse = await canManageGroupSettings(ctx, chatId);
+    if (!canUse) {
+      await ctx.reply('У вас нет прав администратора группы с правом менять профиль группы.');
+      return;
+    }
+
     await openSettingsForCurrentContext(ctx, chatId);
   });
 
