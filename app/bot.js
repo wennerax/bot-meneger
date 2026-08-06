@@ -2105,6 +2105,37 @@ function createBot() {
       return;
     }
 
+    const removeAllowedLinkMatch = text.match(/^\-(?:links|ссылки)(?:\s+(.+))?$/i);
+    if (removeAllowedLinkMatch && removeAllowedLinkMatch[1] !== undefined) {
+      ensureGroup(ctx);
+      if (!isBotAdmin(ctx)) {
+        ctx.reply('Эта команда доступна только администраторам.');
+        return;
+      }
+      const argValue = removeAllowedLinkMatch[1].trim();
+      if (!argValue) {
+        moderationService.disableLinkProtection(ctx.chat.id);
+        ctx.reply('✅ Антиссылки выключены.');
+        return;
+      }
+
+      if (argValue.toLowerCase() === 'all') {
+        if (moderationService.clearAllowedLinks(ctx.chat.id)) {
+          ctx.reply('✅ Все разрешённые ссылки и домены удалены.');
+        } else {
+          ctx.reply('Список разрешённых ссылок уже пуст.');
+        }
+        return;
+      }
+
+      if (moderationService.removeAllowedLink(ctx.chat.id, argValue)) {
+        ctx.reply(`✅ Удалена разрешённая ссылка/домен: ${argValue}`);
+      } else {
+        ctx.reply('Эта ссылка или домен не найдены в списке разрешённых.');
+      }
+      return;
+    }
+
     if (lowerText === '+ссылки' || lowerText === '+links') {
       ensureGroup(ctx);
       if (!isBotAdmin(ctx)) {

@@ -400,6 +400,16 @@ class ModerationService {
     return true;
   }
 
+  clearAllowedLinks(chatId) {
+    const chat = this._getChat(chatId);
+    if (chat.allowedLinks.length === 0) {
+      return false;
+    }
+    chat.allowedLinks = [];
+    this._save();
+    return true;
+  }
+
   isAllowedLink(chatId, value) {
     const normalizedValue = String(value || '').trim().toLowerCase();
     if (!normalizedValue) {

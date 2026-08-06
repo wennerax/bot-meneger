@@ -112,6 +112,27 @@ test('allowed domain rules permit query strings directly after the host', () => 
   assert.equal(service.isAllowedLink(100, 'https://example.net?utm=1'), false);
 });
 
+test('allowed link can be removed from chat allowlist', () => {
+  const service = new ModerationService();
+  service.addAllowedLink(100, 'https://example.com');
+  service.addAllowedLink(100, 'https://t.me/bot');
+
+  assert.equal(service.removeAllowedLink(100, 'https://example.com'), true);
+  assert.equal(service.isAllowedLink(100, 'https://example.com'), false);
+  assert.equal(service.isAllowedLink(100, 'https://t.me/bot'), true);
+  assert.equal(service.removeAllowedLink(100, 'https://example.com'), false);
+});
+
+test('clearAllowedLinks removes all allowed links from chat', () => {
+  const service = new ModerationService();
+  service.addAllowedLink(100, 'https://example.com');
+  service.addAllowedLink(100, 'vk_musix_bot');
+
+  assert.equal(service.clearAllowedLinks(100), true);
+  assert.deepEqual(service.getAllowedLinks(100), []);
+  assert.equal(service.clearAllowedLinks(100), false);
+});
+
 test('username-like allowed links are exempted for all matching variations', () => {
   const service = new ModerationService();
   service.addAllowedLink(100, 'vk_musix_bot');
