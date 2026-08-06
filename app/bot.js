@@ -711,6 +711,128 @@ function createBot() {
     ctx.reply(`${status}, ${ctx.from.first_name || 'пользователь'}!\n\nИспользуйте /help или !помощь, чтобы увидеть команды.`);
   }
 
+  function buildPostKeyboard() {
+    const keyboard = [];
+    const ticket1 = config.ticketUrl1 || '';
+    const ticket2 = config.ticketUrl2 || '';
+    const chatUrl = config.chatUrl || '';
+    const rulesUrl = config.rulesUrl || '';
+    const siteUrl = config.siteUrl || '';
+
+    const ticketButtons = [];
+    if (ticket1) {
+      ticketButtons.push({ text: 'БИЛЕТЫ', url: ticket1 });
+    }
+    if (ticket2) {
+      ticketButtons.push({ text: 'БИЛЕТЫ', url: ticket2 });
+    }
+    if (ticketButtons.length === 1) {
+      keyboard.push(ticketButtons);
+    } else if (ticketButtons.length > 1) {
+      keyboard.push(ticketButtons);
+    }
+
+    const secondRow = [];
+    if (chatUrl) {
+      secondRow.push({ text: 'ЧАТ', url: chatUrl });
+    }
+    if (rulesUrl) {
+      secondRow.push({ text: 'ПРАВИЛА', url: rulesUrl });
+    }
+    if (siteUrl) {
+      secondRow.push({ text: 'САЙТ', url: siteUrl });
+    }
+    if (secondRow.length) {
+      keyboard.push(secondRow);
+    }
+
+    if (!keyboard.length) {
+      return null;
+    }
+    return { inline_keyboard: keyboard };
+  }
+
+  function getPostText() {
+    return [
+      '---',
+      '# 6 АВГУСТА',
+      '**12 АВГУСТА**',
+      '**КНИГОН**',
+      '',
+      '13 АВГУСТА',
+      'Москва',
+      '',
+      'ТЕРРИТОРИЯ',
+      '**БОЛЬШОЙ ЛЕТНИЙ КОНЦЕРТ**',
+      '**ПОД ОТКРЫТЫМ НЕБОМ**',
+      '',
+      '16+',
+      '',
+      '---',
+      '',
+      '**ИЯЙ всем нашим !**',
+      '',
+      '*Не пропусти большие летние концерты в Питере 12 Августа и в Москве 13 Августа.*',
+      '',
+      'И помни: незнание правил не освобождает от ответственности.',
+      '---',
+    ].join('\n');
+  }
+
+  function getImageSource(ctx) {
+    const message = ctx.message || {};
+    if (message.photo && Array.isArray(message.photo) && message.photo.length) {
+      return message.photo[message.photo.length - 1].file_id;
+    }
+    if (message.document && String(message.document.mime_type || '').startsWith('image/')) {
+      return message.document.file_id;
+    }
+    const reply = message.reply_to_message || {};
+    if (reply.photo && Array.isArray(reply.photo) && reply.photo.length) {
+      return reply.photo[reply.photo.length - 1].file_id;
+    }
+    if (reply.document && String(reply.document.mime_type || '').startsWith('image/')) {
+      return reply.document.file_id;
+    }
+    return null;
+  }
+
+  async function postCommand(ctx) {
+    ensureGroup(ctx);
+    if (!isBotAdmin(ctx)) {
+      ctx.reply('Эта команда доступна только администраторам.');
+      return;
+    }
+
+    const postText = getPostText();
+    const keyboard = buildPostKeyboard();
+    const imageSource = getImageSource(ctx);
+    let sentMessage = null;
+
+    const replyOptions = {};
+    if (keyboard) {
+      replyOptions.reply_markup = keyboard;
+    }
+
+    if (!imageSource) {
+      await ctx.reply('⚠️ Изображение не найдено. Публикую пост без картинки.');
+      sentMessage = await ctx.reply(postText, replyOptions);
+    } else {
+      sentMessage = await ctx.replyWithPhoto(imageSource, {
+        caption: postText,
+        ...replyOptions,
+      });
+    }
+
+    if (sentMessage && sentMessage.message_id && ctx.chat && ctx.chat.id) {
+      try {
+        await ctx.telegram.pinChatMessage(ctx.chat.id, sentMessage.message_id, { disable_notification: true });
+      } catch (error) {
+        console.warn('pinChatMessage failed:', error?.response?.description || error?.message || error);
+      }
+    }
+  }
+
   function getHelpPages() {
     return [
       [
@@ -738,6 +860,7 @@ function createBot() {
         '-антифлуд - выключить антифлуд',
         '+ссылки - включить антиссылки',
         '-ссылки - выключить антиссылки',
+        '/post - опубликовать пост с картинкой и кнопками',
         '/warn, !предупреждение @юз - выдать предупреждение',
         '/warnings, !варны [@юз] - показать варны пользователя',
         '/unwarn, !снять предупреждение @юз - снять предупреждения',
@@ -1846,6 +1969,10 @@ function createBot() {
       message.push(item);
     }
     ctx.reply(message.join('\n'));
+  });
+
+  bot.command(['post', 'newpost', 'publish', 'пост'], async (ctx) => {
+    await postCommand(ctx);
   });
 
   bot.command(['links', 'ссылки'], (ctx) => {

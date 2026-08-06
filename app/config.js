@@ -71,6 +71,11 @@ function loadConfig(overrides = {}, options = {}) {
     adminIds: parseAdminIds(merged.ADMIN_IDS),
     botName: merged.BOT_NAME || 'Telegram Bot Manager',
     databasePath: merged.DATABASE_PATH || 'data/bot.json',
+    ticketUrl1: merged.TICKET_URL_1 || merged.TICKET_URL1 || merged.TICKETS_URL_1 || merged.TICKETS_URL1 || '',
+    ticketUrl2: merged.TICKET_URL_2 || merged.TICKET_URL2 || merged.TICKETS_URL_2 || merged.TICKETS_URL2 || '',
+    chatUrl: merged.CHAT_URL || merged.TELEGRAM_CHAT_URL || merged.GROUP_CHAT_URL || '',
+    rulesUrl: merged.RULES_URL || merged.RULES_LINK || '',
+    siteUrl: merged.SITE_URL || merged.WEBSITE_URL || merged.SITE_LINK || '',
     // Support generic AI provider env and OpenRouter-specific env names.
     aiApiKey,
     aiModel: merged.AI_MODEL || merged.OPENROUTER_MODEL || 'openrouter',
