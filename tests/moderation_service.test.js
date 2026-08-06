@@ -189,3 +189,11 @@ test('menu buttons support row layout and persistence', () => {
   assert.equal(service.clearMenuButtons(100), true);
   assert.deepEqual(service.getMenuButtons(100), []);
 });
+
+test('message text can render clickable link labels', () => {
+  const service = new ModerationService();
+
+  assert.equal(service.formatTextWithLinks('Привет(https://example.com)'), '<a href="https://example.com">Привет</a>');
+  assert.equal(service.formatTextWithLinks('ИЯЙ(https://t.me/bred_ish)'), '<a href="https://t.me/bred_ish">ИЯЙ</a>');
+  assert.equal(service.formatTextWithLinks('Обычный текст'), 'Обычный текст');
+});

@@ -437,6 +437,39 @@ class ModerationService {
     return true;
   }
 
+  formatTextWithLinks(text) {
+    const source = String(text ?? '');
+    if (!source) {
+      return '';
+    }
+
+    const escapeHtml = (value) => String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    let result = '';
+    let lastIndex = 0;
+    const pattern = /([^\n()]+?)\((https?:\/\/[^\s)]+|www\.[^\s)]+)\)/g;
+
+    for (const match of source.matchAll(pattern)) {
+      const [fullMatch, label, url] = match;
+      const startIndex = match.index || 0;
+      result += escapeHtml(source.slice(lastIndex, startIndex));
+      const normalizedLabel = String(label || '').trim();
+      const normalizedUrl = String(url || '').trim();
+      if (!normalizedLabel) {
+        result += escapeHtml(fullMatch);
+      } else {
+        result += `<a href="${escapeHtml(normalizedUrl)}">${escapeHtml(normalizedLabel)}</a>`;
+      }
+      lastIndex = startIndex + fullMatch.length;
+    }
+
+    result += escapeHtml(source.slice(lastIndex));
+    return result;
+  }
+
   getMenuText(chatId) {
     return String(this._getChat(chatId).menu.text || '');
   }

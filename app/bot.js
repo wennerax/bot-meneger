@@ -868,6 +868,7 @@ function createBot() {
     const keyboard = buttons.length ? { inline_keyboard: buttons
       .filter((row) => Array.isArray(row) && row.length)
       .map((row) => row.map((item) => ({ text: item.text, url: item.url }))) } : null;
+    const formattedText = moderationService.formatTextWithLinks(menuText);
     const replyOptions = { reply_to_message_id: ctx.message.message_id };
     if (keyboard) {
       replyOptions.reply_markup = keyboard;
@@ -877,7 +878,8 @@ function createBot() {
     try {
       if (menuMedia && menuMedia.type) {
         const mediaOptions = {
-          caption: menuText,
+          caption: formattedText,
+          parse_mode: 'HTML',
           reply_markup: replyOptions.reply_markup,
           reply_to_message_id: replyOptions.reply_to_message_id,
         };
@@ -904,7 +906,7 @@ function createBot() {
     }
 
     if (!sentMessage) {
-      sentMessage = await ctx.reply(menuText, replyOptions);
+      sentMessage = await ctx.reply(formattedText, { ...replyOptions, parse_mode: 'HTML' });
     }
 
     try {
