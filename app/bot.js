@@ -60,8 +60,11 @@ function isGroupMemberWithProfileChangePermission(member) {
   }
 
   const status = String(member.status || '').toLowerCase();
-  const canChangeInfo = Boolean(member.can_change_info);
-  return (status === 'creator' || status === 'administrator') && canChangeInfo;
+  if (status === 'creator') {
+    return true;
+  }
+
+  return status === 'administrator' && Boolean(member.can_change_info);
 }
 
 async function canManageGroupSettings(ctx, targetChatId) {
