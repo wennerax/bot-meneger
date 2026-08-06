@@ -193,7 +193,15 @@ test('menu buttons support row layout and persistence', () => {
 test('message text can render clickable link labels', () => {
   const service = new ModerationService();
 
-  assert.equal(service.formatTextWithLinks('Привет(https://example.com)'), '<a href="https://example.com">Привет</a>');
-  assert.equal(service.formatTextWithLinks('ИЯЙ(https://t.me/bred_ish)'), '<a href="https://t.me/bred_ish">ИЯЙ</a>');
-  assert.equal(service.formatTextWithLinks('Обычный текст'), 'Обычный текст');
+  const first = service.formatTextWithLinks('Привет(https://example.com)');
+  assert.equal(first.text, 'Привет');
+  assert.deepEqual(first.entities, [{ offset: 0, length: 6, type: 'text_link', url: 'https://example.com' }]);
+
+  const second = service.formatTextWithLinks('ИЯЙ(https://t.me/bred_ish)');
+  assert.equal(second.text, 'ИЯЙ');
+  assert.deepEqual(second.entities, [{ offset: 0, length: 3, type: 'text_link', url: 'https://t.me/bred_ish' }]);
+
+  const third = service.formatTextWithLinks('Обычный текст');
+  assert.equal(third.text, 'Обычный текст');
+  assert.deepEqual(third.entities, []);
 });

@@ -440,14 +440,10 @@ class ModerationService {
   formatTextWithLinks(text) {
     const source = String(text ?? '');
     if (!source) {
-      return '';
+      return { text: '', entities: [] };
     }
 
-    const escapeHtml = (value) => String(value)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-
+    const entities = [];
     let result = '';
     let lastIndex = 0;
     const pattern = /([^\n()]+?)\((https?:\/\/[^\s)]+|www\.[^\s)]+)\)/g;
@@ -455,19 +451,24 @@ class ModerationService {
     for (const match of source.matchAll(pattern)) {
       const [fullMatch, label, url] = match;
       const startIndex = match.index || 0;
-      result += escapeHtml(source.slice(lastIndex, startIndex));
+      result += source.slice(lastIndex, startIndex);
       const normalizedLabel = String(label || '').trim();
       const normalizedUrl = String(url || '').trim();
       if (!normalizedLabel) {
-        result += escapeHtml(fullMatch);
+        result += fullMatch;
       } else {
-        result += `<a href="${escapeHtml(normalizedUrl)}">${escapeHtml(normalizedLabel)}</a>`;
+        const urlValue = normalizedUrl.startsWith('http://') || normalizedUrl.startsWith('https://')
+          ? normalizedUrl
+          : `https://${normalizedUrl}`;
+        const offset = result.length;
+        result += normalizedLabel;
+        entities.push({ offset, length: normalizedLabel.length, type: 'text_link', url: urlValue });
       }
       lastIndex = startIndex + fullMatch.length;
     }
 
-    result += escapeHtml(source.slice(lastIndex));
-    return result;
+    result += source.slice(lastIndex);
+    return { text: result, entities };
   }
 
   getMenuText(chatId) {
