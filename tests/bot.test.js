@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, parseSettingsAction } = require('../app/bot');
+const { parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, parseSettingsAction, isGroupMemberWithProfileChangePermission } = require('../app/bot');
 const { buildAiRequestPayload } = require('../app/ai');
 
 test('parsePunishmentDetails extracts duration and reason', () => {
@@ -85,6 +85,13 @@ test('parseSettingsAction extracts the selected group and action type', () => {
   const parsed = parseSettingsAction('select:42');
 
   assert.deepEqual(parsed, { type: 'select', target: 'select', chatId: 42, section: '', value: '42' });
+});
+
+test('isGroupMemberWithProfileChangePermission accepts creators and admins with change-info rights', () => {
+  assert.equal(isGroupMemberWithProfileChangePermission({ status: 'creator', can_change_info: true }), true);
+  assert.equal(isGroupMemberWithProfileChangePermission({ status: 'administrator', can_change_info: true }), true);
+  assert.equal(isGroupMemberWithProfileChangePermission({ status: 'administrator', can_change_info: false }), false);
+  assert.equal(isGroupMemberWithProfileChangePermission({ status: 'member', can_change_info: true }), false);
 });
 
 test('detectForbiddenWord catches drugs and self-harm variants', () => {

@@ -49,6 +49,16 @@ function getGroupDisplayName(chatId, fallback = null) {
   return groupRecord?.title || fallback || String(id);
 }
 
+function isGroupMemberWithProfileChangePermission(member) {
+  if (!member || typeof member !== 'object') {
+    return false;
+  }
+
+  const status = String(member.status || '').toLowerCase();
+  const canChangeInfo = Boolean(member.can_change_info);
+  return (status === 'creator' || status === 'administrator') && canChangeInfo;
+}
+
 async function canManageGroupSettings(ctx, targetChatId) {
   const userId = Number(ctx.from?.id);
   const chatId = Number(targetChatId);
@@ -58,7 +68,7 @@ async function canManageGroupSettings(ctx, targetChatId) {
 
   try {
     const member = await ctx.telegram.getChatMember(chatId, userId);
-    return member?.status === 'administrator' && Boolean(member?.can_change_info);
+    return isGroupMemberWithProfileChangePermission(member);
   } catch (error) {
     return false;
   }
@@ -85,7 +95,7 @@ async function getManagedGroupsForUser(ctx) {
   if (ctx.chat?.id && ctx.chat?.type !== 'private') {
     try {
       const member = await ctx.telegram.getChatMember(ctx.chat.id, userId);
-      if (member?.status === 'administrator' && Boolean(member?.can_change_info)) {
+      if (isGroupMemberWithProfileChangePermission(member)) {
         addGroup(ctx.chat.id, ctx.chat.title || String(ctx.chat.id));
       }
     } catch (error) {
@@ -102,7 +112,7 @@ async function getManagedGroupsForUser(ctx) {
 
     try {
       const member = await ctx.telegram.getChatMember(chatId, userId);
-      if (member?.status === 'administrator' && Boolean(member?.can_change_info)) {
+      if (isGroupMemberWithProfileChangePermission(member)) {
         addGroup(chatId, group.title || String(chatId));
       }
     } catch (error) {
@@ -3300,6 +3310,7 @@ module.exports = {
   detectForbiddenWord,
   isLinkMessage,
   isAllowedLinkUrl,
+  isGroupMemberWithProfileChangePermission,
   startBot,
 };
 
