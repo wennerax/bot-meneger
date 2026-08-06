@@ -127,12 +127,6 @@ function matchesAllowedRule(rule, normalizedUrl) {
   return false;
 }
 
-const DEFAULT_ALLOWED_LINKS = readJsonList(path.join(__dirname, '..', 'data', 'allowed_links.json'), [
-  'vk.com', 'x.com', 'twitter.com',
-  'reddit.com', 'github.com', 'gitlab.com', 'stackoverflow.com', 'google.com', 'drive.google.com', 'gmail.com',
-  'yandex.ru', 'ya.ru', 'discord.com', 'discord.gg', 'steamcommunity.com', 'apple.com', 'microsoft.com'
-]);
-
 class ModerationService {
   constructor(filePath = null) {
     this.filePath = filePath || null;
@@ -152,14 +146,11 @@ class ModerationService {
         ? [...new Set(chat.banWords.map((item) => String(item).trim().toLowerCase()).filter(Boolean))]
         : [...DEFAULT_BAN_WORDS],
       allowedLinks: (() => {
-        const globalList = Array.isArray(DEFAULT_ALLOWED_LINKS)
-          ? DEFAULT_ALLOWED_LINKS.map((item) => String(item).trim().toLowerCase()).filter(Boolean)
-          : [];
         if (!Array.isArray(chat.allowedLinks)) {
-          return [...new Set(globalList)];
+          return [];
         }
         const chatList = chat.allowedLinks.map((item) => String(item).trim().toLowerCase()).filter(Boolean);
-        return [...new Set([...globalList, ...chatList])];
+        return [...new Set(chatList)];
       })(),
       spamProtectionEnabled: Boolean(chat.spamProtectionEnabled),
       linkProtectionEnabled: Boolean(chat.linkProtectionEnabled),

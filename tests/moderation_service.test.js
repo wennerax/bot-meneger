@@ -57,10 +57,17 @@ test('flood protection can be toggled per chat', () => {
   assert.equal(service.isFloodProtectionEnabled(100), false);
 });
 
+test('chat starts with no allowed links by default', () => {
+  const service = new ModerationService();
+
+  assert.deepEqual(service.getAllowedLinks(100), []);
+  assert.equal(service.isAllowedLink(100, 'https://t.me/wwhisbot?start=faq'), false);
+});
+
 test('allowed links accept only exact configured URLs', () => {
   const service = new ModerationService();
 
-  assert.equal(service.isAllowedLink(100, 'https://t.me/wwhisbot?start=faq'), true);
+  assert.equal(service.isAllowedLink(100, 'https://t.me/wwhisbot?start=faq'), false);
   assert.equal(service.isAllowedLink(100, 'https://t.me/wwhisbot?start=faq/extra'), false);
   assert.equal(service.isAllowedLink(100, 'https://example.com/shop'), false);
 
