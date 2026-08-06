@@ -321,9 +321,8 @@ class ModerationService {
     }
 
     const normalizedUrl = normalizedValue.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/#.*$/, '');
-    const [urlWithoutHash] = normalizedUrl.split('#');
-    const [urlWithoutQuery] = urlWithoutHash.split('?');
-    const targetHost = urlWithoutQuery.split('/')[0];
+    const [urlPath, urlQuery = ''] = normalizedUrl.split('?');
+    const urlHost = urlPath.split('/')[0];
 
     return this._getChat(chatId).allowedLinks.some((item) => {
       const rawItem = String(item || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/#.*$/, '');
@@ -331,21 +330,20 @@ class ModerationService {
         return false;
       }
 
-      const [itemWithoutHash] = rawItem.split('#');
-      const [itemWithoutQuery] = itemWithoutHash.split('?');
-      const allowPrefix = itemWithoutQuery.endsWith('/');
+      const [itemPath, itemQuery = ''] = rawItem.split('?');
+      const itemHost = itemPath.split('/')[0];
+      const itemEndsWithSlash = itemPath.endsWith('/');
 
-      if (urlWithoutQuery === itemWithoutQuery) {
+      if (normalizedUrl === rawItem) {
         return true;
       }
 
-      if (allowPrefix) {
-        return urlWithoutQuery.startsWith(itemWithoutQuery);
+      if (!itemPath.includes('/') && !itemQuery) {
+        return urlHost === itemHost || urlHost.endsWith(`.${itemHost}`);
       }
 
-      const itemHost = itemWithoutQuery.split('/')[0];
-      if (itemWithoutQuery === itemHost) {
-        return targetHost === itemHost || targetHost.endsWith(`.${itemHost}`);
+      if (itemEndsWithSlash && itemQuery === '') {
+        return normalizedUrl.startsWith(itemPath);
       }
 
       return false;
