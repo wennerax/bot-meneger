@@ -190,6 +190,15 @@ test('menu buttons support row layout and persistence', () => {
   assert.deepEqual(service.getMenuButtons(100), []);
 });
 
+test('banned words are detected when they are prefixed with extra characters', () => {
+  const service = new ModerationService();
+  service.addBanWord(100, 'нарко');
+  service.addBanWord(100, 'меф');
+
+  assert.equal(service.findBanWord(100, 'наркоывф'), 'нарко');
+  assert.equal(service.findBanWord(100, 'мефылзщ'), 'меф');
+});
+
 test('message text can render clickable link labels', () => {
   const service = new ModerationService();
 

@@ -1001,7 +1001,10 @@ function createBot() {
         '-антифлуд - выключить антифлуд',
         '+ссылки - включить антиссылки',
         '-ссылки - выключить антиссылки',
-        '/menu - открыть настройки меню для первых сообщений бота',
+        '/menu - открыть настройки первого сообщения бота',
+        '/menu + текст - настроить текст сообщения',
+        '/menu + кнопки - настроить кнопки и ряды',
+        '/menu + медиа - добавить фото/видео/документ в сообщение',
         '/warn, !предупреждение @юз - выдать предупреждение',
         '/warnings, !варны [@юз] - показать варны пользователя',
         '/unwarn, !снять предупреждение @юз - снять предупреждения',
@@ -2583,6 +2586,13 @@ function createBot() {
         await applyAutomaticMute(ctx, ctx.from.id, 24, 'Спам');
         return;
       }
+    }
+
+    const forbiddenWord = moderationService.findBanWord(ctx.chat.id, text);
+    if (isGroupChat(ctx) && forbiddenWord) {
+      await deleteMessageSafely(ctx, ctx.message.message_id);
+      await applyAutomaticMute(ctx, ctx.from.id, 24, `Запрещённое слово: ${forbiddenWord}`);
+      return;
     }
 
     if (isGroupChat(ctx) && moderationService.isLinkProtectionEnabled(ctx.chat.id) && isLinkMessage(text, (link) => moderationService.isAllowedLink(ctx.chat.id, link))) {
