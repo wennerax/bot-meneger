@@ -181,6 +181,16 @@ test('moderation settings persist across restarts', () => {
   assert.equal(second.findFilterResponse(100, 'ПРИВЕТ всем'), 'Привет!');
 });
 
+test('first bot comment can be enabled and disabled independently from the message text', () => {
+  const service = new ModerationService();
+
+  assert.equal(service.getMenuEnabled(100), true);
+  assert.equal(service.disableMenu(100), true);
+  assert.equal(service.getMenuEnabled(100), false);
+  assert.equal(service.enableMenu(100), true);
+  assert.equal(service.getMenuEnabled(100), true);
+});
+
 test('menu buttons support row layout and persistence', () => {
   const service = new ModerationService();
 

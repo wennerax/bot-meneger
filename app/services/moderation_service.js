@@ -164,6 +164,7 @@ class ModerationService {
         return [...new Set(chatList)];
       })(),
       menu: {
+        enabled: chat.menu && typeof chat.menu.enabled === 'boolean' ? chat.menu.enabled : true,
         text: (chat.menu && typeof chat.menu.text === 'string')
           ? chat.menu.text
           : 'Спасибо за публикацию! Настройте первое сообщение бота через /menu.',
@@ -538,6 +539,22 @@ class ModerationService {
 
     result += source.slice(lastIndex);
     return { text: result, entities };
+  }
+
+  getMenuEnabled(chatId) {
+    return Boolean(this._getChat(chatId).menu.enabled !== false);
+  }
+
+  enableMenu(chatId) {
+    this._getChat(chatId).menu.enabled = true;
+    this._save();
+    return true;
+  }
+
+  disableMenu(chatId) {
+    this._getChat(chatId).menu.enabled = false;
+    this._save();
+    return true;
   }
 
   getMenuText(chatId) {

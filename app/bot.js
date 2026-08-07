@@ -224,8 +224,11 @@ function buildSettingsAntiKeyboard(chatId) {
 }
 
 function buildSettingsFirstMessageKeyboard(chatId) {
+  const service = defaultModerationService;
+  const enabled = service.getMenuEnabled(chatId);
   return {
     inline_keyboard: [
+      [{ text: enabled ? 'Отключить первый комментарий' : 'Включить первый комментарий', callback_data: `settings:first_toggle:${chatId}` }],
       [{ text: 'Изменить текст', callback_data: `settings:first_text:${chatId}` }],
       [{ text: 'Настройки кнопок', callback_data: `settings:first_buttons:${chatId}` }],
       [{ text: 'Добавить медиа', callback_data: `settings:first_media:${chatId}` }],
@@ -236,7 +239,8 @@ function buildSettingsFirstMessageKeyboard(chatId) {
 }
 
 function buildSettingsFirstMessageButtonsKeyboard(chatId) {
-  const rowsData = moderationService.getMenuButtons(chatId);
+  const service = activeModerationService || defaultModerationService;
+  const rowsData = service.getMenuButtons(chatId);
   const rows = [];
 
   rowsData.forEach((row, rowIndex) => {
@@ -413,8 +417,12 @@ async function showSettingsFirstMessageMenu(ctx, chatId) {
     return;
   }
 
+  const service = activeModerationService || defaultModerationService;
   const text = [
     '📣 Настройка первого сообщения',
+    '',
+    `🔘 Состояние: ${service.getMenuEnabled(chatId) ? 'включено' : 'выключено'}`,
+    `📝 Текст: ${service.getMenuText(chatId) || 'не задан'}`,
     '',
     'Выберите, что хотите изменить:',
     '• изменить текст',
@@ -1475,6 +1483,10 @@ function createBot() {
 
   async function sendMenuReplyForChannelPost(ctx) {
     const chatId = ctx.chat.id;
+    if (!moderationService.getMenuEnabled(chatId)) {
+      return null;
+    }
+
     const menuText = moderationService.getMenuText(chatId);
     const buttons = moderationService.getMenuButtons(chatId);
     const menuMedia = moderationService.getMenuMedia(chatId);
@@ -2854,6 +2866,17 @@ function createBot() {
       return;
     }
 
+    if (parsed.target === 'first_toggle') {
+      const service = activeModerationService || defaultModerationService;
+      if (service.getMenuEnabled(chatId)) {
+        service.disableMenu(chatId);
+      } else {
+        service.enableMenu(chatId);
+      }
+      await showSettingsFirstMessageMenu(ctx, chatId);
+      return;
+    }
+
     if (parsed.target === 'first_text') {
       setPendingSettingsAction(ctx, { action: 'settings_message_text', groupId: chatId });
       await ctx.reply(parseSettingsPrompt('settings_message_text'));
@@ -2866,14 +2889,16 @@ function createBot() {
     }
 
     if (parsed.target === 'first_button_add_row') {
-      moderationService.addMenuRow(chatId);
+      const service = activeModerationService || defaultModerationService;
+      service.addMenuRow(chatId);
       await showSettingsFirstMessageButtonsMenu(ctx, chatId);
       return;
     }
 
     if (parsed.target === 'first_button_remove_row') {
+      const service = activeModerationService || defaultModerationService;
       const rowIndex = Number(parsed.value || 0);
-      if (Number.isFinite(rowIndex) && moderationService.removeMenuRow(chatId, rowIndex)) {
+      if (Number.isFinite(rowIndex) && service.removeMenuRow(chatId, rowIndex)) {
         await ctx.reply('✅ Ряд удалён.');
       } else {
         await ctx.reply('⚠️ Не удалось удалить ряд.');
@@ -2890,14 +2915,15 @@ function createBot() {
     }
 
     if (parsed.target === 'first_button_remove_last') {
-      const rows = moderationService.getMenuButtons(chatId);
+      const service = activeModerationService || defaultModerationService;
+      const rows = service.getMenuButtons(chatId);
       let removed = false;
       for (let rowIndex = rows.length - 1; rowIndex >= 0; rowIndex -= 1) {
         const row = rows[rowIndex] || [];
         if (!row.length) {
           continue;
         }
-        removed = moderationService.removeMenuButton(chatId, rowIndex, row.length - 1);
+        removed = service.removeMenuButton(chatId, rowIndex, row.length - 1);
         break;
       }
       if (removed) {
@@ -2910,8 +2936,9 @@ function createBot() {
     }
 
     if (parsed.target === 'first_button_row') {
+      const service = activeModerationService || defaultModerationService;
       const rowIndex = Number(parsed.value || 0);
-      const rows = moderationService.getMenuButtons(chatId);
+      const rows = service.getMenuButtons(chatId);
       const row = Array.isArray(rows[rowIndex]) ? rows[rowIndex] : [];
       const rowLabel = row.length ? row.map((item) => item.text).join(', ') : 'пусто';
       await ctx.editMessageText(`Ряд ${rowIndex + 1}: ${rowLabel}`, {
