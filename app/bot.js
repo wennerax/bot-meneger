@@ -65,7 +65,20 @@ function isGroupMemberWithProfileChangePermission(member) {
     return true;
   }
 
-  return status === 'administrator' && Boolean(member.can_change_info);
+  if (status !== 'administrator') {
+    return false;
+  }
+
+  return Boolean(
+    member.can_change_info
+    || member.can_delete_messages
+    || member.can_restrict_members
+    || member.can_promote_members
+    || member.can_manage_chat
+    || member.can_manage_topics
+    || member.can_pin_messages
+    || member.can_invite_users
+  );
 }
 
 async function canManageGroupSettings(ctx, targetChatId) {
