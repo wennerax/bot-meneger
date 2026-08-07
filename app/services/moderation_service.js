@@ -195,6 +195,7 @@ class ModerationService {
       floodProtectionEnabled: Boolean(chat.floodProtectionEnabled),
       captchaEnabled: chat.captchaEnabled === undefined ? true : Boolean(chat.captchaEnabled),
       captchaMode: chat.captchaMode || 'emoji',
+      captchaTimeoutMinutes: Number.isFinite(Number(chat.captchaTimeoutMinutes)) ? Number(chat.captchaTimeoutMinutes) : 3,
     };
   }
 
@@ -368,6 +369,21 @@ class ModerationService {
 
   getCaptchaMode(chatId) {
     return this._getChat(chatId).captchaMode || 'emoji';
+  }
+
+  setCaptchaTimeoutMinutes(chatId, minutes) {
+    const parsed = Number(minutes);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return false;
+    }
+    this._getChat(chatId).captchaTimeoutMinutes = parsed;
+    this._save();
+    return true;
+  }
+
+  getCaptchaTimeoutMinutes(chatId) {
+    const parsed = Number(this._getChat(chatId).captchaTimeoutMinutes);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 3;
   }
 
   addFilter(chatId, keyword, response) {

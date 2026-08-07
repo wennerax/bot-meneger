@@ -155,6 +155,10 @@ test('captcha settings can be enabled, disabled and switched by mode', () => {
   assert.equal(service.getCaptchaMode(100), 'emoji');
   service.setCaptchaMode(100, 'math');
   assert.equal(service.getCaptchaMode(100), 'math');
+
+  assert.equal(service.getCaptchaTimeoutMinutes(100), 3);
+  service.setCaptchaTimeoutMinutes(100, 10);
+  assert.equal(service.getCaptchaTimeoutMinutes(100), 10);
 });
 
 test('moderation settings persist across restarts', () => {

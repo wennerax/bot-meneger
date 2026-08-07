@@ -97,6 +97,15 @@ test('shouldStartCaptchaForChat respects the configured enable flag', () => {
   assert.equal(shouldStartCaptchaForChat(42, { isCaptchaEnabled: () => true }), true);
 });
 
+test('buildCaptchaChallenge uses a valid option set for word mode', () => {
+  const challenge = buildCaptchaChallenge('word', 'Алиса');
+
+  assert.match(challenge.prompt, /Алиса/);
+  assert.equal(challenge.correctOption, 'кот');
+  assert.equal(challenge.options.includes('кот'), true);
+  assert.equal(new Set(challenge.options).size, challenge.options.length);
+});
+
 test('parseSettingsAction extracts the selected group and action type', () => {
   const parsed = parseSettingsAction('select:42');
 

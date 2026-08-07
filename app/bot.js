@@ -254,10 +254,12 @@ function buildSettingsCaptchaKeyboard(chatId) {
   const moderationService = activeModerationService || defaultModerationService;
   const enabled = moderationService.isCaptchaEnabled(chatId);
   const mode = moderationService.getCaptchaMode(chatId);
+  const timeout = moderationService.getCaptchaTimeoutMinutes(chatId);
   return {
     inline_keyboard: [
       [{ text: enabled ? 'Отключить капчу' : 'Включить капчу', callback_data: `settings:toggle_captcha:${chatId}:${enabled ? 'off' : 'on'}` }],
       [{ text: 'Режимы', callback_data: `settings:captcha_modes:${chatId}` }],
+      [{ text: `Время: ${timeout} мин`, callback_data: `settings:captcha_timeout:${chatId}` }],
       [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
     ],
   };
@@ -280,6 +282,18 @@ function buildCaptchaModesKeyboard(chatId) {
   };
 }
 
+function buildCaptchaTimeoutKeyboard(chatId) {
+  const moderationService = activeModerationService || defaultModerationService;
+  const current = moderationService.getCaptchaTimeoutMinutes(chatId);
+  const options = [1, 2, 3, 5, 10, 15, 20, 30];
+  return {
+    inline_keyboard: [
+      ...options.map((minutes) => [{ text: `${minutes} мин${current === minutes ? ' ✅' : ''}`, callback_data: `settings:captcha_timeout_set:${chatId}:${minutes}` }]),
+      [{ text: 'Назад', callback_data: `settings:section:captcha:${chatId}` }],
+    ],
+  };
+}
+
 async function showSettingsCaptchaMenu(ctx, chatId) {
   if (!(await canManageGroupSettings(ctx, chatId))) {
     await ctx.reply('У вас нет прав менять настройки этой группы.');
@@ -289,7 +303,8 @@ async function showSettingsCaptchaMenu(ctx, chatId) {
   const moderationService = activeModerationService || defaultModerationService;
   const enabled = moderationService.isCaptchaEnabled(chatId);
   const mode = moderationService.getCaptchaMode(chatId);
-  const text = [
+const timeout = moderationService.getCaptchaTimeoutMinutes(chatId);
+    const text = [
     '🧠 Капча',
     '',
     'При активации капчи, когда пользователь входит в группу он не сможет отправлять сообщения, пока не подтвердит, что он не робот.',
@@ -298,6 +313,7 @@ async function showSettingsCaptchaMenu(ctx, chatId) {
     '',
     `🔐 Статус: ${enabled ? 'включена' : 'отключена'}`,
     `🗂 Режим: ${mode === 'math' ? 'Пример' : mode === 'color' ? 'Цвет' : mode === 'word' ? 'Слово' : 'Эмоджи'}`,
+    `⏱ Время прохождения: ${timeout} мин`,
   ].join('\n');
 
   await ctx.editMessageText(text, { reply_markup: buildSettingsCaptchaKeyboard(chatId) });
@@ -544,10 +560,13 @@ function buildCaptchaChallenge(mode = 'emoji', displayName = 'пользоват
 
   if (normalizedMode === 'word') {
     const prompt = 'Капча для пользователя ' + displayName + '. Выбери слово: кот';
+    const options = ['кот', 'дом', 'море', 'солнце'];
+    const shuffled = [...options].sort(() => Math.random() - 0.5);
+    const target = 'кот';
     return {
       prompt,
-      options: ['кот', 'дом', 'море', 'солнце'],
-      correctOption: 'кот',
+      options: shuffled,
+      correctOption: target,
       mode: normalizedMode,
     };
   }
@@ -810,6 +829,7 @@ function createBot() {
     const challenge = buildCaptchaChallenge(mode, displayName);
     const shuffledOptions = [...challenge.options, challenge.correctOption].sort(() => Math.random() - 0.5);
     const correctOptionId = shuffledOptions.indexOf(challenge.correctOption);
+    const timeoutMinutes = moderationService.getCaptchaTimeoutMinutes(chatId);
 
     let pollMessage;
     try {
@@ -820,7 +840,7 @@ function createBot() {
           type: 'quiz',
           correct_option_id: correctOptionId,
           is_anonymous: false,
-          open_period: 300,
+          open_period: timeoutMinutes * 60,
           disable_notification: true,
         }
       );
@@ -2654,6 +2674,18 @@ function createBot() {
     if (parsed.target === 'captcha_mode') {
       const selectedMode = parsed.value || '';
       moderationService.setCaptchaMode(chatId, selectedMode);
+      await showSettingsCaptchaMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'captcha_timeout') {
+      await ctx.editMessageText('Выберите время на прохождение капчи:', { reply_markup: buildCaptchaTimeoutKeyboard(chatId) });
+      return;
+    }
+
+    if (parsed.target === 'captcha_timeout_set') {
+      const minutes = Number(parsed.value || 0);
+      moderationService.setCaptchaTimeoutMinutes(chatId, minutes);
       await showSettingsCaptchaMenu(ctx, chatId);
       return;
     }
