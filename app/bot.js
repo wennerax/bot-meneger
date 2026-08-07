@@ -3684,11 +3684,14 @@ function createBot() {
       }
     }
 
-    const forbiddenWord = moderationService.findBanWord(ctx.chat.id, text);
-    if (isGroupChat(ctx) && forbiddenWord) {
-      await deleteMessageSafely(ctx, ctx.message.message_id);
-      await applyAutomaticMute(ctx, ctx.from.id, 24, `Запрещённое слово: ${forbiddenWord}`);
-      return;
+    const rulesEnabled = isGroupChat(ctx) && moderationService.isRulesEnabled(ctx.chat.id);
+    if (rulesEnabled) {
+      const forbiddenWord = moderationService.findBanWord(ctx.chat.id, text);
+      if (forbiddenWord) {
+        await deleteMessageSafely(ctx, ctx.message.message_id);
+        await applyAutomaticMute(ctx, ctx.from.id, 24, `Запрещённое слово: ${forbiddenWord}`);
+        return;
+      }
     }
 
     if (isGroupChat(ctx) && moderationService.isLinkProtectionEnabled(ctx.chat.id) && isLinkMessage(text, (link) => moderationService.isAllowedLink(ctx.chat.id, link))) {
@@ -3704,10 +3707,12 @@ function createBot() {
       return;
     }
 
-    const response = moderationService.findFilterResponse(ctx.chat.id, text);
-    if (response) {
-      ctx.reply(response);
-      return;
+    if (rulesEnabled) {
+      const response = moderationService.findFilterResponse(ctx.chat.id, text);
+      if (response) {
+        ctx.reply(response);
+        return;
+      }
     }
 
     if (isPrivateChat(ctx)) {

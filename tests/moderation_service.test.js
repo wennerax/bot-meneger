@@ -57,6 +57,18 @@ test('flood protection can be toggled per chat', () => {
   assert.equal(service.isFloodProtectionEnabled(100), false);
 });
 
+test('rules feature can be enabled and disabled per chat', () => {
+  const service = new ModerationService();
+
+  assert.equal(service.isRulesEnabled(100), true);
+
+  service.disableRules(100);
+  assert.equal(service.isRulesEnabled(100), false);
+
+  service.enableRules(100);
+  assert.equal(service.isRulesEnabled(100), true);
+});
+
 test('chat starts with no allowed links by default', () => {
   const service = new ModerationService();
 
@@ -169,6 +181,7 @@ test('moderation settings persist across restarts', () => {
   first.setRules(100, 'Будьте вежливы');
   first.setGreeting(100, 'Добро пожаловать');
   first.enableSpamProtection(100);
+  first.disableRules(100);
   first.addWarning(100, 7);
   first.addFilter(100, 'привет', 'Привет!');
 
@@ -177,6 +190,7 @@ test('moderation settings persist across restarts', () => {
   assert.equal(second.getRules(100), 'Будьте вежливы');
   assert.equal(second.getGreeting(100), 'Добро пожаловать');
   assert.equal(second.isSpamProtectionEnabled(100), true);
+  assert.equal(second.isRulesEnabled(100), false);
   assert.equal(second.getWarnings(100, 7), 1);
   assert.equal(second.findFilterResponse(100, 'ПРИВЕТ всем'), 'Привет!');
 });
