@@ -156,11 +156,12 @@ async function showSettingsGroupSelector(ctx) {
 function buildSettingsMainKeyboard(chatId) {
   return [
     [
+      { text: 'Капча', callback_data: `settings:section:captcha:${chatId}` },
       { text: 'Ссылки', callback_data: `settings:section:links:${chatId}` },
-      { text: 'Правила', callback_data: `settings:section:rules:${chatId}` },
     ],
     [
       { text: 'Анти(СФС)', callback_data: `settings:section:anti:${chatId}` },
+      { text: 'Правила', callback_data: `settings:section:rules:${chatId}` },
     ],
     [
       { text: 'Сообщение', callback_data: `settings:open_menu:${chatId}` },
@@ -244,6 +245,25 @@ async function showSettingsMainMenu(ctx, chatId) {
   } else {
     await ctx.reply(text, { reply_markup: replyMarkup });
   }
+}
+
+async function showSettingsCaptchaMenu(ctx, chatId) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  const text = [
+    '🧩 Настройки капчи',
+    '',
+    'Капча пока находится в разработке и будет доступна в следующем обновлении.',
+  ].join('\n');
+
+  await ctx.editMessageText(text, { reply_markup: {
+    inline_keyboard: [
+      [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
+    ],
+  } });
 }
 
 async function showSettingsLinksMenu(ctx, chatId) {
@@ -2494,7 +2514,9 @@ function createBot() {
     }
 
     if (parsed.target === 'section') {
-      if (parsed.section === 'links') {
+      if (parsed.section === 'captcha') {
+        await showSettingsCaptchaMenu(ctx, chatId);
+      } else if (parsed.section === 'links') {
         await showSettingsLinksMenu(ctx, chatId);
       } else if (parsed.section === 'anti') {
         await showSettingsAntiMenu(ctx, chatId);
@@ -2812,6 +2834,31 @@ function createBot() {
     listPunishmentsCommand(ctx, 'mute', args);
   });
 
+  bot.command(['menu'], async (ctx) => {
+    if (ctx.chat?.type === 'private') {
+      const managedGroups = await getManagedGroupsForUser(ctx);
+      if (!managedGroups.length) {
+        await ctx.reply('У вас нет групп, где вы можете менять настройки бота.');
+        return;
+      }
+
+      await showSettingsGroupSelector(ctx);
+      return;
+    }
+
+    const chatId = Number(ctx.chat?.id || 0);
+    if (!chatId) {
+      return;
+    }
+
+    if (!(await canManageGroupSettings(ctx, chatId))) {
+      await ctx.reply('У вас нет прав администратора группы с правом менять профиль группы.');
+      return;
+    }
+
+    await openSettingsForCurrentContext(ctx, chatId);
+  });
+
   bot.command(['allowed'], (ctx) => {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
@@ -2828,14 +2875,6 @@ function createBot() {
       message.push(item);
     }
     ctx.reply(message.join('\n'));
-  });
-
-  bot.command(['menu'], async (ctx) => {
-    await menuCommand(ctx);
-  });
-
-  bot.command(['gmenu'], async (ctx) => {
-    await menuCommand(ctx);
   });
 
   bot.command(['links', 'ссылки'], (ctx) => {
