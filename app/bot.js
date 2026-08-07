@@ -75,8 +75,31 @@ async function canManageGroupSettings(ctx, targetChatId) {
     return false;
   }
 
+  if (Number(ctx.chat?.owner_id) === userId) {
+    return true;
+  }
+
   try {
     const member = await ctx.telegram.getChatMember(chatId, userId);
+    if (isGroupMemberWithProfileChangePermission(member)) {
+      return true;
+    }
+  } catch (error) {
+    // ignore and fall back to administrator list
+  }
+
+  try {
+    const chat = await ctx.telegram.getChat(chatId);
+    if (Number(chat?.owner_id) === userId) {
+      return true;
+    }
+  } catch (error) {
+    // ignore and continue
+  }
+
+  try {
+    const administrators = await ctx.telegram.getChatAdministrators(chatId);
+    const member = administrators.find((entry) => Number(entry.user?.id) === userId);
     return isGroupMemberWithProfileChangePermission(member);
   } catch (error) {
     return false;
