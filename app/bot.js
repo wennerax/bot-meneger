@@ -2182,6 +2182,10 @@ function createBot() {
   }
 
   function rulesCommand(ctx) {
+    if (isGroupChat(ctx) && !moderationService.isRulesEnabled(ctx.chat.id)) {
+      ctx.reply('⚠️ Функция правил отключена в этом чате. Включите её через /menu.');
+      return;
+    }
     ctx.reply(moderationService.getRules(ctx.chat.id));
   }
 
@@ -3170,7 +3174,7 @@ function createBot() {
   });
 
   bot.command(['rules', 'правила'], (ctx) => {
-    ctx.reply(moderationService.getRules(ctx.chat.id));
+    rulesCommand(ctx);
   });
 
   bot.command(['hug', 'обнять'], async (ctx) => {
