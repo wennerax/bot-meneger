@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsFirstMessageKeyboard, parseSettingsAction, isGroupMemberWithProfileChangePermission, getGroupDisplayName, buildCaptchaChallenge, shouldStartCaptchaForChat } = require('../app/bot');
+const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsFirstMessageKeyboard, parseSettingsAction, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, shouldStartCaptchaForChat } = require('../app/bot');
 const { buildAiRequestPayload } = require('../app/ai');
 
 test('parsePunishmentDetails extracts duration and reason', () => {
@@ -129,6 +129,13 @@ test('isGroupMemberWithProfileChangePermission accepts creators and admins with 
   assert.equal(isGroupMemberWithProfileChangePermission({ status: 'administrator', can_change_info: false, can_delete_messages: true }), false);
   assert.equal(isGroupMemberWithProfileChangePermission({ status: 'administrator', can_change_info: false }), false);
   assert.equal(isGroupMemberWithProfileChangePermission({ status: 'member', can_change_info: true }), false);
+});
+
+test('isGroupMemberWithManageRights accepts group administrators with standard admin rights', () => {
+  assert.equal(isGroupMemberWithManageRights({ status: 'creator' }), true);
+  assert.equal(isGroupMemberWithManageRights({ status: 'administrator', can_change_info: true }), true);
+  assert.equal(isGroupMemberWithManageRights({ status: 'administrator', can_change_info: false, can_delete_messages: true }), true);
+  assert.equal(isGroupMemberWithManageRights({ status: 'member' }), false);
 });
 
 test('getGroupDisplayName resolves the active bot database group title', () => {
