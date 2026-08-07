@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, parseSettingsAction, isGroupMemberWithProfileChangePermission, getGroupDisplayName } = require('../app/bot');
+const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, parseSettingsAction, isGroupMemberWithProfileChangePermission, getGroupDisplayName, buildCaptchaChallenge } = require('../app/bot');
 const { buildAiRequestPayload } = require('../app/ai');
 
 test('parsePunishmentDetails extracts duration and reason', () => {
@@ -82,6 +82,14 @@ test('buildSettingsMainKeyboard returns a grouped layout with section buttons', 
   assert.equal(keyboard[1][0].callback_data, 'settings:section:anti:42');
   assert.equal(keyboard[1][1].callback_data, 'settings:section:rules:42');
   assert.equal(keyboard[2][0].callback_data, 'settings:open_menu:42');
+});
+
+test('buildCaptchaChallenge returns a math-mode prompt with a deterministic answer', () => {
+  const challenge = buildCaptchaChallenge('math', 'Алиса');
+
+  assert.equal(challenge.prompt, 'Капча для пользователя Алиса. Реши пример: 2 + 3');
+  assert.deepEqual(challenge.options, ['5', '4', '6', '7']);
+  assert.equal(challenge.correctOption, '5');
 });
 
 test('parseSettingsAction extracts the selected group and action type', () => {

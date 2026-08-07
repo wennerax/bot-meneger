@@ -203,7 +203,10 @@ function buildSettingsAntiKeyboard(chatId) {
 function buildSettingsFirstMessageKeyboard(chatId) {
   return {
     inline_keyboard: [
-      [{ text: 'Открыть редактор первого сообщения', callback_data: `settings:open_menu:${chatId}` }],
+      [{ text: 'Изменить текст', callback_data: `settings:first_text:${chatId}` }],
+      [{ text: 'Настройки кнопок', callback_data: `settings:first_buttons:${chatId}` }],
+      [{ text: 'Добавить медиа', callback_data: `settings:first_media:${chatId}` }],
+      [{ text: 'Удалить медиа', callback_data: `settings:first_remove_media:${chatId}` }],
       [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
     ],
   };
@@ -247,23 +250,57 @@ async function showSettingsMainMenu(ctx, chatId) {
   }
 }
 
+function buildSettingsCaptchaKeyboard(chatId) {
+  const moderationService = activeModerationService || defaultModerationService;
+  const enabled = moderationService.isCaptchaEnabled(chatId);
+  const mode = moderationService.getCaptchaMode(chatId);
+  return {
+    inline_keyboard: [
+      [{ text: enabled ? 'Отключить капчу' : 'Включить капчу', callback_data: `settings:toggle_captcha:${chatId}:${enabled ? 'off' : 'on'}` }],
+      [{ text: 'Режимы', callback_data: `settings:captcha_modes:${chatId}` }],
+      [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
+    ],
+  };
+}
+
+function buildCaptchaModesKeyboard(chatId) {
+  const moderationService = activeModerationService || defaultModerationService;
+  const currentMode = moderationService.getCaptchaMode(chatId);
+  const modes = [
+    { key: 'emoji', label: 'Эмоджи' },
+    { key: 'math', label: 'Пример' },
+    { key: 'color', label: 'Цвет' },
+    { key: 'word', label: 'Слово' },
+  ];
+  return {
+    inline_keyboard: [
+      ...modes.map((mode) => [{ text: `${mode.label}${currentMode === mode.key ? ' ✅' : ''}`, callback_data: `settings:captcha_mode:${chatId}:${mode.key}` }]),
+      [{ text: 'Назад', callback_data: `settings:section:captcha:${chatId}` }],
+    ],
+  };
+}
+
 async function showSettingsCaptchaMenu(ctx, chatId) {
   if (!(await canManageGroupSettings(ctx, chatId))) {
     await ctx.reply('У вас нет прав менять настройки этой группы.');
     return;
   }
 
+  const moderationService = activeModerationService || defaultModerationService;
+  const enabled = moderationService.isCaptchaEnabled(chatId);
+  const mode = moderationService.getCaptchaMode(chatId);
   const text = [
-    '🧩 Настройки капчи',
+    '🧠 Капча',
     '',
-    'Капча пока находится в разработке и будет доступна в следующем обновлении.',
+    'При активации капчи, когда пользователь входит в группу он не сможет отправлять сообщения, пока не подтвердит, что он не робот.',
+    '',
+    '🕑 Вы также можете принять решение о наказании ниже для тех, кто не решит капчу в течение отведённого времени и следует ли удалять системное сообщение в случае неудачи.',
+    '',
+    `🔐 Статус: ${enabled ? 'включена' : 'отключена'}`,
+    `🗂 Режим: ${mode === 'math' ? 'Пример' : mode === 'color' ? 'Цвет' : mode === 'word' ? 'Слово' : 'Эмоджи'}`,
   ].join('\n');
 
-  await ctx.editMessageText(text, { reply_markup: {
-    inline_keyboard: [
-      [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
-    ],
-  } });
+  await ctx.editMessageText(text, { reply_markup: buildSettingsCaptchaKeyboard(chatId) });
 }
 
 async function showSettingsLinksMenu(ctx, chatId) {
@@ -313,7 +350,14 @@ async function showSettingsFirstMessageMenu(ctx, chatId) {
     return;
   }
 
-  const text = `📣 Настройка первого сообщения для группы:\n${getGroupDisplayName(chatId, String(chatId))}`;
+  const text = [
+    '📣 Настройка первого сообщения',
+    '',
+    'Выберите, что хотите изменить:',
+    '• изменить текст',
+    '• настроить кнопки и ряды',
+    '• добавить или удалить медиа',
+  ].join('\n');
   await ctx.editMessageText(text, { reply_markup: buildSettingsFirstMessageKeyboard(chatId) });
 }
 
@@ -476,12 +520,52 @@ function buildModerationAlertMessage(userLabel, durationHours, reason) {
   return `⚠️ Пользователь ${userLabel} замучен на ${durationLabel} по причине: ${reason}.`;
 }
 
-function getCaptchaEmojiSet() {
+function buildCaptchaChallenge(mode = 'emoji', displayName = 'пользователь') {
+  const normalizedMode = String(mode || 'emoji').trim().toLowerCase();
+  if (normalizedMode === 'math') {
+    const prompt = 'Капча для пользователя ' + displayName + '. Реши пример: 2 + 3';
+    return {
+      prompt,
+      options: ['5', '4', '6', '7'],
+      correctOption: '5',
+      mode: normalizedMode,
+    };
+  }
+
+  if (normalizedMode === 'color') {
+    const prompt = 'Капча для пользователя ' + displayName + '. Выбери цвет: синий';
+    return {
+      prompt,
+      options: ['синий', 'красный', 'зелёный', 'жёлтый'],
+      correctOption: 'синий',
+      mode: normalizedMode,
+    };
+  }
+
+  if (normalizedMode === 'word') {
+    const prompt = 'Капча для пользователя ' + displayName + '. Выбери слово: кот';
+    return {
+      prompt,
+      options: ['кот', 'дом', 'море', 'солнце'],
+      correctOption: 'кот',
+      mode: normalizedMode,
+    };
+  }
+
   const emojis = ['🐶', '🐱', '🦊', '🐼'];
   const target = emojis[Math.floor(Math.random() * emojis.length)];
   const options = emojis.filter((emoji) => emoji !== target);
   const shuffled = [...options].sort(() => Math.random() - 0.5);
-  return { target, options: shuffled };
+  return {
+    prompt: 'Капча для пользователя ' + displayName + '. Выбери ' + target,
+    options: shuffled,
+    correctOption: target,
+    mode: normalizedMode,
+  };
+}
+
+function getCaptchaEmojiSet() {
+  return buildCaptchaChallenge('emoji');
 }
 
 function buildFunReply(kind) {
@@ -711,14 +795,16 @@ function createBot() {
     const chatId = Number(ctx.chat.id);
     const memberUser = joinUser || ctx.chatMember?.new_chat_member?.user || ctx.update?.chat_member?.new_chat_member?.user || null;
     const displayName = memberUser?.first_name || memberUser?.username || 'пользователь';
-    const { target, options } = getCaptchaEmojiSet();
-    const shuffledOptions = [...options, target].sort(() => Math.random() - 0.5);
-    const correctOptionId = shuffledOptions.indexOf(target);
+    const moderationService = activeModerationService || defaultModerationService;
+    const mode = moderationService.isCaptchaEnabled(chatId) ? moderationService.getCaptchaMode(chatId) : 'emoji';
+    const challenge = buildCaptchaChallenge(mode, displayName);
+    const shuffledOptions = [...challenge.options, challenge.correctOption].sort(() => Math.random() - 0.5);
+    const correctOptionId = shuffledOptions.indexOf(challenge.correctOption);
 
     let pollMessage;
     try {
       pollMessage = await ctx.telegram.sendPoll(chatId,
-        `Капча для пользователя ${displayName}. Выбери ${target}`,
+        challenge.prompt,
         shuffledOptions,
         {
           type: 'quiz',
@@ -2540,6 +2626,28 @@ function createBot() {
       return;
     }
 
+    if (parsed.target === 'toggle_captcha') {
+      if (parsed.value === 'on') {
+        moderationService.enableCaptcha(chatId);
+      } else {
+        moderationService.disableCaptcha(chatId);
+      }
+      await showSettingsCaptchaMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'captcha_modes') {
+      await ctx.editMessageText('Выберите режим капчи:', { reply_markup: buildCaptchaModesKeyboard(chatId) });
+      return;
+    }
+
+    if (parsed.target === 'captcha_mode') {
+      const selectedMode = parsed.value || '';
+      moderationService.setCaptchaMode(chatId, selectedMode);
+      await showSettingsCaptchaMenu(ctx, chatId);
+      return;
+    }
+
     if (parsed.target === 'toggle_spam') {
       if (parsed.value === 'on') {
         moderationService.enableSpamProtection(chatId);
@@ -2577,9 +2685,27 @@ function createBot() {
       return;
     }
 
-    if (parsed.target === 'open_menu') {
+    if (parsed.target === 'open_menu' || parsed.target === 'first_text') {
       setPendingSettingsAction(ctx, { action: 'settings_message_text', groupId: chatId });
       await ctx.reply(parseSettingsPrompt('settings_message_text'));
+      return;
+    }
+
+    if (parsed.target === 'first_buttons') {
+      await ctx.editMessageText(formatMenuOverview(chatId), { reply_markup: buildMenuButtonsKeyboard(chatId) });
+      return;
+    }
+
+    if (parsed.target === 'first_media') {
+      setPendingSettingsAction(ctx, { action: 'settings_message_media', groupId: chatId });
+      await ctx.reply('Отправьте медиа для первого сообщения.');
+      return;
+    }
+
+    if (parsed.target === 'first_remove_media') {
+      moderationService.setMenuMedia(chatId, null);
+      await ctx.reply('✅ Медиа удалено.');
+      await showSettingsFirstMessageMenu(ctx, chatId);
       return;
     }
 
@@ -3332,6 +3458,7 @@ function startBot() {
 
 module.exports = {
   createBot,
+  buildCaptchaChallenge,
   getCaptchaEmojiSet,
   parsePunishmentDetails,
   buildPunishmentNotification,

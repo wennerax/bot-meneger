@@ -143,6 +143,20 @@ test('username-like allowed links are exempted for all matching variations', () 
   assert.equal(service.isAllowedLink(100, 'https://t.me/other_bot?start=vk_musix_bot'), true);
 });
 
+test('captcha settings can be enabled, disabled and switched by mode', () => {
+  const service = new ModerationService();
+
+  assert.equal(service.isCaptchaEnabled(100), true);
+  service.disableCaptcha(100);
+  assert.equal(service.isCaptchaEnabled(100), false);
+  service.enableCaptcha(100);
+  assert.equal(service.isCaptchaEnabled(100), true);
+
+  assert.equal(service.getCaptchaMode(100), 'emoji');
+  service.setCaptchaMode(100, 'math');
+  assert.equal(service.getCaptchaMode(100), 'math');
+});
+
 test('moderation settings persist across restarts', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-meneger-'));
   const filePath = path.join(dir, 'bot.json');

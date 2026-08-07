@@ -193,6 +193,8 @@ class ModerationService {
       spamProtectionEnabled: Boolean(chat.spamProtectionEnabled),
       linkProtectionEnabled: Boolean(chat.linkProtectionEnabled),
       floodProtectionEnabled: Boolean(chat.floodProtectionEnabled),
+      captchaEnabled: chat.captchaEnabled === undefined ? true : Boolean(chat.captchaEnabled),
+      captchaMode: chat.captchaMode || 'emoji',
     };
   }
 
@@ -337,6 +339,35 @@ class ModerationService {
 
   isFloodProtectionEnabled(chatId) {
     return Boolean(this._getChat(chatId).floodProtectionEnabled);
+  }
+
+  enableCaptcha(chatId) {
+    this._getChat(chatId).captchaEnabled = true;
+    this._save();
+  }
+
+  disableCaptcha(chatId) {
+    this._getChat(chatId).captchaEnabled = false;
+    this._save();
+  }
+
+  isCaptchaEnabled(chatId) {
+    return this._getChat(chatId).captchaEnabled !== false;
+  }
+
+  setCaptchaMode(chatId, mode) {
+    const normalized = String(mode || '').trim().toLowerCase();
+    const allowedModes = ['emoji', 'math', 'color', 'word'];
+    if (!allowedModes.includes(normalized)) {
+      return false;
+    }
+    this._getChat(chatId).captchaMode = normalized;
+    this._save();
+    return true;
+  }
+
+  getCaptchaMode(chatId) {
+    return this._getChat(chatId).captchaMode || 'emoji';
   }
 
   addFilter(chatId, keyword, response) {
