@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, parseSettingsAction, isGroupMemberWithProfileChangePermission, getGroupDisplayName, buildCaptchaChallenge } = require('../app/bot');
+const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, parseSettingsAction, isGroupMemberWithProfileChangePermission, getGroupDisplayName, buildCaptchaChallenge, shouldStartCaptchaForChat } = require('../app/bot');
 const { buildAiRequestPayload } = require('../app/ai');
 
 test('parsePunishmentDetails extracts duration and reason', () => {
@@ -90,6 +90,11 @@ test('buildCaptchaChallenge returns a math-mode prompt with a deterministic answ
   assert.equal(challenge.prompt, 'Капча для пользователя Алиса. Реши пример: 2 + 3');
   assert.deepEqual(challenge.options, ['5', '4', '6', '7']);
   assert.equal(challenge.correctOption, '5');
+});
+
+test('shouldStartCaptchaForChat respects the configured enable flag', () => {
+  assert.equal(shouldStartCaptchaForChat(42, { isCaptchaEnabled: () => false }), false);
+  assert.equal(shouldStartCaptchaForChat(42, { isCaptchaEnabled: () => true }), true);
 });
 
 test('parseSettingsAction extracts the selected group and action type', () => {

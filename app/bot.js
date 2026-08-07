@@ -564,6 +564,13 @@ function buildCaptchaChallenge(mode = 'emoji', displayName = 'пользоват
   };
 }
 
+function shouldStartCaptchaForChat(chatId, moderationService) {
+  if (!chatId || !moderationService || typeof moderationService.isCaptchaEnabled !== 'function') {
+    return false;
+  }
+  return moderationService.isCaptchaEnabled(chatId);
+}
+
 function getCaptchaEmojiSet() {
   return buildCaptchaChallenge('emoji');
 }
@@ -796,7 +803,10 @@ function createBot() {
     const memberUser = joinUser || ctx.chatMember?.new_chat_member?.user || ctx.update?.chat_member?.new_chat_member?.user || null;
     const displayName = memberUser?.first_name || memberUser?.username || 'пользователь';
     const moderationService = activeModerationService || defaultModerationService;
-    const mode = moderationService.isCaptchaEnabled(chatId) ? moderationService.getCaptchaMode(chatId) : 'emoji';
+    if (!shouldStartCaptchaForChat(chatId, moderationService)) {
+      return;
+    }
+    const mode = moderationService.getCaptchaMode(chatId);
     const challenge = buildCaptchaChallenge(mode, displayName);
     const shuffledOptions = [...challenge.options, challenge.correctOption].sort(() => Math.random() - 0.5);
     const correctOptionId = shuffledOptions.indexOf(challenge.correctOption);
@@ -3459,6 +3469,7 @@ function startBot() {
 module.exports = {
   createBot,
   buildCaptchaChallenge,
+  shouldStartCaptchaForChat,
   getCaptchaEmojiSet,
   parsePunishmentDetails,
   buildPunishmentNotification,
