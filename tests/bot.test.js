@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, parseSettingsAction, isGroupMemberWithProfileChangePermission, getGroupDisplayName, buildCaptchaChallenge, shouldStartCaptchaForChat } = require('../app/bot');
+const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsFirstMessageKeyboard, parseSettingsAction, isGroupMemberWithProfileChangePermission, getGroupDisplayName, buildCaptchaChallenge, shouldStartCaptchaForChat } = require('../app/bot');
 const { buildAiRequestPayload } = require('../app/ai');
 
 test('parsePunishmentDetails extracts duration and reason', () => {
@@ -82,6 +82,17 @@ test('buildSettingsMainKeyboard returns a grouped layout with section buttons', 
   assert.equal(keyboard[1][0].callback_data, 'settings:section:anti:42');
   assert.equal(keyboard[1][1].callback_data, 'settings:section:rules:42');
   assert.equal(keyboard[2][0].callback_data, 'settings:open_menu:42');
+});
+
+test('buildSettingsFirstMessageKeyboard exposes text, buttons and media controls', () => {
+  const keyboard = buildSettingsFirstMessageKeyboard(42);
+  const labels = keyboard.inline_keyboard.flat().map((button) => button.text);
+
+  assert.ok(labels.includes('Изменить текст'));
+  assert.ok(labels.includes('Настройки кнопок'));
+  assert.ok(labels.includes('Добавить медиа'));
+  assert.ok(labels.includes('Удалить медиа'));
+  assert.ok(labels.includes('Назад'));
 });
 
 test('buildCaptchaChallenge returns a math-mode prompt with a deterministic answer', () => {

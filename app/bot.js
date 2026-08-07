@@ -235,6 +235,30 @@ function buildSettingsFirstMessageKeyboard(chatId) {
   };
 }
 
+function buildSettingsFirstMessageButtonsKeyboard(chatId) {
+  const rowsData = moderationService.getMenuButtons(chatId);
+  const rows = [];
+
+  rowsData.forEach((row, rowIndex) => {
+    const rowLabel = row.length ? row.map((item) => item.text).join(', ') : 'пусто';
+    rows.push([
+      { text: `Ряд ${rowIndex + 1}: ${rowLabel}`, callback_data: `settings:first_button_row:${chatId}:${rowIndex}` },
+    ]);
+    rows.push([
+      { text: 'Добавить кнопку', callback_data: `settings:first_button_add:${chatId}:${rowIndex}` },
+      { text: 'Удалить ряд', callback_data: `settings:first_button_remove_row:${chatId}:${rowIndex}` },
+    ]);
+  });
+
+  rows.push([
+    { text: 'Добавить ряд', callback_data: `settings:first_button_add_row:${chatId}` },
+    { text: 'Удалить кнопку', callback_data: `settings:first_button_remove_last:${chatId}` },
+  ]);
+  rows.push([{ text: 'Назад', callback_data: `settings:open_menu:${chatId}` }]);
+
+  return { inline_keyboard: rows };
+}
+
 function buildSettingsRulesKeyboard(chatId) {
   return {
     inline_keyboard: [
@@ -394,10 +418,27 @@ async function showSettingsFirstMessageMenu(ctx, chatId) {
     '',
     'Выберите, что хотите изменить:',
     '• изменить текст',
-    '• настроить кнопки и ряды',
+    '• настроить кнопки, ряды и ссылки',
     '• добавить или удалить медиа',
   ].join('\n');
   await ctx.editMessageText(text, { reply_markup: buildSettingsFirstMessageKeyboard(chatId) });
+}
+
+async function showSettingsFirstMessageButtonsMenu(ctx, chatId) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  const text = [
+    '🧩 Настройка кнопок первого сообщения',
+    '',
+    'Доступно:',
+    '• добавить или удалить ряд',
+    '• добавить или убрать кнопку',
+    '• задать текст кнопки и ссылку, куда она ведёт',
+  ].join('\n');
+  await ctx.editMessageText(text, { reply_markup: buildSettingsFirstMessageButtonsKeyboard(chatId) });
 }
 
 async function showSettingsRulesMenu(ctx, chatId) {
@@ -1574,6 +1615,21 @@ function createBot() {
       return true;
     }
 
+    if (pending.action === 'settings_message_button_add' && ctx.message.text) {
+      const [title, url] = String(ctx.message.text).split('|').map((part) => part.trim());
+      if (!title || !url) {
+        await ctx.reply('⚠️ Неверный формат. Отправьте в формате: Название | URL');
+        return true;
+      }
+      if (!moderationService.addMenuButton(groupId, title, url, typeof pending.rowIndex === 'number' ? pending.rowIndex : null)) {
+        await ctx.reply('⚠️ Не удалось добавить кнопку.');
+      } else {
+        await ctx.reply(`✅ Кнопка добавлена: ${title} → ${url}`);
+      }
+      clearPendingSettingsAction(ctx);
+      return true;
+    }
+
     if (pending.action === 'settings_message_media') {
       const payload = getMediaPayloadFromMessage(ctx);
       if (!payload) {
@@ -2657,7 +2713,17 @@ function createBot() {
 
   bot.action(/^settings:(.+)$/, async (ctx) => {
     const action = ctx.match[1];
-    const parsed = parseSettingsAction(action);
+    const callbackData = ctx.callbackQuery?.data || `settings:${action}`;
+    const directTimeoutOpen = callbackData.match(/^settings:captcha_timeout:(\d+)$/);
+    const directTimeoutSet = callbackData.match(/^settings:captcha_timeout_set:(\d+):(\d+)$/);
+
+    let parsed = parseSettingsAction(action);
+    if (directTimeoutOpen) {
+      parsed = { ...parsed, target: 'captcha_timeout', chatId: Number(directTimeoutOpen[1]) || 0 };
+    } else if (directTimeoutSet) {
+      parsed = { ...parsed, target: 'captcha_timeout_set', chatId: Number(directTimeoutSet[1]) || 0, value: directTimeoutSet[2] };
+    }
+
     const chatId = Number(parsed.chatId || ctx.chat?.id || 0);
     if (!chatId) {
       await ctx.answerCbQuery();
@@ -2783,14 +2849,80 @@ function createBot() {
       return;
     }
 
-    if (parsed.target === 'open_menu' || parsed.target === 'first_text') {
+    if (parsed.target === 'open_menu') {
+      await showSettingsFirstMessageMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'first_text') {
       setPendingSettingsAction(ctx, { action: 'settings_message_text', groupId: chatId });
       await ctx.reply(parseSettingsPrompt('settings_message_text'));
       return;
     }
 
     if (parsed.target === 'first_buttons') {
-      await ctx.editMessageText(formatMenuOverview(chatId), { reply_markup: buildMenuButtonsKeyboard(chatId) });
+      await showSettingsFirstMessageButtonsMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'first_button_add_row') {
+      moderationService.addMenuRow(chatId);
+      await showSettingsFirstMessageButtonsMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'first_button_remove_row') {
+      const rowIndex = Number(parsed.value || 0);
+      if (Number.isFinite(rowIndex) && moderationService.removeMenuRow(chatId, rowIndex)) {
+        await ctx.reply('✅ Ряд удалён.');
+      } else {
+        await ctx.reply('⚠️ Не удалось удалить ряд.');
+      }
+      await showSettingsFirstMessageButtonsMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'first_button_add') {
+      const rowIndex = Number(parsed.value || 0);
+      setPendingSettingsAction(ctx, { action: 'settings_message_button_add', groupId: chatId, rowIndex });
+      await ctx.reply('Отправьте новую кнопку в формате: Название | URL');
+      return;
+    }
+
+    if (parsed.target === 'first_button_remove_last') {
+      const rows = moderationService.getMenuButtons(chatId);
+      let removed = false;
+      for (let rowIndex = rows.length - 1; rowIndex >= 0; rowIndex -= 1) {
+        const row = rows[rowIndex] || [];
+        if (!row.length) {
+          continue;
+        }
+        removed = moderationService.removeMenuButton(chatId, rowIndex, row.length - 1);
+        break;
+      }
+      if (removed) {
+        await ctx.reply('✅ Кнопка удалена.');
+      } else {
+        await ctx.reply('⚠️ В этом сообщении нет кнопок для удаления.');
+      }
+      await showSettingsFirstMessageButtonsMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'first_button_row') {
+      const rowIndex = Number(parsed.value || 0);
+      const rows = moderationService.getMenuButtons(chatId);
+      const row = Array.isArray(rows[rowIndex]) ? rows[rowIndex] : [];
+      const rowLabel = row.length ? row.map((item) => item.text).join(', ') : 'пусто';
+      await ctx.editMessageText(`Ряд ${rowIndex + 1}: ${rowLabel}`, {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'Добавить кнопку в ряд', callback_data: `settings:first_button_add:${chatId}:${rowIndex}` }],
+            [{ text: 'Удалить ряд', callback_data: `settings:first_button_remove_row:${chatId}:${rowIndex}` }],
+            [{ text: 'Назад', callback_data: `settings:first_buttons:${chatId}` }],
+          ],
+        },
+      });
       return;
     }
 
@@ -3567,6 +3699,7 @@ module.exports = {
   buildPunishmentListMessage,
   buildBotAdminListMessage,
   buildSettingsMainKeyboard,
+  buildSettingsFirstMessageKeyboard,
   parseSettingsAction,
   detectForbiddenWord,
   isLinkMessage,
