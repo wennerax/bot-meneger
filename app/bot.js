@@ -502,16 +502,16 @@ function parseSettingsAction(action) {
 
   let parsedChatId = 0;
   let value = '';
-  const numericCandidates = normalizedParts.filter((part) => /^\d+$/.test(part));
+  const numericCandidates = normalizedParts.filter((part) => /^-?\d+$/.test(part));
 
   if (numericCandidates.length > 0) {
     const maybeChatId = Number(numericCandidates[0]);
-    const maybeValue = Number(numericCandidates[numericCandidates.length - 1]);
     parsedChatId = Number.isFinite(maybeChatId) ? maybeChatId : 0;
-    value = String(normalizedParts[normalizedParts.length - 1] || '');
   }
 
-  if (actionType === 'captcha_timeout_set' && normalizedParts.length >= 3) {
+  if (actionType === 'select') {
+    value = String(normalizedParts[normalizedParts.length - 1] || '');
+  } else if (actionType === 'captcha_timeout_set' && normalizedParts.length >= 3) {
     parsedChatId = Number(normalizedParts[1]) || 0;
     value = normalizedParts[2] || '';
   } else if (actionType === 'captcha_mode' && normalizedParts.length >= 3) {
@@ -2739,8 +2739,8 @@ function createBot() {
   bot.action(/^settings:(.+)$/, async (ctx) => {
     const action = ctx.match[1];
     const callbackData = ctx.callbackQuery?.data || `settings:${action}`;
-    const directTimeoutOpen = callbackData.match(/^settings:captcha_timeout:(\d+)$/);
-    const directTimeoutSet = callbackData.match(/^settings:captcha_timeout_set:(\d+):(\d+)$/);
+    const directTimeoutOpen = callbackData.match(/^settings:captcha_timeout:(-?\d+)$/);
+    const directTimeoutSet = callbackData.match(/^settings:captcha_timeout_set:(-?\d+):(-?\d+)$/);
 
     let parsed = parseSettingsAction(action);
     if (directTimeoutOpen) {

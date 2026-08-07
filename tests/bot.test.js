@@ -123,6 +123,12 @@ test('parseSettingsAction extracts the selected group and action type', () => {
   assert.deepEqual(parsed, { type: 'select', target: 'select', chatId: 42, section: '', value: '42' });
 });
 
+test('parseSettingsAction supports negative Telegram group IDs', () => {
+  const parsed = parseSettingsAction('first_buttons:-1001234567890');
+
+  assert.deepEqual(parsed, { type: 'first_buttons', target: 'first_buttons', chatId: -1001234567890, section: '', value: '' });
+});
+
 test('isGroupMemberWithProfileChangePermission accepts creators and admins with change-info rights', () => {
   assert.equal(isGroupMemberWithProfileChangePermission({ status: 'creator', can_change_info: true }), true);
   assert.equal(isGroupMemberWithProfileChangePermission({ status: 'administrator', can_change_info: true }), true);
