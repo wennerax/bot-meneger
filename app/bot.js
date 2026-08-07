@@ -1121,7 +1121,10 @@ function createBot() {
     return {
       inline_keyboard: [
         [
+          { text: 'Первое Соо', callback_data: 'menu:first_message' },
           { text: 'Текст сообщения', callback_data: 'menu:text' },
+        ],
+        [
           { text: 'Настройки кнопок', callback_data: 'menu:buttons' },
           { text: 'Добавить медиа', callback_data: 'menu:media' },
         ],
@@ -2608,7 +2611,7 @@ function createBot() {
       return;
     }
 
-    if (action === 'overview') {
+    if (action === 'overview' || action === 'first_message') {
       await ctx.editMessageText(formatMenuOverview(chatId), { reply_markup: getMenuKeyboard(chatId) });
       return;
     }
@@ -2832,30 +2835,7 @@ function createBot() {
   });
 
   bot.command(['gmenu'], async (ctx) => {
-    ensureGroup(ctx);
-
-    if (ctx.chat?.type === 'private') {
-      const managedGroups = await getManagedGroupsForUser(ctx);
-      if (!managedGroups.length) {
-        await ctx.reply('У вас нет групп, где вы можете менять настройки бота.');
-        return;
-      }
-      await showSettingsGroupSelector(ctx);
-      return;
-    }
-
-    const chatId = Number(ctx.chat?.id || 0);
-    if (!chatId) {
-      return;
-    }
-
-    const canUse = await canManageGroupSettings(ctx, chatId);
-    if (!canUse) {
-      await ctx.reply('У вас нет прав администратора группы с правом менять профиль группы.');
-      return;
-    }
-
-    await openSettingsForCurrentContext(ctx, chatId);
+    await menuCommand(ctx);
   });
 
   bot.command(['links', 'ссылки'], (ctx) => {
