@@ -242,3 +242,14 @@ test('message text can render clickable link labels', () => {
   assert.equal(third.text, 'Обычный текст');
   assert.deepEqual(third.entities, []);
 });
+
+test('premium emoji entities are preserved when formatting text', () => {
+  const service = new ModerationService();
+  const payload = service.formatTextWithLinks({
+    text: '🙂 привет',
+    entities: [{ type: 'custom_emoji', offset: 0, length: 2, custom_emoji_id: 'premium_1' }],
+  });
+
+  assert.equal(payload.text, '🙂 привет');
+  assert.deepEqual(payload.entities, [{ type: 'custom_emoji', offset: 0, length: 2, custom_emoji_id: 'premium_1' }]);
+});

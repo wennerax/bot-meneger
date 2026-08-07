@@ -277,8 +277,11 @@ function buildSettingsFirstMessageButtonsKeyboard(chatId) {
 }
 
 function buildSettingsRulesKeyboard(chatId) {
+  const service = activeModerationService || defaultModerationService;
+  const enabled = service.isRulesEnabled(chatId);
   return {
     inline_keyboard: [
+      [{ text: enabled ? 'Отключить правила' : 'Включить правила', callback_data: `settings:rules_toggle:${chatId}` }],
       [{ text: 'Изменить правила', callback_data: `settings:rules_edit:${chatId}` }],
       [{ text: 'Добавить правила', callback_data: `settings:rules_add:${chatId}` }],
       [{ text: 'Удалить правила', callback_data: `settings:rules_clear:${chatId}` }],
@@ -482,7 +485,12 @@ async function showSettingsRulesMenu(ctx, chatId) {
 
   const service = activeModerationService || defaultModerationService;
   const rules = service.getRules(chatId);
-  const text = buildSettingsRulesMenuText(chatId, rules);
+  const enabled = service.isRulesEnabled(chatId);
+  const text = [
+    buildSettingsRulesMenuText(chatId, rules),
+    '',
+    `Статус функции правил: ${enabled ? 'включена' : 'отключена'}`,
+  ].join('\n');
 
   await ctx.editMessageText(text, { reply_markup: buildSettingsRulesKeyboard(chatId) });
 }
@@ -1505,19 +1513,28 @@ function createBot() {
     return null;
   }
 
+  function buildTextPayloadFromMessage(ctx) {
+    const message = ctx.message || {};
+    const text = typeof message.text === 'string' ? message.text : '';
+    const entities = Array.isArray(message.entities)
+      ? message.entities.filter((entity) => entity && typeof entity === 'object').map((entity) => ({ ...entity }))
+      : [];
+    return { text, entities };
+  }
+
   async function sendMenuReplyForChannelPost(ctx) {
     const chatId = ctx.chat.id;
     if (!moderationService.getMenuEnabled(chatId)) {
       return null;
     }
 
-    const menuText = moderationService.getMenuText(chatId);
+    const menuTextPayload = moderationService.getMenuTextPayload(chatId);
     const buttons = moderationService.getMenuButtons(chatId);
     const menuMedia = moderationService.getMenuMedia(chatId);
     const keyboard = buttons.length ? { inline_keyboard: buttons
       .filter((row) => Array.isArray(row) && row.length)
       .map((row) => row.map((item) => ({ text: item.text, url: item.url }))) } : null;
-    const { text: formattedText, entities } = moderationService.formatTextWithLinks(menuText);
+    const { text: formattedText, entities } = moderationService.formatTextWithLinks(menuTextPayload);
     const replyOptions = { reply_to_message_id: ctx.message.message_id };
     if (entities.length) {
       replyOptions.entities = entities;
@@ -1608,7 +1625,7 @@ function createBot() {
     }
 
     if (pending.action === 'settings_rules_set' && ctx.message.text) {
-      moderationService.setRules(groupId, String(ctx.message.text).trim());
+      moderationService.setRules(groupId, buildTextPayloadFromMessage(ctx));
       await ctx.reply('✅ Правила группы обновлены.');
       clearPendingSettingsAction(ctx);
       return true;
@@ -1645,7 +1662,7 @@ function createBot() {
     }
 
     if (pending.action === 'settings_message_text' && ctx.message.text) {
-      moderationService.setMenuText(groupId, String(ctx.message.text).trim());
+      moderationService.setMenuText(groupId, buildTextPayloadFromMessage(ctx));
       await ctx.reply('✅ Текст первого сообщения обновлён.');
       clearPendingSettingsAction(ctx);
       return true;
@@ -1688,7 +1705,7 @@ function createBot() {
     }
 
     if (pending.action === 'text' && ctx.message.text) {
-      moderationService.setMenuText(ctx.chat.id, ctx.message.text.trim());
+      moderationService.setMenuText(ctx.chat.id, buildTextPayloadFromMessage(ctx));
       await ctx.reply('✅ Текст первого сообщения обновлён.');
       clearPendingMenuAction(ctx);
       return true;
@@ -2811,6 +2828,17 @@ function createBot() {
         moderationService.disableLinkProtection(chatId);
       }
       await showSettingsLinksMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'rules_toggle') {
+      const service = activeModerationService || defaultModerationService;
+      if (service.isRulesEnabled(chatId)) {
+        service.disableRules(chatId);
+      } else {
+        service.enableRules(chatId);
+      }
+      await showSettingsRulesMenu(ctx, chatId);
       return;
     }
 

@@ -102,6 +102,18 @@ function parseAllowedLinkRule(item) {
   }
 }
 
+function normalizeTextPayload(value) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const text = typeof value.text === 'string' ? value.text : String(value.text ?? '');
+    const entities = Array.isArray(value.entities)
+      ? value.entities.filter((entity) => entity && typeof entity === 'object').map((entity) => ({ ...entity }))
+      : [];
+    return { text, entities };
+  }
+
+  return { text: String(value ?? ''), entities: [] };
+}
+
 function matchesAllowedRule(rule, normalizedUrl) {
   if (!rule || !rule.value || !normalizedUrl) {
     return false;
@@ -147,8 +159,8 @@ class ModerationService {
 
   _normalizeChat(chat = {}) {
     return {
-      rules: chat.rules ?? 'Правила чата пока не настроены.',
-      greeting: chat.greeting ?? 'Добро пожаловать в чат! Ознакомьтесь с правилами через /rules.',
+      rules: normalizeTextPayload(chat.rules ?? 'Правила чата пока не настроены.'),
+      greeting: normalizeTextPayload(chat.greeting ?? 'Добро пожаловать в чат! Ознакомьтесь с правилами через /rules.'),
       warnings: chat.warnings && typeof chat.warnings === 'object'
         ? Object.fromEntries(Object.entries(chat.warnings).map(([key, value]) => [String(key), Number(value)]))
         : {},
@@ -165,9 +177,9 @@ class ModerationService {
       })(),
       menu: {
         enabled: chat.menu && typeof chat.menu.enabled === 'boolean' ? chat.menu.enabled : true,
-        text: (chat.menu && typeof chat.menu.text === 'string')
+        text: normalizeTextPayload((chat.menu && typeof chat.menu.text !== 'undefined')
           ? chat.menu.text
-          : 'Спасибо за публикацию! Настройте первое сообщение бота через /menu.',
+          : 'Спасибо за публикацию! Настройте первое сообщение бота через /menu.'),
         buttons: (() => {
           const rawButtons = chat.menu?.buttons;
           if (!Array.isArray(rawButtons)) {
@@ -194,6 +206,7 @@ class ModerationService {
       spamProtectionEnabled: Boolean(chat.spamProtectionEnabled),
       linkProtectionEnabled: Boolean(chat.linkProtectionEnabled),
       floodProtectionEnabled: Boolean(chat.floodProtectionEnabled),
+      rulesEnabled: chat.rulesEnabled === undefined ? true : Boolean(chat.rulesEnabled),
       captchaEnabled: chat.captchaEnabled === undefined ? true : Boolean(chat.captchaEnabled),
       captchaMode: chat.captchaMode || 'emoji',
       captchaTimeoutMinutes: Number.isFinite(Number(chat.captchaTimeoutMinutes)) ? Number(chat.captchaTimeoutMinutes) : 3,
@@ -262,20 +275,28 @@ class ModerationService {
   }
 
   getRules(chatId) {
-    return this._getChat(chatId).rules;
+    return normalizeTextPayload(this._getChat(chatId).rules).text;
+  }
+
+  getRulesPayload(chatId) {
+    return normalizeTextPayload(this._getChat(chatId).rules);
   }
 
   setRules(chatId, rules) {
-    this._getChat(chatId).rules = rules;
+    this._getChat(chatId).rules = normalizeTextPayload(rules);
     this._save();
   }
 
   getGreeting(chatId) {
-    return this._getChat(chatId).greeting;
+    return normalizeTextPayload(this._getChat(chatId).greeting).text;
+  }
+
+  getGreetingPayload(chatId) {
+    return normalizeTextPayload(this._getChat(chatId).greeting);
   }
 
   setGreeting(chatId, greeting) {
-    this._getChat(chatId).greeting = greeting;
+    this._getChat(chatId).greeting = normalizeTextPayload(greeting);
     this._save();
   }
 
@@ -341,6 +362,20 @@ class ModerationService {
 
   isFloodProtectionEnabled(chatId) {
     return Boolean(this._getChat(chatId).floodProtectionEnabled);
+  }
+
+  enableRules(chatId) {
+    this._getChat(chatId).rulesEnabled = true;
+    this._save();
+  }
+
+  disableRules(chatId) {
+    this._getChat(chatId).rulesEnabled = false;
+    this._save();
+  }
+
+  isRulesEnabled(chatId) {
+    return this._getChat(chatId).rulesEnabled !== false;
   }
 
   enableCaptcha(chatId) {
@@ -497,6 +532,12 @@ class ModerationService {
   }
 
   formatTextWithLinks(text) {
+    if (text && typeof text === 'object' && !Array.isArray(text)) {
+      const source = String(text.text ?? '');
+      const entities = Array.isArray(text.entities) ? text.entities.map((entity) => ({ ...entity })) : [];
+      return { text: source, entities };
+    }
+
     const source = String(text ?? '');
     if (!source) {
       return { text: '', entities: [] };
@@ -558,11 +599,15 @@ class ModerationService {
   }
 
   getMenuText(chatId) {
-    return String(this._getChat(chatId).menu.text || '');
+    return normalizeTextPayload(this._getChat(chatId).menu.text).text;
+  }
+
+  getMenuTextPayload(chatId) {
+    return normalizeTextPayload(this._getChat(chatId).menu.text);
   }
 
   setMenuText(chatId, text) {
-    this._getChat(chatId).menu.text = String(text || '');
+    this._getChat(chatId).menu.text = normalizeTextPayload(text);
     this._save();
     return true;
   }
