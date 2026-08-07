@@ -115,7 +115,7 @@ test('parseSettingsAction extracts the selected group and action type', () => {
 test('isGroupMemberWithProfileChangePermission accepts creators and admins with change-info rights', () => {
   assert.equal(isGroupMemberWithProfileChangePermission({ status: 'creator', can_change_info: true }), true);
   assert.equal(isGroupMemberWithProfileChangePermission({ status: 'administrator', can_change_info: true }), true);
-  assert.equal(isGroupMemberWithProfileChangePermission({ status: 'administrator', can_change_info: false, can_delete_messages: true }), true);
+  assert.equal(isGroupMemberWithProfileChangePermission({ status: 'administrator', can_change_info: false, can_delete_messages: true }), false);
   assert.equal(isGroupMemberWithProfileChangePermission({ status: 'administrator', can_change_info: false }), false);
   assert.equal(isGroupMemberWithProfileChangePermission({ status: 'member', can_change_info: true }), false);
 });

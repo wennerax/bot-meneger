@@ -65,20 +65,7 @@ function isGroupMemberWithProfileChangePermission(member) {
     return true;
   }
 
-  if (status !== 'administrator') {
-    return false;
-  }
-
-  return Boolean(
-    member.can_change_info
-    || member.can_delete_messages
-    || member.can_restrict_members
-    || member.can_promote_members
-    || member.can_manage_chat
-    || member.can_manage_topics
-    || member.can_pin_messages
-    || member.can_invite_users
-  );
+  return status === 'administrator' && Boolean(member.can_change_info);
 }
 
 async function canManageGroupSettings(ctx, targetChatId) {
@@ -1603,7 +1590,13 @@ function createBot() {
       return;
     }
 
-    await ctx.reply(formatMenuOverview(ctx.chat.id), { reply_markup: getMenuKeyboard(ctx.chat.id) });
+    const chatId = Number(ctx.chat?.id || 0);
+    if (!chatId || !(await canManageGroupSettings(ctx, chatId))) {
+      await ctx.reply('У вас нет прав менять настройки этой группы.');
+      return;
+    }
+
+    await ctx.reply(formatMenuOverview(chatId), { reply_markup: getMenuKeyboard(chatId) });
   }
 
   function getHelpPages() {
