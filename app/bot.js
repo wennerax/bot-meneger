@@ -436,15 +436,42 @@ function parseSettingsAction(action) {
   const isPrefixed = parts[0] === 'settings' && parts.length > 1;
   const normalizedParts = isPrefixed ? parts.slice(1) : parts;
   const actionType = normalizedParts[0] || '';
-  const numericPart = normalizedParts.find((part) => /^\d+$/.test(part));
-  const parsedChatId = Number(numericPart || 0);
   const target = actionType === 'select' ? 'select' : actionType;
+
+  let parsedChatId = 0;
+  let value = '';
+  const numericCandidates = normalizedParts.filter((part) => /^\d+$/.test(part));
+
+  if (numericCandidates.length > 0) {
+    const maybeChatId = Number(numericCandidates[0]);
+    const maybeValue = Number(numericCandidates[numericCandidates.length - 1]);
+    parsedChatId = Number.isFinite(maybeChatId) ? maybeChatId : 0;
+    value = String(normalizedParts[normalizedParts.length - 1] || '');
+  }
+
+  if (actionType === 'captcha_timeout_set' && normalizedParts.length >= 3) {
+    parsedChatId = Number(normalizedParts[1]) || 0;
+    value = normalizedParts[2] || '';
+  } else if (actionType === 'captcha_mode' && normalizedParts.length >= 3) {
+    parsedChatId = Number(normalizedParts[1]) || 0;
+    value = normalizedParts[2] || '';
+  } else if (actionType === 'toggle_captcha' && normalizedParts.length >= 3) {
+    parsedChatId = Number(normalizedParts[1]) || 0;
+    value = normalizedParts[2] || '';
+  } else if (actionType === 'captcha_modes' && normalizedParts.length >= 2) {
+    parsedChatId = Number(normalizedParts[1]) || 0;
+    value = '';
+  } else if (actionType === 'captcha_timeout' && normalizedParts.length >= 2) {
+    parsedChatId = Number(normalizedParts[1]) || 0;
+    value = '';
+  }
+
   return {
     type: actionType,
     target,
     chatId: parsedChatId,
     section: actionType === 'section' ? normalizedParts[1] || '' : '',
-    value: normalizedParts[normalizedParts.length - 1] || '',
+    value,
   };
 }
 
