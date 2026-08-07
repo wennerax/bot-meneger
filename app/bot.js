@@ -287,6 +287,18 @@ function buildSettingsRulesKeyboard(chatId) {
   };
 }
 
+function buildSettingsRulesMenuText(chatId, rulesText = '') {
+  const rules = String(rulesText || '').trim();
+  return [
+    '📜 Настройки правил группы',
+    '',
+    'Текущие правила:',
+    rules || 'Пока не заданы.',
+    '',
+    'Выберите действие:',
+  ].join('\n');
+}
+
 function buildSettingsBanwordsKeyboard(chatId) {
   return {
     inline_keyboard: [
@@ -468,11 +480,8 @@ async function showSettingsRulesMenu(ctx, chatId) {
     return;
   }
 
-  const text = [
-    '📜 Настройки правил группы',
-    '',
-    'Выберите действие:',
-  ].join('\n');
+  const rules = moderationService.getRules(chatId);
+  const text = buildSettingsRulesMenuText(chatId, rules);
 
   await ctx.editMessageText(text, { reply_markup: buildSettingsRulesKeyboard(chatId) });
 }
@@ -3740,6 +3749,7 @@ module.exports = {
   buildBotAdminListMessage,
   buildSettingsMainKeyboard,
   buildSettingsFirstMessageKeyboard,
+  buildSettingsRulesMenuText,
   parseSettingsAction,
   detectForbiddenWord,
   isLinkMessage,

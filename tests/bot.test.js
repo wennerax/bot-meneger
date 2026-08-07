@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsFirstMessageKeyboard, parseSettingsAction, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, shouldStartCaptchaForChat } = require('../app/bot');
+const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, parseSettingsAction, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, shouldStartCaptchaForChat } = require('../app/bot');
 const { buildAiRequestPayload } = require('../app/ai');
 
 test('parsePunishmentDetails extracts duration and reason', () => {
@@ -115,6 +115,14 @@ test('buildCaptchaChallenge uses a valid option set for word mode', () => {
   assert.equal(challenge.correctOption, 'кот');
   assert.equal(challenge.options.includes('кот'), true);
   assert.equal(new Set(challenge.options).size, challenge.options.length);
+});
+
+test('buildSettingsRulesMenuText includes the current rules text', () => {
+  const text = buildSettingsRulesMenuText(42, 'Соблюдайте уважение в чате');
+
+  assert.match(text, /Настройки правил группы/);
+  assert.match(text, /Текущие правила:/);
+  assert.match(text, /Соблюдайте уважение в чате/);
 });
 
 test('parseSettingsAction extracts the selected group and action type', () => {
