@@ -480,7 +480,8 @@ async function showSettingsRulesMenu(ctx, chatId) {
     return;
   }
 
-  const rules = moderationService.getRules(chatId);
+  const service = activeModerationService || defaultModerationService;
+  const rules = service.getRules(chatId);
   const text = buildSettingsRulesMenuText(chatId, rules);
 
   await ctx.editMessageText(text, { reply_markup: buildSettingsRulesKeyboard(chatId) });
@@ -492,7 +493,8 @@ async function showSettingsBanwordsMenu(ctx, chatId) {
     return;
   }
 
-  const words = moderationService.getBanWords(chatId);
+  const service = activeModerationService || defaultModerationService;
+  const words = service.getBanWords(chatId);
   const text = [
     '🚫 Запрещённые слова',
     '',
