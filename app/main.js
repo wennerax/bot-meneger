@@ -67,12 +67,27 @@ function main() {
         miniAppServer.listen(port, () => {
           console.log(`Mini app server listening on http://localhost:${port}`);
           console.log(`Mini app permanent URL: ${miniAppUrl}`);
+          saveMiniAppUrlToFile(miniAppUrl);
         });
       } catch (error) {
         console.warn('Mini app server startup failed:', error?.message || error);
       }
     }
   })();
+}
+
+const fs = require('node:fs');
+const path = require('node:path');
+
+function saveMiniAppUrlToFile(url) {
+  try {
+    const filePath = path.join(__dirname, '..', 'data', 'miniapp_url.txt');
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, String(url || '').trim(), 'utf8');
+    console.log(`Mini app URL saved to ${filePath}`);
+  } catch (error) {
+    console.warn('Failed to save mini app URL to file:', error?.message || error);
+  }
 }
 
 if (require.main === module) {
