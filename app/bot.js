@@ -1850,6 +1850,60 @@ function createBot() {
       return true;
     }
 
+    if (pending.action === 'admin_report_write') {
+      const reportId = String(pending.reportId || '');
+      const report = adminReports.get(reportId);
+      if (!report) {
+        await ctx.reply('⚠️ Жалоба не найдена или уже обработана.');
+        clearPendingSettingsAction(ctx);
+        return true;
+      }
+
+      const text = (ctx.message && (ctx.message.text || '')).trim();
+      if (!text) {
+        await ctx.reply('⚠️ Пустой отчёт не отправлен. Напишите текст отчёта.');
+        return true;
+      }
+
+      const acceptor = report.acceptedBy || { id: ctx.from.id, username: ctx.from.username, first_name: ctx.from.first_name };
+      const finalText = formatAdminReportText(report, acceptor) + '\n\n📝 Отчёт модератора:\n' + text;
+
+      // update all notification messages
+      try {
+        if (Array.isArray(report.notifications)) {
+          for (const note of report.notifications) {
+            try {
+              await ctx.telegram.editMessageText(note.chatId, note.messageId, null, finalText);
+            } catch (err) {
+              // ignore per-message errors
+            }
+          }
+        }
+      } catch (err) {
+        // ignore
+      }
+
+      // delete moderator's message containing the report
+      try {
+        if (ctx.message && ctx.message.message_id) {
+          await ctx.deleteMessage(ctx.message.message_id);
+        }
+      } catch (err) {
+        // ignore deletion errors
+      }
+
+      // remove stored report
+      adminReports.delete(reportId);
+      clearPendingSettingsAction(ctx);
+      // optionally confirm in the admin chat
+      try {
+        await ctx.reply('✅ Отчёт добавлен в уведомление.');
+      } catch (err) {
+        // ignore
+      }
+      return true;
+    }
+
     return false;
   }
 
@@ -3283,14 +3337,43 @@ function createBot() {
       username: ctx.from.username,
       first_name: ctx.from.first_name,
     };
-    const acceptedText = formatAdminReportText(report, acceptor);
-    adminReports.delete(reportId);
 
+    // mark as accepted but keep the report until moderator provides a written report
+    report.acceptedBy = acceptor;
+    report.acceptedAt = Date.now();
+    report.status = 'accepted';
+
+    const acceptedText = formatAdminReportText(report, acceptor) + '\n\n✍️ Модератор, пожалуйста, напишите отчёт по этой жалобе.';
+
+    // edit the message where the moderator clicked to remove buttons
     try {
-      await ctx.editMessageText(acceptedText, { reply_markup: buildAdminReportKeyboard(report) });
+      await ctx.editMessageText(acceptedText);
     } catch (error) {
-      // message may be old or edited, ignore
+      // ignore
     }
+
+    // edit any other notification messages (origin/admin group) to remove buttons and show accepted text
+    try {
+      if (Array.isArray(report.notifications)) {
+        for (const note of report.notifications) {
+          try {
+            // skip editing the message in the same chat if it's the one we already edited
+            if (note.chatId === ctx.chat.id && note.messageId === ctx.callbackQuery?.message?.message_id) {
+              continue;
+            }
+            await ctx.telegram.editMessageText(note.chatId, note.messageId, null, acceptedText);
+          } catch (err) {
+            // ignore per-message errors
+          }
+        }
+      }
+    } catch (err) {
+      // ignore
+    }
+
+    // set pending action so the moderator can write the report text; scope to moderator user in current chat
+    setPendingSettingsAction(ctx, { action: 'admin_report_write', reportId, groupId: ctx.chat.id });
+    await ctx.reply('Напишите краткий отчёт по жалобе. После отправки ваше сообщение будет удалено и включено в уведомление.');
     return;
   });
 
@@ -3774,17 +3857,29 @@ function createBot() {
           messageId: reply.message_id,
         },
       };
+      // store report and message IDs for notifications
+      report.notifications = [];
       adminReports.set(reportId, report);
 
-      await ctx.reply(formatAdminReportText(report), { reply_markup: buildAdminReportKeyboard(report) });
+      try {
+        const originMsg = await ctx.reply(formatAdminReportText(report), { reply_markup: buildAdminReportKeyboard(report) });
+        if (originMsg && originMsg.message_id) {
+          report.notifications.push({ chatId: ctx.chat.id, messageId: originMsg.message_id, origin: true });
+        }
+      } catch (error) {
+        console.error('Failed to post admin report in origin chat:', error?.message || error);
+      }
 
       const moderationService = activeModerationService || defaultModerationService;
       const shouldNotifyAdmins = moderationService.getAdminNotifyAdmins(ctx.chat.id);
-      if (shouldNotifyAdmins && Number.isFinite(ADMIN_NOTIFICATION_GROUP_ID) && ADMIN_NOTIFICATION_GROUP_ID !== 0) {
+      if (shouldNotifyAdmins && Number.isFinite(ADMIN_NOTIFICATION_GROUP_ID) && ADMIN_NOTIFICATION_GROUP_ID !== 0 && ADMIN_NOTIFICATION_GROUP_ID !== ctx.chat.id) {
         try {
-          await ctx.telegram.sendMessage(ADMIN_NOTIFICATION_GROUP_ID, formatAdminReportText(report), { reply_markup: buildAdminReportKeyboard(report) });
+          const adminMsg = await ctx.telegram.sendMessage(ADMIN_NOTIFICATION_GROUP_ID, formatAdminReportText(report), { reply_markup: buildAdminReportKeyboard(report) });
+          if (adminMsg && adminMsg.message_id) {
+            report.notifications.push({ chatId: ADMIN_NOTIFICATION_GROUP_ID, messageId: adminMsg.message_id, origin: false });
+          }
         } catch (error) {
-          console.error('Failed to send admin notification to admin group:', error);
+          console.error('Failed to send admin notification to admin group:', error?.message || error);
         }
       }
       return;
