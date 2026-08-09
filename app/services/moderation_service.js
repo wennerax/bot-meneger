@@ -220,6 +220,10 @@ class ModerationService {
         deleteOnProcess: Boolean(chat.adminNotify?.deleteOnProcess),
         deleteInStaffGroup: Boolean(chat.adminNotify?.deleteInStaffGroup),
       },
+      hideAnonymous: {
+        enabled: Boolean(chat.hideAnonymous?.enabled),
+        deleteMessages: Boolean(chat.hideAnonymous?.deleteMessages),
+      },
     };
   }
 
@@ -815,6 +819,34 @@ class ModerationService {
       const rule = parseAllowedLinkRule(item);
       return matchesAllowedRule(rule, normalizedUrl);
     });
+  }
+
+  isHideAnonymousEnabled(chatId) {
+    return Boolean(this._getChat(chatId).hideAnonymous.enabled);
+  }
+
+  enableHideAnonymous(chatId) {
+    this._getChat(chatId).hideAnonymous.enabled = true;
+    this._save();
+  }
+
+  disableHideAnonymous(chatId) {
+    this._getChat(chatId).hideAnonymous.enabled = false;
+    this._save();
+  }
+
+  shouldDeleteAnonymousMessages(chatId) {
+    return Boolean(this._getChat(chatId).hideAnonymous.deleteMessages);
+  }
+
+  enableDeleteAnonymousMessages(chatId) {
+    this._getChat(chatId).hideAnonymous.deleteMessages = true;
+    this._save();
+  }
+
+  disableDeleteAnonymousMessages(chatId) {
+    this._getChat(chatId).hideAnonymous.deleteMessages = false;
+    this._save();
   }
 }
 

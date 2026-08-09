@@ -255,6 +255,9 @@ function buildSettingsMainKeyboard(chatId) {
       { text: 'Первый Коммент', callback_data: `settings:open_menu:${chatId}` },
       { text: '@admin', callback_data: `settings:section:admin:${chatId}` },
     ],
+    [
+      { text: '🚫 Скрытые пользователи', callback_data: `settings:section:anonymous:${chatId}` },
+    ],
   ];
 }
 
@@ -449,6 +452,47 @@ function buildSettingsAdminMenuText() {
     '',
     'Уведомление получит:',
   ].join('\n');
+}
+
+function buildSettingsAnonymousMenuText() {
+  return [
+    '🚫 Скрытые пользователи',
+    '',
+    'Через это меню вы можете установить наказание для пользователей, которые пишут в группу, маскируясь под канал.',
+    '',
+    'Telegram позволяет каждому пользователю писать в группу, скрывая своё сообщение.',
+    '',
+    'Это позволит модератору правильно определить, что пишет это сообщение и является ли он администратором: эта блокировка будет применяться ко всем, кто пишет через канал.',
+    '',
+    'Если этот параметр включен, пользователь, пишущий в группу через канал, будет способен отправлять сообщения, которые удаляются автоматически в зависимости от настроек.',
+  ].join('\n');
+}
+
+function buildSettingsAnonymousKeyboard(chatId) {
+  const service = activeModerationService || defaultModerationService;
+  const enabled = service.isHideAnonymousEnabled(chatId);
+  const deleteMessages = service.shouldDeleteAnonymousMessages(chatId);
+
+  return {
+    inline_keyboard: [
+      [
+        { text: enabled ? '✅ Включено' : '❌ Отключено', callback_data: `settings:toggle_anonymous:${chatId}` },
+      ],
+      [
+        { text: `Удалять сообщения: ${deleteMessages ? '✅' : '❌'}`, callback_data: `settings:toggle_delete_anonymous:${chatId}` },
+      ],
+      [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
+    ],
+  };
+}
+
+async function showSettingsAnonymousMenu(ctx, chatId) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  await ctx.editMessageText(buildSettingsAnonymousMenuText(), { reply_markup: buildSettingsAnonymousKeyboard(chatId) });
 }
 
 async function showSettingsAdminMenu(ctx, chatId) {
@@ -3032,6 +3076,8 @@ function createBot() {
         await showSettingsAdminMenu(ctx, chatId);
       } else if (parsed.section === 'banwords') {
         await showSettingsBanwordsMenu(ctx, chatId);
+      } else if (parsed.section === 'anonymous') {
+        await showSettingsAnonymousMenu(ctx, chatId);
       }
       return;
     }
@@ -3189,6 +3235,28 @@ function createBot() {
 
     if (parsed.target === 'admin_notify_advanced') {
       await showSettingsAdminAdvancedMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'toggle_anonymous') {
+      const service = activeModerationService || defaultModerationService;
+      if (service.isHideAnonymousEnabled(chatId)) {
+        service.disableHideAnonymous(chatId);
+      } else {
+        service.enableHideAnonymous(chatId);
+      }
+      await showSettingsAnonymousMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'toggle_delete_anonymous') {
+      const service = activeModerationService || defaultModerationService;
+      if (service.shouldDeleteAnonymousMessages(chatId)) {
+        service.disableDeleteAnonymousMessages(chatId);
+      } else {
+        service.enableDeleteAnonymousMessages(chatId);
+      }
+      await showSettingsAnonymousMenu(ctx, chatId);
       return;
     }
 
@@ -3826,6 +3894,21 @@ function createBot() {
       database.recordMessage(ctx.chat.id, ctx.from.id, getDisplayName(ctx), ctx.from.username);
     }
 
+    // Handle anonymous messages (sender_chat) - messages posted through a channel
+    if (isGroupChat(ctx) && message.sender_chat) {
+      const service = activeModerationService || defaultModerationService;
+      if (service.isHideAnonymousEnabled(ctx.chat.id)) {
+        if (service.shouldDeleteAnonymousMessages(ctx.chat.id)) {
+          try {
+            await ctx.deleteMessage();
+          } catch (error) {
+            console.warn('Failed to delete anonymous message:', error?.message || error);
+          }
+        }
+        return;
+      }
+    }
+
     if (isGroupChat(ctx) && isAdminReportText(text)) {
       const reply = message.reply_to_message;
       if (!reply || !reply.from) {
@@ -4194,6 +4277,8 @@ module.exports = {
   buildSettingsMainKeyboard,
   buildSettingsFirstMessageKeyboard,
   buildSettingsRulesMenuText,
+  buildSettingsAnonymousMenuText,
+  buildSettingsAnonymousKeyboard,
   parseSettingsAction,
   detectForbiddenWord,
   isLinkMessage,
