@@ -46,9 +46,26 @@ function main() {
           database: botState.database,
         });
         const port = Number(process.env.MINIAPP_PORT || 3000);
-        const miniAppUrl = config.miniAppUrl || `http://localhost:${port}`;
+
+        function detectPublicMiniAppUrl(cfg, portNumber) {
+          // explicit config
+          if (cfg && typeof cfg.miniAppUrl === 'string' && cfg.miniAppUrl.trim()) {
+            return cfg.miniAppUrl.trim().replace(/\/$/, '');
+          }
+          // common hosting env vars
+          if (process.env.MINIAPP_URL) return process.env.MINIAPP_URL.replace(/\/$/, '');
+          if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL.replace(/\/$/, '')}`;
+          if (process.env.RENDER_EXTERNAL_HOSTNAME) return `https://${process.env.RENDER_EXTERNAL_HOSTNAME.replace(/\/$/, '')}`;
+          if (process.env.HEROKU_APP_NAME) return `https://${process.env.HEROKU_APP_NAME}.herokuapp.com`;
+          if (process.env.HOST) return `http://${process.env.HOST.replace(/\/$/, '')}${portNumber ? `:${portNumber}` : ''}`;
+          if (process.env.HOSTNAME && process.env.GITHUB_ACTIONS !== 'true') return `http://${process.env.HOSTNAME}${portNumber ? `:${portNumber}` : ''}`;
+          // fallback local
+          return `http://localhost:${portNumber}`;
+        }
+
+        const miniAppUrl = detectPublicMiniAppUrl(config, port);
         miniAppServer.listen(port, () => {
-          console.log(`Mini app server listening on ${miniAppUrl}`);
+          console.log(`Mini app server listening on http://localhost:${port}`);
           console.log(`Mini app permanent URL: ${miniAppUrl}`);
         });
       } catch (error) {

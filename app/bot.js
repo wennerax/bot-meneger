@@ -3862,9 +3862,13 @@ function createBot() {
       adminReports.set(reportId, report);
 
       try {
-        const originMsg = await ctx.reply(formatAdminReportText(report), { reply_markup: buildAdminReportKeyboard(report) });
-        if (originMsg && originMsg.message_id) {
-          report.notifications.push({ chatId: ctx.chat.id, messageId: originMsg.message_id, origin: true });
+        const mode = moderationService.getAdminNotifyMode(ctx.chat.id);
+        // if mode is 'staff' we avoid posting the report in the origin chat
+        if (mode !== 'staff') {
+          const originMsg = await ctx.reply(formatAdminReportText(report), { reply_markup: buildAdminReportKeyboard(report) });
+          if (originMsg && originMsg.message_id) {
+            report.notifications.push({ chatId: ctx.chat.id, messageId: originMsg.message_id, origin: true });
+          }
         }
       } catch (error) {
         console.error('Failed to post admin report in origin chat:', error?.message || error);
