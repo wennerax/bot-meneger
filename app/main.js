@@ -1,5 +1,6 @@
 const { loadConfig } = require('./config');
-const { startBot } = require('./bot');
+const { createBot, startBot } = require('./bot');
+const { buildMiniAppServer } = require('../miniapp/server');
 
 function main() {
   const config = loadConfig();
@@ -17,9 +18,11 @@ function main() {
   // Perform a lightweight AI endpoint check if a key is configured.
   // This will not log the key; it only reports status codes and friendly hints.
   const aiModule = require('./ai');
+  let miniAppServer = null;
   (async function checkAi() {
+    const botState = createBot();
     if (!config.aiApiKey) {
-      startBot();
+      startBot(botState);
       return;
     }
 
@@ -35,7 +38,20 @@ function main() {
     } catch (err) {
       console.warn('AI endpoint check failed:', err?.message || err);
     } finally {
-      startBot();
+      startBot(botState);
+      try {
+        miniAppServer = buildMiniAppServer({
+          bot: botState.bot,
+          moderationService: botState.moderationService,
+          database: botState.database,
+        });
+        const port = Number(process.env.MINIAPP_PORT || 3000);
+        miniAppServer.listen(port, () => {
+          console.log(`Mini app server listening on http://localhost:${port}`);
+        });
+      } catch (error) {
+        console.warn('Mini app server startup failed:', error?.message || error);
+      }
     }
   })();
 }

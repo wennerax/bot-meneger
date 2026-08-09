@@ -210,6 +210,12 @@ class ModerationService {
       captchaEnabled: chat.captchaEnabled === undefined ? true : Boolean(chat.captchaEnabled),
       captchaMode: chat.captchaMode || 'emoji',
       captchaTimeoutMinutes: Number.isFinite(Number(chat.captchaTimeoutMinutes)) ? Number(chat.captchaTimeoutMinutes) : 3,
+      adminNotify: {
+        mode: (chat.adminNotify && typeof chat.adminNotify.mode === 'string') ? chat.adminNotify.mode : 'none',
+        notifyOwner: Boolean(chat.adminNotify?.notifyOwner),
+        notifyAdmins: Boolean(chat.adminNotify?.notifyAdmins),
+        advanced: Boolean(chat.adminNotify?.advanced),
+      },
     };
   }
 
@@ -615,6 +621,50 @@ class ModerationService {
   getMenuButtons(chatId) {
     const buttons = this._getChat(chatId).menu.buttons || [];
     return buttons.map((row) => row.map((item) => ({ ...item })));
+  }
+
+  getAdminNotifyMode(chatId) {
+    return String(this._getChat(chatId).adminNotify.mode || 'none');
+  }
+
+  setAdminNotifyMode(chatId, mode) {
+    const allowed = ['none', 'owner', 'staff'];
+    if (!allowed.includes(String(mode))) {
+      return false;
+    }
+    this._getChat(chatId).adminNotify.mode = String(mode);
+    this._save();
+    return true;
+  }
+
+  getAdminNotifyOwner(chatId) {
+    return Boolean(this._getChat(chatId).adminNotify.notifyOwner);
+  }
+
+  setAdminNotifyOwner(chatId, enabled) {
+    this._getChat(chatId).adminNotify.notifyOwner = Boolean(enabled);
+    this._save();
+    return true;
+  }
+
+  getAdminNotifyAdmins(chatId) {
+    return Boolean(this._getChat(chatId).adminNotify.notifyAdmins);
+  }
+
+  setAdminNotifyAdmins(chatId, enabled) {
+    this._getChat(chatId).adminNotify.notifyAdmins = Boolean(enabled);
+    this._save();
+    return true;
+  }
+
+  getAdminNotifyAdvanced(chatId) {
+    return Boolean(this._getChat(chatId).adminNotify.advanced);
+  }
+
+  setAdminNotifyAdvanced(chatId, enabled) {
+    this._getChat(chatId).adminNotify.advanced = Boolean(enabled);
+    this._save();
+    return true;
   }
 
   addMenuRow(chatId) {

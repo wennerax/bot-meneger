@@ -11,6 +11,7 @@ const { getMentionText, resolveUsernameTarget } = require('./services/username_s
 const defaultModerationService = new ModerationService();
 let activeDatabase = null;
 let activeModerationService = null;
+const adminReports = new Map();
 
 function normalizeUrlPattern(value) {
   return String(value || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '');
@@ -119,6 +120,53 @@ async function canManageGroupSettings(ctx, targetChatId) {
   }
 }
 
+function getMessageLink(chatId, messageId) {
+  const id = String(chatId || '');
+  const msgId = Number(messageId) || 0;
+  if (!id || !msgId) {
+    return null;
+  }
+  if (id.startsWith('-100')) {
+    return `https://t.me/c/${id.slice(4)}/${msgId}`;
+  }
+  return `https://t.me/${id}/${msgId}`;
+}
+
+function formatAdminReportText(report, acceptedBy = null) {
+  const reporter = report.reporter;
+  const target = report.target;
+  const acceptedText = acceptedBy
+    ? `\n\n✅ Жалобу принял модератор ${getMentionText(acceptedBy)} [${acceptedBy.id}]`
+    : '';
+  return [
+    '⚠️ ВНИМАНИЕ!',
+    `${getMentionText(reporter)} [${reporter.id}] требует действия администратора в группе:`,
+    `"${report.groupTitle || getGroupDisplayName(report.chatId)}"`,
+    '',
+    `На кого: ${getMentionText(target.user)} [${target.user.id}]`,
+    '',
+    acceptedText,
+  ].filter(Boolean).join('\n');
+}
+
+function buildAdminReportKeyboard(report) {
+  const url = getMessageLink(report.chatId, report.target.messageId);
+  return {
+    inline_keyboard: [
+      [{ text: 'Посмотреть сообщение', url: url || 'https://t.me' }],
+      [{ text: 'Принять', callback_data: `admin_report:accept:${report.chatId}:${report.id}` }],
+    ],
+  };
+}
+
+function createAdminReportId() {
+  return `r${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function isAdminReportText(text) {
+  return typeof text === 'string' && /(^|\s)@admin(\s|$)/i.test(text);
+}
+
 async function getManagedGroupsForUser(ctx) {
   const userId = Number(ctx.from?.id);
   if (!Number.isFinite(userId)) {
@@ -200,7 +248,8 @@ function buildSettingsMainKeyboard(chatId) {
       { text: 'Правила', callback_data: `settings:section:rules:${chatId}` },
     ],
     [
-      { text: 'Сообщение', callback_data: `settings:open_menu:${chatId}` },
+      { text: 'Первый Коммент', callback_data: `settings:open_menu:${chatId}` },
+      { text: '@admin', callback_data: `settings:section:admin:${chatId}` },
     ],
   ];
 }
@@ -311,6 +360,57 @@ function buildSettingsBanwordsKeyboard(chatId) {
       [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
     ],
   };
+}
+
+function buildSettingsAdminKeyboard(chatId) {
+  const service = activeModerationService || defaultModerationService;
+  const mode = service.getAdminNotifyMode(chatId);
+  const notifyOwner = service.getAdminNotifyOwner(chatId);
+  const notifyAdmins = service.getAdminNotifyAdmins(chatId);
+  const advanced = service.getAdminNotifyAdvanced(chatId);
+
+  return {
+    inline_keyboard: [
+      [
+        { text: `Никто${mode === 'none' ? ' ✅' : ''}`, callback_data: `settings:admin_notify:none:${chatId}` },
+        { text: `👑 Владелец${mode === 'owner' ? ' ✅' : ''}`, callback_data: `settings:admin_notify:owner:${chatId}` },
+      ],
+      [
+        { text: `👥 Группа персонала${mode === 'staff' ? ' ✅' : ''}`, callback_data: `settings:admin_notify:staff:${chatId}` },
+      ],
+      [
+        { text: `🔔 Уведомить Владелец ${notifyOwner ? '✅' : '❌'}`, callback_data: `settings:admin_notify:notify_owner:${chatId}` },
+      ],
+      [
+        { text: `🔔 Уведомить Администраторов ${notifyAdmins ? '✅' : '❌'}`, callback_data: `settings:admin_notify:notify_admins:${chatId}` },
+      ],
+      [
+        { text: `🛠️ Расширенные настройки${advanced ? ' ✅' : ''}`, callback_data: `settings:admin_notify:advanced:${chatId}` },
+      ],
+      [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
+    ],
+  };
+}
+
+function buildSettingsAdminMenuText() {
+  return [
+    '🚨 @admin — это команда, доступная пользователям для привлечения внимания персонала группы, например, в случае, если какой-либо другой пользователь не соблюдает правила группы.',
+    '',
+    'В этом меню вы можете указать, куда вы хотите, чтобы отчеты, сделанные пользователями, отправлялись, и/или нужно ли помечать некоторый персонал напрямую.',
+    '',
+    '⚠️ Команда @admin НЕ работает, если используется администратором с разрешением "Блокировка пользователей", или модератором.',
+    '',
+    'Уведомление получит:',
+  ].join('\n');
+}
+
+async function showSettingsAdminMenu(ctx, chatId) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  await ctx.editMessageText(buildSettingsAdminMenuText(), { reply_markup: buildSettingsAdminKeyboard(chatId) });
 }
 
 async function showSettingsMainMenu(ctx, chatId) {
@@ -521,12 +621,16 @@ function parseSettingsAction(action) {
 
   let parsedChatId = 0;
   let value = '';
-  const numericCandidates = normalizedParts.filter((part) => /^-?\d+$/.test(part));
+  const args = normalizedParts.slice(1);
+  const chatIdIndex = args.findIndex((part) => /^-?\d+$/.test(part));
 
-  if (numericCandidates.length > 0) {
-    const maybeChatId = Number(numericCandidates[0]);
+  if (chatIdIndex >= 0) {
+    const maybeChatId = Number(args[chatIdIndex]);
     parsedChatId = Number.isFinite(maybeChatId) ? maybeChatId : 0;
   }
+
+  const remainingArgs = args.filter((_, index) => index !== chatIdIndex);
+  const nonNumericRemaining = remainingArgs.filter((part) => !/^-?\d+$/.test(part));
 
   if (actionType === 'select') {
     value = String(normalizedParts[normalizedParts.length - 1] || '');
@@ -545,6 +649,10 @@ function parseSettingsAction(action) {
   } else if (actionType === 'captcha_timeout' && normalizedParts.length >= 2) {
     parsedChatId = Number(normalizedParts[1]) || 0;
     value = '';
+  } else if (nonNumericRemaining.length > 0) {
+    value = String(nonNumericRemaining[nonNumericRemaining.length - 1] || '');
+  } else if (remainingArgs.length > 0) {
+    value = String(remainingArgs[remainingArgs.length - 1] || '');
   }
 
   return {
@@ -2819,6 +2927,8 @@ function createBot() {
         await showSettingsFirstMessageMenu(ctx, chatId);
       } else if (parsed.section === 'rules') {
         await showSettingsRulesMenu(ctx, chatId);
+      } else if (parsed.section === 'admin') {
+        await showSettingsAdminMenu(ctx, chatId);
       } else if (parsed.section === 'banwords') {
         await showSettingsBanwordsMenu(ctx, chatId);
       }
@@ -2944,6 +3054,22 @@ function createBot() {
       return;
     }
 
+    if (parsed.target === 'admin_notify') {
+      const action = String(parsed.value || '').toLowerCase();
+      const service = activeModerationService || defaultModerationService;
+      if (['none', 'owner', 'staff'].includes(action)) {
+        service.setAdminNotifyMode(chatId, action);
+      } else if (action === 'notify_owner') {
+        service.setAdminNotifyOwner(chatId, !service.getAdminNotifyOwner(chatId));
+      } else if (action === 'notify_admins') {
+        service.setAdminNotifyAdmins(chatId, !service.getAdminNotifyAdmins(chatId));
+      } else if (action === 'advanced') {
+        service.setAdminNotifyAdvanced(chatId, !service.getAdminNotifyAdvanced(chatId));
+      }
+      await showSettingsAdminMenu(ctx, chatId);
+      return;
+    }
+
     if (parsed.target === 'first_button_add_row') {
       const service = activeModerationService || defaultModerationService;
       service.addMenuRow(chatId);
@@ -3057,6 +3183,47 @@ function createBot() {
       await showSettingsBanwordsMenu(ctx, chatId);
       return;
     }
+  });
+
+  bot.action(/^admin_report:(.+)$/, async (ctx) => {
+    const action = ctx.match[1];
+    await ctx.answerCbQuery();
+    const parts = String(action || '').split(':').filter(Boolean);
+    if (parts[0] !== 'accept') {
+      return;
+    }
+
+    const reportChatId = Number(parts[1] || ctx.chat?.id || 0);
+    const reportId = parts[2] || '';
+    if (!Number.isFinite(reportChatId) || !reportId) {
+      return;
+    }
+
+    if (!isBotAdmin(ctx)) {
+      await ctx.reply('Эта команда доступна только администраторам.');
+      return;
+    }
+
+    const report = adminReports.get(reportId);
+    if (!report || Number(report.chatId) !== reportChatId) {
+      await ctx.reply('Эта жалоба больше недоступна.');
+      return;
+    }
+
+    const acceptor = {
+      id: ctx.from.id,
+      username: ctx.from.username,
+      first_name: ctx.from.first_name,
+    };
+    const acceptedText = formatAdminReportText(report, acceptor);
+    adminReports.delete(reportId);
+
+    try {
+      await ctx.editMessageText(acceptedText, { reply_markup: buildAdminReportKeyboard(report) });
+    } catch (error) {
+      // message may be old or edited, ignore
+    }
+    return;
   });
 
   bot.action(/^menu:(.+)$/, async (ctx) => {
@@ -3298,6 +3465,28 @@ function createBot() {
     await openSettingsForCurrentContext(ctx, chatId);
   });
 
+  bot.command(['miniapp', 'миниприложение'], async (ctx) => {
+    const chatId = Number(ctx.chat?.id || 0);
+    if (!chatId) {
+      return;
+    }
+
+    if (!(await canManageGroupSettings(ctx, chatId))) {
+      await ctx.reply('У вас нет прав администратора группы с правом менять профиль группы.');
+      return;
+    }
+
+    const url = `${process.env.MINIAPP_URL || 'http://localhost:3000'}`;
+    await ctx.reply('Открыл мини-приложение для настроек группы.', {
+      reply_markup: {
+        inline_keyboard: [[{
+          text: 'Открыть настройки',
+          web_app: { url: `${url}/?chat_id=${chatId}` },
+        }]],
+      },
+    });
+  });
+
   bot.command(['allowed'], (ctx) => {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
@@ -3483,6 +3672,43 @@ function createBot() {
 
     if (isGroupChat(ctx)) {
       database.recordMessage(ctx.chat.id, ctx.from.id, getDisplayName(ctx), ctx.from.username);
+    }
+
+    if (isGroupChat(ctx) && isAdminReportText(text)) {
+      const reply = message.reply_to_message;
+      if (!reply || !reply.from) {
+        await ctx.reply('Для жалобы @admin ответьте на сообщение нарушителя.');
+        return;
+      }
+
+      if (await canManageGroupSettings(ctx, ctx.chat.id)) {
+        await ctx.reply('Администраторы и модераторы не могут использовать @admin.');
+        return;
+      }
+
+      const reportId = createAdminReportId();
+      const report = {
+        id: reportId,
+        chatId: ctx.chat.id,
+        groupTitle: ctx.chat.title || String(ctx.chat.id),
+        reporter: {
+          id: ctx.from.id,
+          first_name: ctx.from.first_name,
+          username: ctx.from.username,
+        },
+        target: {
+          user: {
+            id: reply.from.id,
+            first_name: reply.from.first_name,
+            username: reply.from.username,
+          },
+          messageId: reply.message_id,
+        },
+      };
+      adminReports.set(reportId, report);
+
+      await ctx.reply(formatAdminReportText(report), { reply_markup: buildAdminReportKeyboard(report) });
+      return;
     }
 
     if (text.startsWith('!')) {
@@ -3761,8 +3987,9 @@ function createBot() {
   return { bot, config, userService, moderationService, database };
 }
 
-function startBot() {
-  const { bot, config } = createBot();
+function startBot(botState = null) {
+  const state = botState || createBot();
+  const { bot, config } = state;
   if (!config.botToken) {
     console.log('BOT_TOKEN is not configured.');
     return;

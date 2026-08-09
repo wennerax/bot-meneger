@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bot Manager Mini App</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --panel: #111827;
+        --panel-2: #1f2937;
+        --text: #f9fafb;
+        --muted: #94a3b8;
+        --accent: #3b82f6;
+        --success: #10b981;
+        --danger: #ef4444;
+      }
+      body {
+        margin: 0;
+        font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        padding: 16px;
+      }
+      .card {
+        background: var(--panel);
+        border-radius: 16px;
+        padding: 16px;
+        margin-bottom: 14px;
+        box-shadow: 0 10px 30px rgba(0,0,0,.2);
+      }
+      .title { font-size: 20px; font-weight: 700; margin: 0 0 8px; }
+      .muted { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+      .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+      .tab { border: 0; border-radius: 999px; padding: 8px 12px; background: var(--panel-2); color: var(--text); }
+      .tab.active { background: var(--accent); }
+      .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0; }
+      button, select, input, textarea {
+        font: inherit;
+      }
+      button {
+        border: 0;
+        border-radius: 10px;
+        padding: 10px 12px;
+        background: var(--accent);
+        color: white;
+        cursor: pointer;
+      }
+      button.secondary { background: var(--panel-2); }
+      button.danger { background: var(--danger); }
+      input, textarea, select {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid #374151;
+        background: var(--panel-2);
+        color: var(--text);
+        border-radius: 10px;
+        padding: 10px 12px;
+      }
+      textarea { min-height: 100px; resize: vertical; }
+      .switch { display: flex; align-items: center; gap: 8px; }
+      .switch input[type="checkbox"] { width: auto; }
+      .section { margin-top: 8px; }
+      .status { font-size: 13px; color: var(--success); margin-top: 10px; }
+      .error { color: var(--danger); }
+      .hidden { display: none; }
+      .list { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+      .item { padding: 8px 10px; background: var(--panel-2); border-radius: 10px; font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1 class="title">Настройки бота</h1>
+      <p class="muted">Мини-приложение для администраторов группы</p>
+      <div class="status" id="status">Загрузка...</div>
+      <div class="tabs">
+        <button class="tab active" data-tab="rules">Правила</button>
+        <button class="tab" data-tab="anti">Анти-модерация</button>
+        <button class="tab" data-tab="captcha">Капча</button>
+        <button class="tab" data-tab="menu">Первое сообщение</button>
+        <button class="tab" data-tab="content">Слова и ссылки</button>
+      </div>
+    </div>
+
+    <div id="section-rules" class="card">
+      <div class="row">
+        <strong>Правила</strong>
+        <label class="switch"><input id="rulesEnabled" type="checkbox" /> Вкл</label>
+      </div>
+      <textarea id="rulesText" placeholder="Введите правила группы"></textarea>
+      <div class="section">
+        <button id="saveRules">Сохранить правила</button>
+      </div>
+    </div>
+
+    <div id="section-anti" class="card hidden">
+      <div class="row">
+        <strong>Антиспам</strong>
+        <label class="switch"><input id="spamEnabled" type="checkbox" /> Вкл</label>
+      </div>
+      <div class="row">
+        <strong>Антифлуд</strong>
+        <label class="switch"><input id="floodEnabled" type="checkbox" /> Вкл</label>
+      </div>
+      <div class="row">
+        <strong>Антиссылки</strong>
+        <label class="switch"><input id="linkEnabled" type="checkbox" /> Вкл</label>
+      </div>
+      <div class="section">
+        <button id="saveAnti">Сохранить анти-модерацию</button>
+      </div>
+    </div>
+
+    <div id="section-captcha" class="card hidden">
+      <div class="row">
+        <strong>Капча</strong>
+        <label class="switch"><input id="captchaEnabled" type="checkbox" /> Вкл</label>
+      </div>
+      <label>Режим</label>
+      <select id="captchaMode">
+        <option value="emoji">Эмоджи</option>
+        <option value="math">Пример</option>
+        <option value="color">Цвет</option>
+        <option value="word">Слово</option>
+      </select>
+      <label style="margin-top:8px;display:block;">Время прохождения (мин)</label>
+      <select id="captchaTimeout">
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="5">5</option>
+        <option value="10">10</option>
+        <option value="15">15</option>
+        <option value="20">20</option>
+        <option value="30">30</option>
+      </select>
+      <div class="section">
+        <button id="saveCaptcha">Сохранить капчу</button>
+      </div>
+    </div>
+
+    <div id="section-menu" class="card hidden">
+      <div class="row">
+        <strong>Первое сообщение</strong>
+        <label class="switch"><input id="menuEnabled" type="checkbox" /> Вкл</label>
+      </div>
+      <textarea id="menuText" placeholder="Текст первого сообщения"></textarea>
+      <div class="section">
+        <button id="saveMenu">Сохранить первое сообщение</button>
+      </div>
+      <div class="section">
+        <strong>Кнопки первого сообщения</strong>
+        <input id="menuButtonText" placeholder="Текст кнопки" />
+        <input id="menuButtonUrl" placeholder="https://example.com" style="margin-top:8px;" />
+        <input id="menuButtonRow" placeholder="Номер ряда (по умолчанию 0)" style="margin-top:8px;" />
+        <button id="saveMenuButton" style="margin-top:8px;">Добавить кнопку</button>
+        <div id="menuButtonsList" class="list"></div>
+      </div>
+    </div>
+
+    <div id="section-content" class="card hidden">
+      <strong>Список разрешённых ссылок</strong>
+      <textarea id="allowedLinksText" placeholder="Одна ссылка/домен на строку"></textarea>
+      <div class="section">
+        <button id="saveAllowedLinks">Сохранить ссылки</button>
+      </div>
+      <strong style="margin-top:10px;display:block;">Список запрещённых слов</strong>
+      <textarea id="banWordsText" placeholder="Одно слово на строку"></textarea>
+      <div class="section">
+        <button id="saveBanWords">Сохранить слова</button>
+      </div>
+      <strong style="margin-top:10px;display:block;">Приветствие</strong>
+      <textarea id="greetingText" placeholder="Текст приветствия"></textarea>
+      <div class="section">
+        <button id="saveGreeting">Сохранить приветствие</button>
+      </div>
+    </div>
+
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script>
+      const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+      const statusEl = document.getElementById('status');
+      const state = {
+        chatId: null,
+        initData: null,
+      };
+
+      function setStatus(message, isError) {
+        statusEl.textContent = message;
+        statusEl.classList.toggle('error', Boolean(isError));
+      }
+
+      function renderTabs(activeTab) {
+        document.querySelectorAll('.tab').forEach((button) => {
+          button.classList.toggle('active', button.dataset.tab === activeTab);
+        });
+        document.querySelectorAll('[id^="section-"]').forEach((section) => {
+          section.classList.toggle('hidden', section.id !== `section-${activeTab}`);
+        });
+      }
+
+      async function loadSettings() {
+        if (!tg) {
+          setStatus('Telegram Web App недоступен', true);
+          return;
+        }
+        state.chatId = tg.initDataUnsafe?.chat?.id || tg.initDataUnsafe?.user?.id || null;
+        state.initData = tg.initData || '';
+        tg.ready();
+        tg.expand();
+        tg.setHeaderColor('#0f172a');
+        tg.setBackgroundColor('#0f172a');
+
+        if (!state.chatId) {
+          setStatus('Не удалось определить группу', true);
+          return;
+        }
+
+        try {
+          const response = await fetch(`/api/miniapp/settings?chatId=${state.chatId}`, {
+            headers: { 'x-telegram-init-data': state.initData },
+          });
+          const payload = await response.json();
+          if (!response.ok) {
+            throw new Error(payload.error || 'Ошибка загрузки');
+          }
+
+          const settings = payload.settings || {};
+          document.getElementById('rulesEnabled').checked = Boolean(settings.rulesEnabled);
+          document.getElementById('rulesText').value = settings.rulesText || '';
+          document.getElementById('spamEnabled').checked = Boolean(settings.spamEnabled);
+          document.getElementById('floodEnabled').checked = Boolean(settings.floodEnabled);
+          document.getElementById('linkEnabled').checked = Boolean(settings.linkEnabled);
+          document.getElementById('captchaEnabled').checked = Boolean(settings.captchaEnabled);
+          document.getElementById('captchaMode').value = settings.captchaMode || 'emoji';
+          document.getElementById('captchaTimeout').value = String(settings.captchaTimeout || 3);
+          document.getElementById('menuEnabled').checked = Boolean(settings.menuEnabled);
+          document.getElementById('menuText').value = settings.menuText || '';
+          document.getElementById('allowedLinksText').value = (settings.allowedLinks || []).join('\n');
+          document.getElementById('banWordsText').value = (settings.banWords || []).join('\n');
+          document.getElementById('greetingText').value = settings.greetingText || '';
+          renderMenuButtons(settings.menuButtons || []);
+          setStatus('Настройки загружены');
+        } catch (error) {
+          setStatus(error.message || 'Ошибка загрузки', true);
+        }
+      }
+
+      function renderMenuButtons(buttons) {
+        const list = document.getElementById('menuButtonsList');
+        if (!list) {
+          return;
+        }
+        list.innerHTML = '';
+        const rows = Array.isArray(buttons) ? buttons : [];
+        rows.forEach((row, rowIndex) => {
+          row.forEach((button, buttonIndex) => {
+            const item = document.createElement('div');
+            item.className = 'item';
+            item.textContent = `Ряд ${rowIndex + 1} / Кнопка ${buttonIndex + 1}: ${button.text} → ${button.url}`;
+            list.appendChild(item);
+          });
+        });
+      }
+
+      async function saveJson(path, payload) {
+        const response = await fetch(path, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-telegram-init-data': state.initData,
+          },
+          body: JSON.stringify(payload),
+        });
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || 'Ошибка сохранения');
+        }
+        return result;
+      }
+
+      document.querySelectorAll('.tab').forEach((button) => {
+        button.addEventListener('click', () => renderTabs(button.dataset.tab));
+      });
+
+      document.getElementById('saveRules').addEventListener('click', async () => {
+        try {
+          await saveJson('/api/miniapp/rules', {
+            chatId: state.chatId,
+            enabled: document.getElementById('rulesEnabled').checked,
+            text: document.getElementById('rulesText').value,
+          });
+          setStatus('Правила сохранены');
+        } catch (error) {
+          setStatus(error.message || 'Ошибка сохранения правил', true);
+        }
+      });
+
+      document.getElementById('saveAnti').addEventListener('click', async () => {
+        try {
+          await saveJson('/api/miniapp/anti', {
+            chatId: state.chatId,
+            spamEnabled: document.getElementById('spamEnabled').checked,
+            floodEnabled: document.getElementById('floodEnabled').checked,
+            linkEnabled: document.getElementById('linkEnabled').checked,
+          });
+          setStatus('Анти-модерация сохранена');
+        } catch (error) {
+          setStatus(error.message || 'Ошибка сохранения анти-модерации', true);
+        }
+      });
+
+      document.getElementById('saveCaptcha').addEventListener('click', async () => {
+        try {
+          await saveJson('/api/miniapp/captcha', {
+            chatId: state.chatId,
+            enabled: document.getElementById('captchaEnabled').checked,
+            mode: document.getElementById('captchaMode').value,
+            timeout: Number(document.getElementById('captchaTimeout').value || 3),
+          });
+          setStatus('Капча сохранена');
+        } catch (error) {
+          setStatus(error.message || 'Ошибка сохранения капчи', true);
+        }
+      });
+
+      document.getElementById('saveMenu').addEventListener('click', async () => {
+        try {
+          await saveJson('/api/miniapp/menu', {
+            chatId: state.chatId,
+            enabled: document.getElementById('menuEnabled').checked,
+            text: document.getElementById('menuText').value,
+          });
+          setStatus('Первое сообщение сохранено');
+        } catch (error) {
+          setStatus(error.message || 'Ошибка сохранения первого сообщения', true);
+        }
+      });
+
+      document.getElementById('saveMenuButton').addEventListener('click', async () => {
+        try {
+          await saveJson('/api/miniapp/buttons', {
+            chatId: state.chatId,
+            action: 'add',
+            text: document.getElementById('menuButtonText').value,
+            url: document.getElementById('menuButtonUrl').value,
+            rowIndex: Number(document.getElementById('menuButtonRow').value || 0),
+          });
+          setStatus('Кнопка добавлена');
+          document.getElementById('menuButtonText').value = '';
+          document.getElementById('menuButtonUrl').value = '';
+          document.getElementById('menuButtonRow').value = '';
+          await loadSettings();
+        } catch (error) {
+          setStatus(error.message || 'Ошибка добавления кнопки', true);
+        }
+      });
+
+      document.getElementById('saveAllowedLinks').addEventListener('click', async () => {
+        try {
+          await saveJson('/api/miniapp/allowed-links', {
+            chatId: state.chatId,
+            values: document.getElementById('allowedLinksText').value.split(/\n+/).map((line) => line.trim()).filter(Boolean),
+          });
+          setStatus('Список ссылок сохранён');
+        } catch (error) {
+          setStatus(error.message || 'Ошибка сохранения ссылок', true);
+        }
+      });
+
+      document.getElementById('saveBanWords').addEventListener('click', async () => {
+        try {
+          await saveJson('/api/miniapp/banwords', {
+            chatId: state.chatId,
+            values: document.getElementById('banWordsText').value.split(/\n+/).map((line) => line.trim()).filter(Boolean),
+          });
+          setStatus('Список слов сохранён');
+        } catch (error) {
+          setStatus(error.message || 'Ошибка сохранения слов', true);
+        }
+      });
+
+      document.getElementById('saveGreeting').addEventListener('click', async () => {
+        try {
+          await saveJson('/api/miniapp/greeting', {
+            chatId: state.chatId,
+            text: document.getElementById('greetingText').value,
+          });
+          setStatus('Приветствие сохранено');
+        } catch (error) {
+          setStatus(error.message || 'Ошибка сохранения приветствия', true);
+        }
+      });
+
+      loadSettings();
+    </script>
+  </body>
+</html>
