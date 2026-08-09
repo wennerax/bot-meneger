@@ -46,8 +46,10 @@ function main() {
           database: botState.database,
         });
         const port = Number(process.env.MINIAPP_PORT || 3000);
+        const miniAppUrl = config.miniAppUrl || `http://localhost:${port}`;
         miniAppServer.listen(port, () => {
-          console.log(`Mini app server listening on http://localhost:${port}`);
+          console.log(`Mini app server listening on ${miniAppUrl}`);
+          console.log(`Mini app permanent URL: ${miniAppUrl}`);
         });
       } catch (error) {
         console.warn('Mini app server startup failed:', error?.message || error);

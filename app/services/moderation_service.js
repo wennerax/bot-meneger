@@ -215,6 +215,10 @@ class ModerationService {
         notifyOwner: Boolean(chat.adminNotify?.notifyOwner),
         notifyAdmins: Boolean(chat.adminNotify?.notifyAdmins),
         advanced: Boolean(chat.adminNotify?.advanced),
+        onlyInReply: Boolean(chat.adminNotify?.onlyInReply),
+        reasonRequired: Boolean(chat.adminNotify?.reasonRequired),
+        deleteOnProcess: Boolean(chat.adminNotify?.deleteOnProcess),
+        deleteInStaffGroup: Boolean(chat.adminNotify?.deleteInStaffGroup),
       },
     };
   }
@@ -663,6 +667,46 @@ class ModerationService {
 
   setAdminNotifyAdvanced(chatId, enabled) {
     this._getChat(chatId).adminNotify.advanced = Boolean(enabled);
+    this._save();
+    return true;
+  }
+
+  getAdminNotifyOnlyInReply(chatId) {
+    return Boolean(this._getChat(chatId).adminNotify.onlyInReply);
+  }
+
+  setAdminNotifyOnlyInReply(chatId, enabled) {
+    this._getChat(chatId).adminNotify.onlyInReply = Boolean(enabled);
+    this._save();
+    return true;
+  }
+
+  getAdminNotifyReasonRequired(chatId) {
+    return Boolean(this._getChat(chatId).adminNotify.reasonRequired);
+  }
+
+  setAdminNotifyReasonRequired(chatId, enabled) {
+    this._getChat(chatId).adminNotify.reasonRequired = Boolean(enabled);
+    this._save();
+    return true;
+  }
+
+  getAdminNotifyDeleteOnProcess(chatId) {
+    return Boolean(this._getChat(chatId).adminNotify.deleteOnProcess);
+  }
+
+  setAdminNotifyDeleteOnProcess(chatId, enabled) {
+    this._getChat(chatId).adminNotify.deleteOnProcess = Boolean(enabled);
+    this._save();
+    return true;
+  }
+
+  getAdminNotifyDeleteInStaffGroup(chatId) {
+    return Boolean(this._getChat(chatId).adminNotify.deleteInStaffGroup);
+  }
+
+  setAdminNotifyDeleteInStaffGroup(chatId, enabled) {
+    this._getChat(chatId).adminNotify.deleteInStaffGroup = Boolean(enabled);
     this._save();
     return true;
   }

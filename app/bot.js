@@ -13,6 +13,10 @@ let activeDatabase = null;
 let activeModerationService = null;
 const adminReports = new Map();
 
+// Установите сюда ID группы модераторов, в которую будут приходить уведомления при включенном уведомлении администраторов.
+// Пример: const ADMIN_NOTIFICATION_GROUP_ID = -1001234567890;
+const ADMIN_NOTIFICATION_GROUP_ID = 0;
+
 function normalizeUrlPattern(value) {
   return String(value || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '');
 }
@@ -385,11 +389,54 @@ function buildSettingsAdminKeyboard(chatId) {
         { text: `🔔 Уведомить Администраторов ${notifyAdmins ? '✅' : '❌'}`, callback_data: `settings:admin_notify:notify_admins:${chatId}` },
       ],
       [
-        { text: `🛠️ Расширенные настройки${advanced ? ' ✅' : ''}`, callback_data: `settings:admin_notify:advanced:${chatId}` },
+        { text: `🛠️ Расширенные настройки${advanced ? ' ✅' : ''}`, callback_data: `settings:admin_notify_advanced:${chatId}` },
       ],
       [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
     ],
   };
+}
+
+function buildSettingsAdminAdvancedKeyboard(chatId) {
+  const service = activeModerationService || defaultModerationService;
+  const onlyInReply = service.getAdminNotifyOnlyInReply(chatId);
+  const reasonRequired = service.getAdminNotifyReasonRequired(chatId);
+  const deleteOnProcess = service.getAdminNotifyDeleteOnProcess(chatId);
+  const deleteInStaff = service.getAdminNotifyDeleteInStaffGroup(chatId);
+
+  return {
+    inline_keyboard: [
+      [{ text: `Только в ответ: ${onlyInReply ? '✅' : '❌'}`, callback_data: `settings:admin_notify:toggle_only_in_reply:${chatId}` }],
+      [{ text: `Причина обязательна: ${reasonRequired ? '✅' : '❌'}`, callback_data: `settings:admin_notify:toggle_reason_required:${chatId}` }],
+      [{ text: `Удалять при обработке отчёта: ${deleteOnProcess ? '✅' : '❌'}`, callback_data: `settings:admin_notify:toggle_delete_on_process:${chatId}` }],
+      [{ text: `Удалять в группе персонала при обработке отчёта: ${deleteInStaff ? '✅' : '❌'}`, callback_data: `settings:admin_notify:toggle_delete_in_staff:${chatId}` }],
+      [{ text: 'Назад', callback_data: `settings:admin_notify:${chatId}` }],
+    ],
+  };
+}
+
+function buildSettingsAdminAdvancedMenuText() {
+  return [
+    '🚨 Расширенные настройки @admin',
+    '',
+    'Описание опций:',
+    '',
+    '🧾 Только в ответ: Команда @admin доступна только при ответе на сообщение нарушителя.',
+    '',
+    '✍️ Причина обязательна: Пользователь должен указать причину в тексте отчёта.',
+    '',
+    '🗑️ Удалять при обработке отчёта: Сообщение отчёта и сообщение пользователя удаляются после пометки отчёта как обработанного.',
+    '',
+    '🔒 Удалять в группе персонала при обработке отчёта: Если включено, сообщение отчёта будет также удалено из группы персонала при обработке.',
+  ].join('\n');
+}
+
+async function showSettingsAdminAdvancedMenu(ctx, chatId) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  await ctx.editMessageText(buildSettingsAdminAdvancedMenuText(), { reply_markup: buildSettingsAdminAdvancedKeyboard(chatId) });
 }
 
 function buildSettingsAdminMenuText() {
@@ -3065,8 +3112,29 @@ function createBot() {
         service.setAdminNotifyAdmins(chatId, !service.getAdminNotifyAdmins(chatId));
       } else if (action === 'advanced') {
         service.setAdminNotifyAdvanced(chatId, !service.getAdminNotifyAdvanced(chatId));
+      } else if (action === 'toggle_only_in_reply') {
+        service.setAdminNotifyOnlyInReply(chatId, !service.getAdminNotifyOnlyInReply(chatId));
+        await showSettingsAdminAdvancedMenu(ctx, chatId);
+        return;
+      } else if (action === 'toggle_reason_required') {
+        service.setAdminNotifyReasonRequired(chatId, !service.getAdminNotifyReasonRequired(chatId));
+        await showSettingsAdminAdvancedMenu(ctx, chatId);
+        return;
+      } else if (action === 'toggle_delete_on_process') {
+        service.setAdminNotifyDeleteOnProcess(chatId, !service.getAdminNotifyDeleteOnProcess(chatId));
+        await showSettingsAdminAdvancedMenu(ctx, chatId);
+        return;
+      } else if (action === 'toggle_delete_in_staff') {
+        service.setAdminNotifyDeleteInStaffGroup(chatId, !service.getAdminNotifyDeleteInStaffGroup(chatId));
+        await showSettingsAdminAdvancedMenu(ctx, chatId);
+        return;
       }
       await showSettingsAdminMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'admin_notify_advanced') {
+      await showSettingsAdminAdvancedMenu(ctx, chatId);
       return;
     }
 
@@ -3476,7 +3544,8 @@ function createBot() {
       return;
     }
 
-    const url = `${process.env.MINIAPP_URL || 'http://localhost:3000'}`;
+    const port = Number(process.env.MINIAPP_PORT || 3000);
+    const url = config.miniAppUrl || `http://localhost:${port}`;
     await ctx.reply('Открыл мини-приложение для настроек группы.', {
       reply_markup: {
         inline_keyboard: [[{
@@ -3708,6 +3777,16 @@ function createBot() {
       adminReports.set(reportId, report);
 
       await ctx.reply(formatAdminReportText(report), { reply_markup: buildAdminReportKeyboard(report) });
+
+      const moderationService = activeModerationService || defaultModerationService;
+      const shouldNotifyAdmins = moderationService.getAdminNotifyAdmins(ctx.chat.id);
+      if (shouldNotifyAdmins && Number.isFinite(ADMIN_NOTIFICATION_GROUP_ID) && ADMIN_NOTIFICATION_GROUP_ID !== 0) {
+        try {
+          await ctx.telegram.sendMessage(ADMIN_NOTIFICATION_GROUP_ID, formatAdminReportText(report), { reply_markup: buildAdminReportKeyboard(report) });
+        } catch (error) {
+          console.error('Failed to send admin notification to admin group:', error);
+        }
+      }
       return;
     }
 

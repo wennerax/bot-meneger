@@ -76,6 +76,7 @@ function loadConfig(overrides = {}, options = {}) {
     chatUrl: merged.CHAT_URL || merged.TELEGRAM_CHAT_URL || merged.GROUP_CHAT_URL || '',
     rulesUrl: merged.RULES_URL || merged.RULES_LINK || '',
     siteUrl: merged.SITE_URL || merged.WEBSITE_URL || merged.SITE_LINK || '',
+    miniAppUrl: merged.MINIAPP_URL || merged.MINI_APP_URL || '',
     // Support generic AI provider env and OpenRouter-specific env names.
     aiApiKey,
     aiModel: merged.AI_MODEL || merged.OPENROUTER_MODEL || 'openrouter',
