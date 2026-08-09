@@ -47,6 +47,18 @@ function detectForbiddenWord(text) {
   return defaultModerationService.findBanWord(0, text);
 }
 
+function isAnonymousSenderMessage(message = {}) {
+  if (!message || typeof message !== 'object') {
+    return false;
+  }
+
+  const senderChat = message.sender_chat;
+  const hasSenderChat = Boolean(senderChat && typeof senderChat === 'object' && senderChat.id);
+  const hasAuthorSignature = Boolean(message.author_signature);
+
+  return hasSenderChat || hasAuthorSignature;
+}
+
 function getGroupDisplayName(chatId, fallback = null) {
   const id = Number(chatId);
   if (!Number.isFinite(id)) {
@@ -3894,13 +3906,13 @@ function createBot() {
       database.recordMessage(ctx.chat.id, ctx.from.id, getDisplayName(ctx), ctx.from.username);
     }
 
-    // Handle anonymous messages (sender_chat) - messages posted through a channel
-    if (isGroupChat(ctx) && message.sender_chat) {
+    // Handle anonymous messages (sender_chat/author_signature) - messages posted through a channel or hidden sender
+    if (isGroupChat(ctx) && isAnonymousSenderMessage(message)) {
       const service = activeModerationService || defaultModerationService;
       if (service.isHideAnonymousEnabled(ctx.chat.id)) {
         if (service.shouldDeleteAnonymousMessages(ctx.chat.id)) {
           try {
-            await ctx.deleteMessage();
+            await deleteMessageSafely(ctx, message.message_id);
           } catch (error) {
             console.warn('Failed to delete anonymous message:', error?.message || error);
           }
@@ -4279,6 +4291,7 @@ module.exports = {
   buildSettingsRulesMenuText,
   buildSettingsAnonymousMenuText,
   buildSettingsAnonymousKeyboard,
+  isAnonymousSenderMessage,
   parseSettingsAction,
   detectForbiddenWord,
   isLinkMessage,

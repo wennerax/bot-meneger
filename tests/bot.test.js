@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, parseSettingsAction, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, shouldStartCaptchaForChat } = require('../app/bot');
+const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, parseSettingsAction, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, shouldStartCaptchaForChat, isAnonymousSenderMessage } = require('../app/bot');
 const { buildAiRequestPayload } = require('../app/ai');
 
 test('parsePunishmentDetails extracts duration and reason', () => {
@@ -85,6 +85,13 @@ test('buildSettingsMainKeyboard returns a grouped layout with section buttons', 
   assert.equal(keyboard[2][0].callback_data, 'settings:open_menu:42');
   assert.equal(keyboard[2][1].callback_data, 'settings:section:admin:42');
   assert.equal(keyboard[3][0].callback_data, 'settings:section:anonymous:42');
+});
+
+test('isAnonymousSenderMessage detects hidden sender messages', () => {
+  assert.equal(isAnonymousSenderMessage({ sender_chat: { id: -1001, type: 'channel' } }), true);
+  assert.equal(isAnonymousSenderMessage({ author_signature: 'Anonymous admin' }), true);
+  assert.equal(isAnonymousSenderMessage({ from: { id: 123 } }), false);
+  assert.equal(isAnonymousSenderMessage(null), false);
 });
 
 test('buildSettingsFirstMessageKeyboard exposes text, buttons and media controls', () => {
