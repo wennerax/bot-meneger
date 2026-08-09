@@ -1,7 +1,7 @@
 const path = require('node:path');
 const { Telegraf } = require('telegraf');
 const sharp = require('sharp');
-const { loadConfig } = require('./config');
+const { loadConfig, getMiniAppPort, detectPublicMiniAppUrl } = require('./config');
 const UserService = require('./services/user_service');
 const ModerationService = require('./services/moderation_service');
 const Database = require('./services/database');
@@ -3627,8 +3627,8 @@ function createBot() {
       return;
     }
 
-    const port = Number(process.env.MINIAPP_PORT || 3000);
-    const url = config.miniAppUrl || `http://localhost:${port}`;
+    const port = getMiniAppPort();
+    const url = detectPublicMiniAppUrl(config, port);
     await ctx.reply('Открыл мини-приложение для настроек группы.', {
       reply_markup: {
         inline_keyboard: [[{

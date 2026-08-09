@@ -76,7 +76,7 @@ function loadConfig(overrides = {}, options = {}) {
     chatUrl: merged.CHAT_URL || merged.TELEGRAM_CHAT_URL || merged.GROUP_CHAT_URL || '',
     rulesUrl: merged.RULES_URL || merged.RULES_LINK || '',
     siteUrl: merged.SITE_URL || merged.WEBSITE_URL || merged.SITE_LINK || '',
-    miniAppUrl: merged.MINIAPP_URL || merged.MINI_APP_URL || '',
+    miniAppUrl: merged.MINIAPP_URL || merged.MINI_APP_URL || merged.APP_URL || '',
     // Support generic AI provider env and OpenRouter-specific env names.
     aiApiKey,
     aiModel: merged.AI_MODEL || merged.OPENROUTER_MODEL || 'openrouter',
@@ -85,7 +85,75 @@ function loadConfig(overrides = {}, options = {}) {
   };
 }
 
+function normalizePublicUrl(value) {
+  const url = String(value || '').trim();
+  if (!url) {
+    return '';
+  }
+
+  return url.replace(/\/$/, '');
+}
+
+function getMiniAppPort() {
+  const port = Number(process.env.MINIAPP_PORT || process.env.PORT || 3000);
+  return Number.isFinite(port) && port > 0 ? port : 3000;
+}
+
+function detectPublicMiniAppUrl(config = {}, portNumber) {
+  const env = process.env;
+  const explicit = normalizePublicUrl(config.miniAppUrl || config.siteUrl);
+  if (explicit) {
+    return explicit;
+  }
+
+  const candidates = [
+    env.MINIAPP_URL,
+    env.MINI_APP_URL,
+    env.APP_URL,
+    env.WEBSITE_URL,
+    env.SITE_URL,
+    env.SITE_LINK,
+    env.URL,
+  ]
+    .map(normalizePublicUrl)
+    .filter(Boolean);
+
+  if (env.VERCEL_URL) {
+    candidates.unshift(`https://${normalizePublicUrl(env.VERCEL_URL)}`);
+  }
+
+  if (env.RENDER_EXTERNAL_HOSTNAME) {
+    candidates.unshift(`https://${normalizePublicUrl(env.RENDER_EXTERNAL_HOSTNAME)}`);
+  }
+
+  if (env.WEBSITE_HOSTNAME) {
+    candidates.unshift(`https://${normalizePublicUrl(env.WEBSITE_HOSTNAME)}`);
+  }
+
+  if (env.HEROKU_APP_NAME) {
+    candidates.unshift(`https://${normalizePublicUrl(env.HEROKU_APP_NAME)}.herokuapp.com`);
+  }
+
+  if (env.HOST) {
+    candidates.push(`http://${normalizePublicUrl(env.HOST)}`);
+  }
+
+  if (env.HOSTNAME && env.GITHUB_ACTIONS !== 'true') {
+    candidates.push(`http://${normalizePublicUrl(env.HOSTNAME)}`);
+  }
+
+  const firstCandidate = candidates.find(Boolean);
+  if (firstCandidate) {
+    return normalizePublicUrl(firstCandidate);
+  }
+
+  const port = Number(env.MINIAPP_PORT || env.PORT || portNumber || 3000);
+  return `http://localhost:${Number.isFinite(port) && port > 0 ? port : 3000}`;
+}
+
 module.exports = {
   loadConfig,
   parseAdminIds,
+  getMiniAppPort,
+  detectPublicMiniAppUrl,
 };
