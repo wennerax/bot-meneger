@@ -130,6 +130,8 @@ async function requestAi(prompt, options = {}) {
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
+      'OpenAI-Api-Key': apiKey,
+      Accept: 'application/json',
     },
     body: JSON.stringify(await buildAiRequestPayload(prompt, model, options)),
   });
