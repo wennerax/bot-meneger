@@ -209,6 +209,7 @@ class ModerationService {
       rulesEnabled: chat.rulesEnabled === undefined ? true : Boolean(chat.rulesEnabled),
       captchaEnabled: chat.captchaEnabled === undefined ? true : Boolean(chat.captchaEnabled),
       captchaMode: chat.captchaMode || 'emoji',
+      mediaAiEnabled: Boolean(chat.mediaAiEnabled),
       captchaTimeoutMinutes: Number.isFinite(Number(chat.captchaTimeoutMinutes)) ? Number(chat.captchaTimeoutMinutes) : 3,
       adminNotify: {
         mode: (chat.adminNotify && typeof chat.adminNotify.mode === 'string') ? chat.adminNotify.mode : 'none',
@@ -392,6 +393,20 @@ class ModerationService {
 
   isFloodProtectionEnabled(chatId) {
     return Boolean(this._getChat(chatId).floodProtectionEnabled);
+  }
+
+  enableMediaAi(chatId) {
+    this._getChat(chatId).mediaAiEnabled = true;
+    this._save();
+  }
+
+  disableMediaAi(chatId) {
+    this._getChat(chatId).mediaAiEnabled = false;
+    this._save();
+  }
+
+  isMediaAiEnabled(chatId) {
+    return Boolean(this._getChat(chatId).mediaAiEnabled);
   }
 
   enableRules(chatId) {

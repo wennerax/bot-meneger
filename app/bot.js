@@ -277,11 +277,10 @@ function buildSettingsMainKeyboard(chatId) {
     ],
     [
       { text: 'Команды', callback_data: `settings:section:commands:${chatId}` },
+      { text: 'Медиа ИИ', callback_data: `settings:section:media_ai:${chatId}` },
     ],
     [
       { text: 'Первый Коммент', callback_data: `settings:open_menu:${chatId}` },
-    ],
-    [
       { text: '@admin', callback_data: `settings:section:admin:${chatId}` },
       { text: '🚫 Скрытые пользователи', callback_data: `settings:section:anonymous:${chatId}` },
     ],
@@ -705,6 +704,41 @@ async function safeEditMessageText(ctx, text, extra = {}) {
     }
     throw error;
   }
+}
+
+function buildSettingsMediaAiText(chatId) {
+  const service = activeModerationService || defaultModerationService;
+  const enabled = service.isMediaAiEnabled(chatId);
+  return [
+    '🤖 Медиа ИИ',
+    '',
+    'При включённой функции все медиа в группе будут проверяться ИИ на наличие 18+ контента.',
+    'Если ИИ определит запрещённое взрослое содержание, сообщение будет удалено, а отправитель заблокирован.',
+    '',
+    `Статус: ${enabled ? 'Включено' : 'Отключено'}`,
+    '',
+    'Нажмите кнопку ниже, чтобы переключить состояние.',
+  ].join('\n');
+}
+
+function buildSettingsMediaAiKeyboard(chatId) {
+  const service = activeModerationService || defaultModerationService;
+  const enabled = service.isMediaAiEnabled(chatId);
+  return {
+    inline_keyboard: [
+      [{ text: enabled ? 'Выключить Медиа ИИ' : 'Включить Медиа ИИ', callback_data: `settings:toggle_media_ai:${chatId}:${enabled ? 'off' : 'on'}` }],
+      [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
+    ],
+  };
+}
+
+async function showSettingsMediaAiMenu(ctx, chatId) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  await safeEditMessageText(ctx, buildSettingsMediaAiText(chatId), { reply_markup: buildSettingsMediaAiKeyboard(chatId) });
 }
 
 async function showSettingsAdminMenu(ctx, chatId) {
@@ -2188,13 +2222,53 @@ function createBot() {
     return null;
   }
 
-  function buildTextPayloadFromMessage(ctx) {
-    const message = ctx.message || {};
-    const text = typeof message.text === 'string' ? message.text : '';
-    const entities = Array.isArray(message.entities)
-      ? message.entities.filter((entity) => entity && typeof entity === 'object').map((entity) => ({ ...entity }))
-      : [];
-    return { text, entities };
+  async function analyzeMediaWithAi(ctx, message) {
+    const payload = getMediaPayloadFromMessage(ctx);
+    if (!payload || !payload.fileId) {
+      return false;
+    }
+
+    let fileUrl = null;
+    try {
+      const linkResult = await ctx.telegram.getFileLink(payload.fileId);
+      if (typeof linkResult === 'string') {
+        fileUrl = linkResult;
+      } else if (linkResult && typeof linkResult.href === 'string') {
+        fileUrl = linkResult.href;
+      }
+    } catch (error) {
+      console.warn('Failed to obtain media file link for AI analysis:', error?.message || error);
+      return false;
+    }
+
+    if (!fileUrl) {
+      return false;
+    }
+
+    const prompt = [
+      'Ты — модератор чата. Оцени медиа-файл по ссылке и определи, содержит ли он взрослый или порнографический контент 18+ (наголые части тела, половые акты, сенсуальные сцены, откровенную обнажённость).',
+      'Игнорируй безопасные фотографии одежды, семейные сцены, природу, животных, еду, архитектуру и обычные текстовые изображения.',
+      'Отвечай одним словом: да или нет. Если считаешь, что контент содержит взрослый материал, ответь да.',
+      `URL: ${fileUrl}`,
+    ].join(' ');
+
+    try {
+      const result = await ai.requestAi(prompt, {
+        apiKey: config.aiApiKey,
+        apiBaseUrl: config.aiApiBaseUrl,
+        model: config.aiModel,
+      });
+      const normalized = String(result || '').trim().toLowerCase();
+      if (!normalized) {
+        return false;
+      }
+      const positive = /\b(да|yes|true|adult|порно|porn|эротик|откровенн|нагота|голая|сексуал)\b/.test(normalized);
+      const negative = /\b(нет|no|false|не\s|не содержит)\b/.test(normalized);
+      return positive && !negative;
+    } catch (error) {
+      console.warn('AI media analysis failed:', error?.message || error);
+      return false;
+    }
   }
 
   async function sendMenuReplyForChannelPost(ctx) {
@@ -3609,6 +3683,8 @@ function createBot() {
         await showSettingsRulesMenu(ctx, chatId);
       } else if (parsed.section === 'admin') {
         await showSettingsAdminMenu(ctx, chatId);
+      } else if (parsed.section === 'media_ai') {
+        await showSettingsMediaAiMenu(ctx, chatId);
       } else if (parsed.section === 'banwords') {
         await showSettingsBanwordsMenu(ctx, chatId);
       } else if (parsed.section === 'anonymous') {
@@ -3682,6 +3758,16 @@ function createBot() {
         moderationService.disableSpamProtection(chatId);
       }
       await showSettingsAntiMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'toggle_media_ai') {
+      if (parsed.value === 'on') {
+        moderationService.enableMediaAi(chatId);
+      } else {
+        moderationService.disableMediaAi(chatId);
+      }
+      await showSettingsMediaAiMenu(ctx, chatId);
       return;
     }
 
@@ -4501,6 +4587,27 @@ function createBot() {
           }
         }
         return;
+      }
+    }
+
+    if (isGroupChat(ctx) && isMediaMessage(ctx)) {
+      const service = activeModerationService || defaultModerationService;
+      if (service.isMediaAiEnabled(ctx.chat.id) && config.aiApiKey) {
+        const isAdult = await analyzeMediaWithAi(ctx, message);
+        if (isAdult) {
+          try {
+            await deleteMessageSafely(ctx, message.message_id);
+          } catch (err) {
+            // ignore
+          }
+          try {
+            await ctx.telegram.banChatMember(ctx.chat.id, ctx.from.id);
+          } catch (err) {
+            console.warn('Failed to ban user for adult media:', err?.message || err);
+          }
+          await ctx.reply(`🚫 Медиа-контент запрещён. Пользователь ${ctx.from.first_name || ctx.from.username || ctx.from.id} был заблокирован.`);
+          return;
+        }
       }
     }
 
