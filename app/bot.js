@@ -277,7 +277,7 @@ function buildSettingsMainKeyboard(chatId) {
     ],
     [
       { text: 'Первый Коммент', callback_data: `settings:open_menu:${chatId}` },
-      { text: 'Права на Команды', callback_data: `settings:section:commands:${chatId}` },
+      { text: 'Настройка прав команд', callback_data: `settings:section:commands:${chatId}` },
     ],
     [
       { text: '@admin', callback_data: `settings:section:admin:${chatId}` },
@@ -3509,7 +3509,8 @@ function createBot() {
       } else if (parsed.section === 'anonymous') {
         await showSettingsAnonymousMenu(ctx, chatId);
       } else if (parsed.section === 'commands') {
-        await showSettingsCommandRightsMenu(ctx, chatId);
+        // Open interactive command rights UI (same as /menu)
+        await showMenuCommandRightsMenu(ctx, chatId, 0);
       }
       return;
     }
