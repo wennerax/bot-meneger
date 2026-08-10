@@ -202,10 +202,22 @@ test('allowed links bypass link protection while suspicious ones trigger it', ()
   assert.equal(isLinkMessage('https://example.com/shop', (link) => link.includes('t.me')), true);
 });
 
-test('buildAiRequestPayload builds an OpenAI-compatible request body', async () => {
+test('buildAiRequestPayload builds an OpenAI-compatible request body for text prompts', async () => {
   const payload = await buildAiRequestPayload('привет', 'gpt-4o-mini');
 
   assert.equal(payload.model, 'gpt-4o-mini');
   assert.equal(payload.messages[1].role, 'user');
   assert.match(payload.messages[1].content, /привет/);
+});
+
+test('buildAiRequestPayload supports multimodal prompt arrays', async () => {
+  const multis = [
+    { type: 'text', text: 'Что на картинке?' },
+    { type: 'image_url', image_url: { url: 'data:image/png;base64,AAA' } },
+  ];
+  const payload = await buildAiRequestPayload(multis, 'gpt-4o-mini');
+
+  assert.equal(payload.model, 'gpt-4o-mini');
+  assert.equal(payload.messages[1].role, 'user');
+  assert.equal(payload.messages[1].content, multis);
 });

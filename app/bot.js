@@ -2226,6 +2226,35 @@ function createBot() {
     return null;
   }
 
+  async function getFileBase64DataUrl(fileUrl) {
+    if (!fileUrl) {
+      return null;
+    }
+
+    try {
+      const response = await fetch(fileUrl);
+      if (!response.ok) {
+        throw new Error(`Telegram file fetch failed with status ${response.status}`);
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      let mimeType = response.headers.get('content-type') || '';
+      if (!mimeType) {
+        const ext = fileUrl.split('.').pop().toLowerCase();
+        if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
+        else if (ext === 'png') mimeType = 'image/png';
+        else if (ext === 'webp') mimeType = 'image/webp';
+        else if (ext === 'gif') mimeType = 'image/gif';
+        else mimeType = 'application/octet-stream';
+      }
+      const base64 = buffer.toString('base64');
+      return `data:${mimeType};base64,${base64}`;
+    } catch (error) {
+      console.warn('Failed to fetch Telegram media as base64:', error?.message || error);
+      return null;
+    }
+  }
+
   async function analyzeMediaWithAi(ctx, message) {
     const payload = getMediaPayloadFromMessage(ctx);
     if (!payload || !payload.fileId) {
@@ -2249,12 +2278,23 @@ function createBot() {
       return false;
     }
 
+    const dataUrl = await getFileBase64DataUrl(fileUrl);
+    if (!dataUrl) {
+      return false;
+    }
+
     const prompt = [
-      'Оцени приведённый медиа-файл по ссылке и ответь только одним словом: «да» или «нет».',
-      'Если файл содержит порнографическое, откровенно сексуальное или взрослое (18+) содержание, ответь «да».',
-      'Если это безопасный контент без обнажённых половых частей, ответь «нет».',
-      `URL: ${fileUrl}`,
-    ].join(' ');
+      {
+        type: 'text',
+        text: 'Оцени приведённый медиа-файл и ответь только одним словом: «да» или «нет». Если файл содержит порнографическое, откровенно сексуальное или взрослое (18+) содержание, ответь «да». Если это безопасный контент без обнажённых половых частей, ответь «нет».',
+      },
+      {
+        type: 'image_url',
+        image_url: {
+          url: dataUrl,
+        },
+      },
+    ];
 
     try {
       const result = await ai.requestAi(prompt, {

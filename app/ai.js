@@ -85,6 +85,7 @@ async function buildAiRequestPayload(prompt, model, options = {}) {
     realtimeContext,
   ].join(' ');
 
+  const userContent = Array.isArray(prompt) ? prompt : prompt;
   return {
     model: model || 'gpt-4o-mini',
     messages: [
@@ -92,7 +93,7 @@ async function buildAiRequestPayload(prompt, model, options = {}) {
         role: 'system',
         content: systemMessage,
       },
-      { role: 'user', content: prompt },
+      { role: 'user', content: userContent },
     ],
   };
 }
