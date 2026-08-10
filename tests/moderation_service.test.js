@@ -200,7 +200,7 @@ test('allowed anonymous channels can be added and removed per chat', () => {
 
   assert.equal(service.isAllowedAnonymousChannel(100, 777), false);
   assert.equal(service.addAllowedAnonymousChannel(100, 777), true);
-  assert.deepEqual(service.getAllowedAnonymousChannels(100), [777]);
+  assert.deepEqual(service.getAllowedAnonymousChannels(100), ['777']);
   assert.equal(service.isAllowedAnonymousChannel(100, 777), true);
   assert.equal(service.addAllowedAnonymousChannel(100, 777), false);
   assert.equal(service.removeAllowedAnonymousChannel(100, 777), true);

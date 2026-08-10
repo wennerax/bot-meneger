@@ -277,9 +277,10 @@ function buildSettingsMainKeyboard(chatId) {
     ],
     [
       { text: 'Первый Коммент', callback_data: `settings:open_menu:${chatId}` },
-      { text: '@admin', callback_data: `settings:section:admin:${chatId}` },
+      { text: 'Права на Команды', callback_data: `settings:section:commands:${chatId}` },
     ],
     [
+      { text: '@admin', callback_data: `settings:section:admin:${chatId}` },
       { text: '🚫 Скрытые пользователи', callback_data: `settings:section:anonymous:${chatId}` },
     ],
   ];
@@ -455,6 +456,135 @@ function buildSettingsAdminAdvancedMenuText() {
     '',
     '🔒 Удалять в группе персонала при обработке отчёта: Если включено, сообщение отчёта будет также удалено из группы персонала при обработке.',
   ].join('\n');
+}
+
+function getHelpPages() {
+  return [
+    [
+      '📋 СПРАВКА ПО КОМАНДАМ',
+      '',
+      '👤 ПОЛЬЗОВАТЕЛЬСКИЕ КОМАНДЫ',
+      '/start, !начало - начать работу',
+      '/help, !помощь - показать эту справку',
+      '/id, !айди - показать ваши ID',
+      '/about, !информация - информация о боте',
+      '/whoami, !кто я - забавное описание вас',
+      '/stats, !статистика - личная статистика пользователя',
+      '/top, !топ - топ пользователей по сообщениям в группе',
+    ].join('\n'),
+    [
+      '📋 СПРАВКА ПО КОМАНДАМ',
+      '',
+      '👮 МОДЕРСКИЕ КОМАНДЫ',
+      '/rules, !правила - показать правила чата',
+      '/setrules, !установить правила <текст> - установить правила',
+      '/setgreeting, !установить приветствие <текст> - установить приветствие',
+      '+антиспам - включить антиспам',
+      '-антиспам - выключить антиспам',
+      '+антифлуд - включить антифлуд',
+      '-антифлуд - выключить антифлуд',
+      '+ссылки - включить антиссылки',
+      '-ссылки - выключить антиссылки',
+      '/menu - открыть настройки первого сообщения бота',
+      '/menu + текст - настроить текст сообщения',
+      '/menu + кнопки - настроить кнопки и ряды',
+      '/menu + медиа - добавить фото/видео/документ в сообщение',
+      '/warn, !предупреждение @юз - выдать предупреждение',
+      '/warnings, !варны [@юз] - показать варны пользователя',
+      '/unwarn, !снять предупреждение @юз - снять предупреждения',
+      '/mute, !мут @юз <время> <причина> - ограничить сообщения',
+      '/unmute, !размут - снять ограничение',
+      '/ban, !бан <время> <причина> - заблокировать пользователя',
+      '/unban, !разбан - разблокировать пользователя',
+      '/banlist, !баны [страница] - список активных банов',
+      '/mutelist, !муты [страница] - список активных мутов',
+      '/admins, !админы - список администраторов бота',
+      '/addadmin @юз, !добавить админа @юз - назначить админа бота',
+      '/removeadmin @юз, !снять админа @юз - снять вспомогательного администратора бота',
+      '/promote @юз [уровень], !повышение @юз [уровень] - повысить администратора (если уровень не указан, повышает на 1)',
+      '/demote @юз [уровень], !разжалование @юз [уровень] - понизить администратора (если уровень не указан, понижает на 1)',
+    ].join('\n'),
+    [
+      '📋 Система уровней администраторов',
+      '',
+      'Уровни (1 = наивысший):',
+      '1 — Главный админ (владелец группы). Только владелец получает этот уровень автоматически.',
+      '2 — Ведущий админ. Почти все команды модерации (кроме антиспам/антиссылки/антифлуд). Может добавлять и снимать админов ниже себя.',
+      '3 — Старший админ. Доступ к ban и управлению пользователями ниже по уровню (может наказывать, но не снимать права).',
+      '4 — Средний админ. Доступ к warn и mute и их снятию.',
+      '5 — Младший админ. Доступ только к выдаче предупреждений и просмотру варн-листа.',
+      '',
+      'Команды управления админами:',
+      '/admins — показать админов по уровням',
+      '/addadmin @user [уровень] — назначить админа (по умолчанию уровень 5)',
+      '/removeadmin @user — снять админа',
+      '/promote @user [уровень] — повысить администратора (без уровня повышает на 1). Нельзя повысить до уровня не ниже вашего.',
+      '/demote @user [уровень] — понизить администратора (без уровня понижает на 1).',
+      '',
+      'Правила:',
+      '- Нельзя наказывать админов выше себя. При попытке будет сообщение: "Ты не можешь наказывать админов выше себя".',
+      '- Главный админ защищён: его нельзя снять/изменить другими администраторами.',
+      '',
+      'Примеры:',
+      '/addadmin @ivan 4 — назначить @ivan админом уровня 4 (средний)',
+      '/promote @petya — повысить @petya на один уровень',
+    ].join('\n'),
+    [
+      '📋 СПРАВКА ПО КОМАНДАМ',
+      '',
+      '🎉 РАЗВЛЕЧЕНИЯ',
+      '/hug @юз, !обнять @юз - обнять пользователя',
+      '/kiss @юз, !поцеловать @юз - поцеловать пользователя',
+      '/slap @юз, !шлёпнуть @юз - шлёпнуть пользователя',
+      '/poke @юз, !тыкнуть @юз - ткнуть пользователя',
+      '/coin, !монетка - подбросить монетку',
+      '/dice, !кубик - бросить кубик',
+      '/fate, !вопрос - спросить судьбу',
+      '/compliment, !комплимент - получить комплимент',
+      '/insult, !инсульт - получить приятную шутку',
+      '/ai <текст> - спросить AI и получить ответ',
+      '',
+      'Используйте русские команды с ! и английские с /',
+    ].join('\n'),
+  ];
+}
+
+function buildSettingsCommandRightsText(chatId, pageIndex = 0) {
+  const pages = getHelpPages();
+  const selectedPage = Math.max(0, Math.min(pageIndex, pages.length - 1));
+  return `${pages[selectedPage]}
+
+Страница ${selectedPage + 1}/${pages.length}`;
+}
+
+function buildSettingsCommandRightsKeyboard(chatId, pageIndex = 0) {
+  const pages = getHelpPages();
+  const selectedPage = Math.max(0, Math.min(pageIndex, pages.length - 1));
+  const buttons = [];
+  if (selectedPage > 0) {
+    buttons.push({ text: '⬅️ Назад', callback_data: `settings:command_rights:${chatId}:${selectedPage - 1}` });
+  }
+  if (selectedPage < pages.length - 1) {
+    buttons.push({ text: 'Вперёд ➡️', callback_data: `settings:command_rights:${chatId}:${selectedPage + 1}` });
+  }
+
+  return {
+    inline_keyboard: [
+      buttons,
+      [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
+    ],
+  };
+}
+
+async function showSettingsCommandRightsMenu(ctx, chatId, pageIndex = 0) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  await ctx.editMessageText(buildSettingsCommandRightsText(chatId, pageIndex), {
+    reply_markup: buildSettingsCommandRightsKeyboard(chatId, pageIndex),
+  });
 }
 
 async function showSettingsAdminAdvancedMenu(ctx, chatId) {
@@ -3250,6 +3380,8 @@ function createBot() {
         await showSettingsBanwordsMenu(ctx, chatId);
       } else if (parsed.section === 'anonymous') {
         await showSettingsAnonymousMenu(ctx, chatId);
+      } else if (parsed.section === 'commands') {
+        await showSettingsCommandRightsMenu(ctx, chatId);
       }
       return;
     }
@@ -3434,6 +3566,12 @@ function createBot() {
 
     if (parsed.target === 'anonymous_exceptions') {
       await showSettingsAnonymousExceptionsMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'command_rights') {
+      const pageIndex = Number(parsed.value || 0);
+      await showSettingsCommandRightsMenu(ctx, chatId, Number.isFinite(pageIndex) ? pageIndex : 0);
       return;
     }
 
@@ -4469,6 +4607,7 @@ module.exports = {
   buildPunishmentListMessage,
   buildBotAdminListMessage,
   buildSettingsMainKeyboard,
+  buildSettingsCommandRightsKeyboard,
   buildSettingsFirstMessageKeyboard,
   buildSettingsRulesMenuText,
   buildSettingsAnonymousMenuText,
