@@ -1856,6 +1856,9 @@ function createBot() {
           { text: 'Настройки кнопок', callback_data: 'menu:buttons' },
           { text: 'Добавить медиа', callback_data: 'menu:media' },
         ],
+        [
+          { text: '🔐 Права на Команды', callback_data: 'menu:command_rights' },
+        ],
       ],
     };
   }
@@ -1943,6 +1946,95 @@ function createBot() {
       return 'Отправьте любое медиа (фото, видео, документ, голос, стикер и т.п.), и я сохраню его в качестве первого медиа-сообщения.';
     }
     return '';
+  }
+
+  function getCommandsList() {
+    return [
+      { cmd: 'staff', label: '/staff' },
+      { cmd: 'rules', label: '/rules' },
+      { cmd: 'me', label: '/me' },
+      { cmd: 'translate', label: '/translate' },
+      { cmd: 'link', label: '/link' },
+      { cmd: 'help', label: '/help' },
+      { cmd: 'whoami', label: '/whoami' },
+      { cmd: 'coin', label: '/coin' },
+      { cmd: 'dice', label: '/dice' },
+    ];
+  }
+
+  function getPermissionEmoji(level) {
+    if (level === 'none') return '❌';
+    if (level === 'admin') return '👨‍💼';
+    return '👥';
+  }
+
+  function getPermissionLabel(level) {
+    if (level === 'none') return 'Никто';
+    if (level === 'admin') return 'Админы';
+    return 'Все';
+  }
+
+  function buildCommandRightsText(chatId) {
+    const service = activeModerationService || defaultModerationService;
+    const commands = getCommandsList();
+    const rights = service.getAllCommandRights(chatId);
+
+    const lines = [
+      '🔐 ПРАВА НА КОМАНДЫ',
+      '',
+      'Текущие разрешения:',
+    ];
+
+    commands.forEach(({ cmd, label }) => {
+      const level = rights[cmd] || 'all';
+      const emoji = getPermissionEmoji(level);
+      const text = getPermissionLabel(level);
+      lines.push(`${emoji} ${label.padEnd(12)} ${text}`);
+    });
+
+    return lines.join('\n');
+  }
+
+  function buildCommandRightsKeyboard(chatId, commandIndex = 0) {
+    const commands = getCommandsList();
+    const service = activeModerationService || defaultModerationService;
+    const rights = service.getAllCommandRights(chatId);
+
+    const validIndex = Math.max(0, Math.min(commandIndex, commands.length - 1));
+    const { cmd, label } = commands[validIndex];
+    const currentLevel = rights[cmd] || 'all';
+
+    const keyboard = {
+      inline_keyboard: [
+        [{ text: `Команда: ${label}`, callback_data: 'menu:command_rights:none' }],
+        [
+          { text: `${getPermissionEmoji('all')} Все`, callback_data: `menu:command_rights:toggle:${validIndex}:all` },
+          { text: `${getPermissionEmoji('admin')} Админы`, callback_data: `menu:command_rights:toggle:${validIndex}:admin` },
+          { text: `${getPermissionEmoji('none')} Никто`, callback_data: `menu:command_rights:toggle:${validIndex}:none` },
+        ],
+        [
+          validIndex > 0 && { text: '⬅️', callback_data: `menu:command_rights:nav:${validIndex - 1}` },
+          validIndex < commands.length - 1 && { text: '➡️', callback_data: `menu:command_rights:nav:${validIndex + 1}` },
+        ].filter(Boolean),
+        [
+          { text: 'Назад к меню', callback_data: 'menu:overview' },
+        ],
+      ].filter((row) => row.length > 0),
+    };
+
+    return keyboard;
+  }
+
+  async function showMenuCommandRightsMenu(ctx, chatId, commandIndex = 0) {
+    if (!(await canManageGroupSettings(ctx, chatId))) {
+      await ctx.reply('У вас нет прав менять настройки этой группы.');
+      return;
+    }
+
+    const text = buildCommandRightsText(chatId);
+    const keyboard = buildCommandRightsKeyboard(chatId, commandIndex);
+
+    await ctx.editMessageText(text, { reply_markup: keyboard });
   }
 
   function getMediaPayloadFromMessage(ctx) {
@@ -3865,6 +3957,36 @@ function createBot() {
         return;
       }
       await ctx.editMessageText(formatMenuOverview(chatId), { reply_markup: buildMenuRowInfoKeyboard(chatId, rowIndex) });
+      return;
+    }
+
+    if (action === 'command_rights') {
+      await showMenuCommandRightsMenu(ctx, chatId, 0);
+      return;
+    }
+
+    if (action.startsWith('command_rights:nav:')) {
+      const commandIndex = Number(action.split(':')[2]);
+      if (Number.isFinite(commandIndex)) {
+        await showMenuCommandRightsMenu(ctx, chatId, commandIndex);
+      }
+      return;
+    }
+
+    if (action.startsWith('command_rights:toggle:')) {
+      const parts = action.split(':');
+      const commandIndex = Number(parts[2]);
+      const newLevel = String(parts[3]);
+      const commands = getCommandsList();
+
+      if (Number.isFinite(commandIndex) && commandIndex >= 0 && commandIndex < commands.length) {
+        const { cmd } = commands[commandIndex];
+        if (['all', 'admin', 'none'].includes(newLevel)) {
+          moderationService.setCommandRights(chatId, cmd, newLevel);
+          await ctx.reply(`✅ Право на ${commands[commandIndex].label} изменено на "${getPermissionLabel(newLevel)}".`);
+          await showMenuCommandRightsMenu(ctx, chatId, commandIndex);
+        }
+      }
       return;
     }
   });

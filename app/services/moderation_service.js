@@ -234,6 +234,9 @@ class ModerationService {
           return [...new Set(list)];
         })(),
       },
+      commandRights: (chat.commandRights && typeof chat.commandRights === 'object')
+        ? { ...chat.commandRights }
+        : {},
     };
   }
 
@@ -933,6 +936,27 @@ class ModerationService {
   disableDeleteAnonymousMessages(chatId) {
     this._getChat(chatId).hideAnonymous.deleteMessages = false;
     this._save();
+  }
+
+  getCommandRights(chatId, command) {
+    const chat = this._getChat(chatId);
+    const cmd = String(command || '').toLowerCase().replace(/^\//, '');
+    return chat.commandRights[cmd] || 'all';
+  }
+
+  setCommandRights(chatId, command, level) {
+    const chat = this._getChat(chatId);
+    const cmd = String(command || '').toLowerCase().replace(/^\//, '');
+    if (['all', 'admin', 'none'].includes(level)) {
+      chat.commandRights[cmd] = level;
+      this._save();
+      return true;
+    }
+    return false;
+  }
+
+  getAllCommandRights(chatId) {
+    return { ...this._getChat(chatId).commandRights };
   }
 }
 
