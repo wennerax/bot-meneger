@@ -47,6 +47,18 @@ function detectForbiddenWord(text) {
   return defaultModerationService.findBanWord(0, text);
 }
 
+function isChannelPostInGroupMessage(message = {}) {
+  if (!message || typeof message !== 'object') {
+    return false;
+  }
+
+  const isSenderChatChannel = message.sender_chat?.type === 'channel';
+  const isForwardedFromChannel = message.forward_from_chat?.type === 'channel';
+  const hasRegularUser = Boolean(message.from && typeof message.from === 'object' && message.from.id);
+
+  return !hasRegularUser && (isSenderChatChannel || isForwardedFromChannel);
+}
+
 function isAnonymousSenderMessage(message = {}) {
   if (!message || typeof message !== 'object') {
     return false;
@@ -1590,9 +1602,7 @@ function createBot() {
   }
 
   function isChannelPostInGroup(ctx) {
-    const message = ctx.message || {};
-    return isGroupChat(ctx)
-      && (message.sender_chat?.type === 'channel' || message.forward_from_chat?.type === 'channel');
+    return isGroupChat(ctx) && isChannelPostInGroupMessage(ctx.message);
   }
 
   function getMenuKeyboard(chatId) {
@@ -4292,6 +4302,7 @@ module.exports = {
   buildSettingsAnonymousMenuText,
   buildSettingsAnonymousKeyboard,
   isAnonymousSenderMessage,
+  isChannelPostInGroupMessage,
   parseSettingsAction,
   detectForbiddenWord,
   isLinkMessage,

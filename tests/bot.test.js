@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, parseSettingsAction, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, shouldStartCaptchaForChat, isAnonymousSenderMessage } = require('../app/bot');
+const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, parseSettingsAction, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage } = require('../app/bot');
 const { buildAiRequestPayload } = require('../app/ai');
 
 test('parsePunishmentDetails extracts duration and reason', () => {
@@ -92,6 +92,12 @@ test('isAnonymousSenderMessage detects hidden sender messages', () => {
   assert.equal(isAnonymousSenderMessage({ author_signature: 'Anonymous admin' }), true);
   assert.equal(isAnonymousSenderMessage({ from: { id: 123 } }), false);
   assert.equal(isAnonymousSenderMessage(null), false);
+});
+
+test('isChannelPostInGroupMessage ignores messages sent on behalf of a channel by a user', () => {
+  assert.equal(isChannelPostInGroupMessage({ sender_chat: { type: 'channel' }, from: { id: 123 } }), false);
+  assert.equal(isChannelPostInGroupMessage({ sender_chat: { type: 'channel' } }), true);
+  assert.equal(isChannelPostInGroupMessage({ forward_from_chat: { type: 'channel' } }), true);
 });
 
 test('buildSettingsFirstMessageKeyboard exposes text, buttons and media controls', () => {
