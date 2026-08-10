@@ -958,6 +958,10 @@ class ModerationService {
     return false;
   }
 
+  getAllCommandRights(chatId) {
+    return { ...this._getChat(chatId).commandRights };
+  }
+
   isCommandDisabled(chatId, command) {
     const chat = this._getChat(chatId);
     const cmd = String(command || '').toLowerCase().replace(/^\//, '');
