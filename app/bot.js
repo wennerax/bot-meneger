@@ -2071,16 +2071,16 @@ function createBot() {
   function buildCommandRightsPageText(chatId, pageIndex = 0) {
     const service = activeModerationService || defaultModerationService;
     const commands = getCommandsList();
-    const rights = service.getAllCommandRights(chatId);
+    const disabled = service.getAllCommandDisabled(chatId);
     const totalPages = Math.max(1, Math.ceil(commands.length / COMMANDS_PER_PAGE));
     const page = Math.max(0, Math.min(pageIndex, totalPages - 1));
 
     const header = [
-      '🔐 ПРАВА НА КОМАНДЫ',
+      '🔧 Управление командами',
       '',
-      'В этом меню вы можете настроить права следующих команд.',
+      'В этом меню можно отключать и включать команды бота.',
       '',
-      '❌ = Никто | 👥 = Все | 👨‍💼 = Админы',
+      'Статус: ❌ отключено, ✅ включено',
       '',
     ];
 
@@ -2088,8 +2088,8 @@ function createBot() {
     const pageCommands = commands.slice(start, start + COMMANDS_PER_PAGE);
 
     pageCommands.forEach(({ cmd, label }) => {
-      const level = rights[cmd] || 'all';
-      header.push(`${getPermissionEmoji(level)} ${label} — ${getPermissionLabel(level)}`);
+      const isDisabled = Boolean(disabled[cmd]);
+      header.push(`${isDisabled ? '❌' : '✅'} ${label}`);
     });
 
     header.push('');
@@ -2100,7 +2100,7 @@ function createBot() {
   function buildCommandRightsPageKeyboard(chatId, pageIndex = 0, returnCallback = `menu:overview`, returnFlag = 'menu') {
     const commands = getCommandsList();
     const service = activeModerationService || defaultModerationService;
-    const rights = service.getAllCommandRights(chatId);
+    const disabled = service.getAllCommandDisabled(chatId);
     const totalPages = Math.max(1, Math.ceil(commands.length / COMMANDS_PER_PAGE));
     const page = Math.max(0, Math.min(pageIndex, totalPages - 1));
 
@@ -2108,27 +2108,17 @@ function createBot() {
     const pageCommands = commands.slice(start, start + COMMANDS_PER_PAGE);
 
     const rows = [];
-    // For each command show: [label] [none] [admin] [all]
+    const suffix = returnFlag === 'settings' ? ':settings' : '';
+
     pageCommands.forEach((item, idx) => {
       const index = start + idx;
-      const level = rights[item.cmd] || 'all';
-      const noneText = level === 'none' ? `${getPermissionEmoji('none')} Никто ✅` : `${getPermissionEmoji('none')} Никто`;
-      const adminText = level === 'admin' ? `${getPermissionEmoji('admin')} Админы ✅` : `${getPermissionEmoji('admin')} Админы`;
-      const allText = level === 'all' ? `${getPermissionEmoji('all')} Все ✅` : `${getPermissionEmoji('all')} Все`;
-
-      const suffix = returnFlag === 'settings' ? ':settings' : '';
-      const noneButton = { text: noneText, callback_data: `menu:command_rights:toggle:${index}:none${suffix}` };
-      const adminButton = { text: adminText, callback_data: `menu:command_rights:toggle:${index}:admin${suffix}` };
-      const allButton = { text: allText, callback_data: `menu:command_rights:toggle:${index}:all${suffix}` };
-      const labelBtn = { text: item.label, callback_data: `menu:command_rights:select:${index}${suffix}` };
-
-      const row = [labelBtn, noneButton, adminButton, allButton];
-      rows.push(row);
+      const isDisabled = Boolean(disabled[item.cmd]);
+      const disableButton = { text: isDisabled ? 'Отключить ❌' : 'Отключить', callback_data: `menu:command_rights:disable:${index}${suffix}` };
+      const enableButton = { text: isDisabled ? 'Включить' : 'Включить ✅', callback_data: `menu:command_rights:enable:${index}${suffix}` };
+      rows.push([{ text: item.label, callback_data: 'menu:none' }, disableButton, enableButton]);
     });
 
-    // Navigation buttons
     const nav = [];
-    const suffix = returnFlag === 'settings' ? ':settings' : '';
     if (page > 0) nav.push({ text: '⬅️ Назад', callback_data: `menu:command_rights:nav:${page - 1}${suffix}` });
     if (page < totalPages - 1) nav.push({ text: 'Вперёд ➡️', callback_data: `menu:command_rights:nav:${page + 1}${suffix}` });
 
@@ -4097,23 +4087,20 @@ function createBot() {
       return;
     }
 
-    if (action.startsWith('command_rights:toggle:')) {
+    if (action.startsWith('command_rights:disable:') || action.startsWith('command_rights:enable:')) {
       const parts = action.split(':');
       const commandIndex = Number(parts[2]);
-      const newLevel = String(parts[3]);
+      const enable = action.startsWith('command_rights:enable:');
       const commands = getCommandsList();
       const returnFlag = parts.includes('settings') ? 'settings' : 'menu';
       const returnCallback = returnFlag === 'settings' ? `settings:main:${chatId}` : 'menu:overview';
 
       if (Number.isFinite(commandIndex) && commandIndex >= 0 && commandIndex < commands.length) {
-        const { cmd } = commands[commandIndex];
-        if (['all', 'admin', 'none'].includes(newLevel)) {
-          moderationService.setCommandRights(chatId, cmd, newLevel);
-          await safeAnswerCbQuery(ctx, `✅ Право на ${commands[commandIndex].label} изменено на "${getPermissionLabel(newLevel)}".`);
-          // compute page index containing this command
-          const pageIndex = Math.floor(commandIndex / COMMANDS_PER_PAGE);
-          await showMenuCommandRightsMenu(ctx, chatId, pageIndex, returnCallback, returnFlag);
-        }
+        const { cmd, label } = commands[commandIndex];
+        moderationService.setCommandDisabled(chatId, cmd, !enable);
+        await safeAnswerCbQuery(ctx, `✅ Команда ${label} ${enable ? 'включена' : 'отключена'}.`);
+        const pageIndex = Math.floor(commandIndex / COMMANDS_PER_PAGE);
+        await showMenuCommandRightsMenu(ctx, chatId, pageIndex, returnCallback, returnFlag);
       }
       return;
     }
