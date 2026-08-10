@@ -226,10 +226,10 @@ class ModerationService {
         allowedAnonymousChannels: (() => {
           const list = [];
           if (Array.isArray(chat.hideAnonymous?.allowedAnonymousChannels)) {
-            list.push(...chat.hideAnonymous.allowedAnonymousChannels.map((item) => normalizeAnonymousChannelIdentifier(item)).filter(Boolean));
+            list.push(...chat.hideAnonymous.allowedAnonymousChannels.map((item) => this._normalizeAnonymousChannelIdentifier(item)).filter(Boolean));
           }
           if (Array.isArray(chat.hideAnonymous?.allowedChannelIds)) {
-            list.push(...chat.hideAnonymous.allowedChannelIds.map((item) => normalizeAnonymousChannelIdentifier(item)).filter(Boolean));
+            list.push(...chat.hideAnonymous.allowedChannelIds.map((item) => this._normalizeAnonymousChannelIdentifier(item)).filter(Boolean));
           }
           return [...new Set(list)];
         })(),
