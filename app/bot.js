@@ -2023,11 +2023,7 @@ function createBot() {
   }
   function getCommandsList() {
     return [
-      { cmd: 'staff', label: '/staff' },
       { cmd: 'rules', label: '/rules' },
-      { cmd: 'me', label: '/me' },
-      { cmd: 'translate', label: '/translate' },
-      { cmd: 'link', label: '/link' },
       { cmd: 'help', label: '/help' },
       { cmd: 'whoami', label: '/whoami' },
       { cmd: 'coin', label: '/coin' },
