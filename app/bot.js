@@ -1856,9 +1856,6 @@ function createBot() {
           { text: 'Настройки кнопок', callback_data: 'menu:buttons' },
           { text: 'Добавить медиа', callback_data: 'menu:media' },
         ],
-        [
-          { text: '🔐 Права на Команды', callback_data: 'menu:command_rights' },
-        ],
       ],
     };
   }
