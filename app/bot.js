@@ -701,7 +701,7 @@ async function showSettingsAdminMenu(ctx, chatId) {
     return;
   }
 
-  await ctx.editMessageText(buildSettingsAdminMenuText(), { reply_markup: buildSettingsAdminKeyboard(chatId) });
+  await safeEditMessageText(ctx, buildSettingsAdminMenuText(), { reply_markup: buildSettingsAdminKeyboard(chatId) });
 }
 
 async function showSettingsMainMenu(ctx, chatId) {
@@ -1547,6 +1547,18 @@ function createBot() {
       }
     } catch (error) {
       // ignore stale or invalid callback query errors
+    }
+  }
+
+  async function safeEditMessageText(ctx, text, extra = {}) {
+    try {
+      await ctx.editMessageText(text, extra);
+    } catch (error) {
+      const description = error?.response?.description || error?.description || '';
+      if (typeof description === 'string' && description.includes('message is not modified')) {
+        return;
+      }
+      throw error;
     }
   }
 
