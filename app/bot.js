@@ -1547,6 +1547,66 @@ function createBot() {
     return slashCommand.test(text) || bangCommand.test(text) || plusMinusCommand.test(text);
   }
 
+  function parseBotCommandKey(text) {
+    const normalized = String(text || '').trim();
+    const slashMatch = normalized.match(/^\/([^\s]+)/);
+    if (slashMatch) {
+      const commandWithBot = slashMatch[1].toLowerCase();
+      return commandWithBot.split('@')[0];
+    }
+
+    const bangMatch = normalized.match(/^!(\S+)/);
+    if (!bangMatch) {
+      return null;
+    }
+
+    const rawCommand = bangMatch[1].toLowerCase();
+    if (/^кто$/.test(rawCommand) && /^!кто\s*я\b/i.test(normalized)) {
+      return 'whoami';
+    }
+
+    const translationMap = {
+      начало: 'start',
+      помощь: 'help',
+      айди: 'id',
+      информация: 'about',
+      статистика: 'stats',
+      правила: 'rules',
+      обнять: 'hug',
+      поцеловать: 'kiss',
+      шлёпнуть: 'slap',
+      шлепнуть: 'slap',
+      тыкнуть: 'poke',
+      монетка: 'coin',
+      кубик: 'dice',
+      вопрос: 'fate',
+      комплимент: 'compliment',
+      инсульт: 'insult',
+    };
+
+    return translationMap[rawCommand] || rawCommand;
+  }
+
+  async function enforceDisabledCommand(ctx, next) {
+    if (!ctx.chat || !isGroupChat(ctx) || !ctx.message) {
+      return next();
+    }
+
+    const commandKey = parseBotCommandKey(getMessageText(ctx));
+    if (!commandKey) {
+      return next();
+    }
+
+    if (moderationService.isCommandDisabled(ctx.chat.id, commandKey)) {
+      await deleteMessageSafely(ctx, ctx.message.message_id);
+      return;
+    }
+
+    return next();
+  }
+
+  bot.use(enforceDisabledCommand);
+
   function ensureGroup(ctx) {
     database.ensureGroup(ctx.chat.id, ctx.chat.title || String(ctx.chat.id), ctx.chat?.owner_id || null);
   }
@@ -1854,6 +1914,9 @@ function createBot() {
         [
           { text: 'Настройки кнопок', callback_data: 'menu:buttons' },
           { text: 'Добавить медиа', callback_data: 'menu:media' },
+        ],
+        [
+          { text: 'Настройки команд', callback_data: 'menu:command_rights' },
         ],
       ],
     };

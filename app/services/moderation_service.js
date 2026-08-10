@@ -237,6 +237,9 @@ class ModerationService {
       commandRights: (chat.commandRights && typeof chat.commandRights === 'object')
         ? { ...chat.commandRights }
         : {},
+      commandDisabled: (chat.commandDisabled && typeof chat.commandDisabled === 'object')
+        ? { ...chat.commandDisabled }
+        : {},
     };
   }
 
@@ -955,8 +958,26 @@ class ModerationService {
     return false;
   }
 
-  getAllCommandRights(chatId) {
-    return { ...this._getChat(chatId).commandRights };
+  isCommandDisabled(chatId, command) {
+    const chat = this._getChat(chatId);
+    const cmd = String(command || '').toLowerCase().replace(/^\//, '');
+    return Boolean(chat.commandDisabled[cmd]);
+  }
+
+  setCommandDisabled(chatId, command, disabled) {
+    const chat = this._getChat(chatId);
+    const cmd = String(command || '').toLowerCase().replace(/^\//, '');
+    if (disabled) {
+      chat.commandDisabled[cmd] = true;
+    } else {
+      delete chat.commandDisabled[cmd];
+    }
+    this._save();
+    return true;
+  }
+
+  getAllCommandDisabled(chatId) {
+    return { ...this._getChat(chatId).commandDisabled };
   }
 }
 
