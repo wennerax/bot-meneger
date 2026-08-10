@@ -79,7 +79,7 @@ function loadConfig(overrides = {}, options = {}) {
     miniAppUrl: merged.MINIAPP_URL || merged.MINI_APP_URL || merged.APP_URL || '',
     // Support generic AI provider env and OpenRouter-specific env names.
     aiApiKey,
-    aiModel: merged.AI_MODEL || merged.OPENROUTER_MODEL || 'openrouter',
+    aiModel: merged.AI_MODEL || merged.OPENROUTER_MODEL || 'gpt-4o-mini',
     aiApiBaseUrl: merged.OPENROUTER_API_BASE_URL || merged.AI_API_BASE_URL || 'https://api.openrouter.ai',
     weatherLocation: merged.WEATHER_LOCATION || 'Moscow',
   };
