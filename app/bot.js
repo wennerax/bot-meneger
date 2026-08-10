@@ -1947,7 +1947,6 @@ function createBot() {
     }
     return '';
   }
-
   function getCommandsList() {
     return [
       { cmd: 'staff', label: '/staff' },
@@ -1959,6 +1958,25 @@ function createBot() {
       { cmd: 'whoami', label: '/whoami' },
       { cmd: 'coin', label: '/coin' },
       { cmd: 'dice', label: '/dice' },
+      { cmd: 'start', label: '/start' },
+      { cmd: 'id', label: '/id' },
+      { cmd: 'about', label: '/about' },
+      { cmd: 'stats', label: '/stats' },
+      { cmd: 'top', label: '/top' },
+      { cmd: 'warn', label: '/warn' },
+      { cmd: 'warnings', label: '/warnings' },
+      { cmd: 'unwarn', label: '/unwarn' },
+      { cmd: 'mute', label: '/mute' },
+      { cmd: 'unmute', label: '/unmute' },
+      { cmd: 'ban', label: '/ban' },
+      { cmd: 'unban', label: '/unban' },
+      { cmd: 'banlist', label: '/banlist' },
+      { cmd: 'mutelist', label: '/mutelist' },
+      { cmd: 'admins', label: '/admins' },
+      { cmd: 'addadmin', label: '/addadmin' },
+      { cmd: 'removeadmin', label: '/removeadmin' },
+      { cmd: 'promote', label: '/promote' },
+      { cmd: 'demote', label: '/demote' },
     ];
   }
 
@@ -1974,66 +1992,80 @@ function createBot() {
     return 'Все';
   }
 
-  function buildCommandRightsText(chatId) {
+  const COMMANDS_PER_PAGE = 5;
+
+  function buildCommandRightsPageText(chatId, pageIndex = 0) {
     const service = activeModerationService || defaultModerationService;
     const commands = getCommandsList();
     const rights = service.getAllCommandRights(chatId);
+    const totalPages = Math.max(1, Math.ceil(commands.length / COMMANDS_PER_PAGE));
+    const page = Math.max(0, Math.min(pageIndex, totalPages - 1));
 
-    const lines = [
+    const header = [
       '🔐 ПРАВА НА КОМАНДЫ',
       '',
-      'Текущие разрешения:',
+      'В этом меню вы можете настроить права следующих команд.',
+      '',
+      '❌ = Никто | 👥 = Все | 👨‍💼 = Админы',
+      '',
     ];
 
-    commands.forEach(({ cmd, label }) => {
+    const start = page * COMMANDS_PER_PAGE;
+    const pageCommands = commands.slice(start, start + COMMANDS_PER_PAGE);
+
+    pageCommands.forEach(({ cmd, label }) => {
       const level = rights[cmd] || 'all';
-      const emoji = getPermissionEmoji(level);
-      const text = getPermissionLabel(level);
-      lines.push(`${emoji} ${label.padEnd(12)} ${text}`);
+      header.push(`${getPermissionEmoji(level)} ${label} — ${getPermissionLabel(level)}`);
     });
 
-    return lines.join('\n');
+    header.push('');
+    header.push(`Страница ${page + 1}/${totalPages}`);
+    return header.join('\n');
   }
 
-  function buildCommandRightsKeyboard(chatId, commandIndex = 0) {
+  function buildCommandRightsPageKeyboard(chatId, pageIndex = 0) {
     const commands = getCommandsList();
     const service = activeModerationService || defaultModerationService;
     const rights = service.getAllCommandRights(chatId);
+    const totalPages = Math.max(1, Math.ceil(commands.length / COMMANDS_PER_PAGE));
+    const page = Math.max(0, Math.min(pageIndex, totalPages - 1));
 
-    const validIndex = Math.max(0, Math.min(commandIndex, commands.length - 1));
-    const { cmd, label } = commands[validIndex];
-    const currentLevel = rights[cmd] || 'all';
+    const start = page * COMMANDS_PER_PAGE;
+    const pageCommands = commands.slice(start, start + COMMANDS_PER_PAGE);
 
-    const keyboard = {
-      inline_keyboard: [
-        [{ text: `Команда: ${label}`, callback_data: 'menu:command_rights:none' }],
-        [
-          { text: `${getPermissionEmoji('all')} Все`, callback_data: `menu:command_rights:toggle:${validIndex}:all` },
-          { text: `${getPermissionEmoji('admin')} Админы`, callback_data: `menu:command_rights:toggle:${validIndex}:admin` },
-          { text: `${getPermissionEmoji('none')} Никто`, callback_data: `menu:command_rights:toggle:${validIndex}:none` },
-        ],
-        [
-          validIndex > 0 && { text: '⬅️', callback_data: `menu:command_rights:nav:${validIndex - 1}` },
-          validIndex < commands.length - 1 && { text: '➡️', callback_data: `menu:command_rights:nav:${validIndex + 1}` },
-        ].filter(Boolean),
-        [
-          { text: 'Назад к меню', callback_data: 'menu:overview' },
-        ],
-      ].filter((row) => row.length > 0),
-    };
+    const rows = [];
+    // For each command show: [label] [none] [admin] [all]
+    pageCommands.forEach((item, idx) => {
+      const index = start + idx;
+      const level = rights[item.cmd] || 'all';
+      const noneButton = { text: getPermissionEmoji('none'), callback_data: `command_rights:toggle:${index}:none` };
+      const adminButton = { text: getPermissionEmoji('admin'), callback_data: `command_rights:toggle:${index}:admin` };
+      const allButton = { text: getPermissionEmoji('all'), callback_data: `command_rights:toggle:${index}:all` };
+      const labelBtn = { text: item.label, callback_data: `command_rights:select:${index}` };
 
-    return keyboard;
+      const row = [labelBtn, noneButton, adminButton, allButton];
+      rows.push(row);
+    });
+
+    // Navigation buttons
+    const nav = [];
+    if (page > 0) nav.push({ text: '⬅️ Назад', callback_data: `command_rights:nav:${page - 1}` });
+    if (page < totalPages - 1) nav.push({ text: 'Вперёд ➡️', callback_data: `command_rights:nav:${page + 1}` });
+
+    if (nav.length) rows.push(nav);
+    rows.push([{ text: 'Назад', callback_data: 'menu:overview' }]);
+
+    return { inline_keyboard: rows };
   }
 
-  async function showMenuCommandRightsMenu(ctx, chatId, commandIndex = 0) {
+  async function showMenuCommandRightsMenu(ctx, chatId, pageIndex = 0) {
     if (!(await canManageGroupSettings(ctx, chatId))) {
       await ctx.reply('У вас нет прав менять настройки этой группы.');
       return;
     }
 
-    const text = buildCommandRightsText(chatId);
-    const keyboard = buildCommandRightsKeyboard(chatId, commandIndex);
-
+    const text = buildCommandRightsPageText(chatId, pageIndex);
+    const keyboard = buildCommandRightsPageKeyboard(chatId, pageIndex);
     await ctx.editMessageText(text, { reply_markup: keyboard });
   }
 
