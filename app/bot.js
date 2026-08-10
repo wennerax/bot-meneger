@@ -1974,66 +1974,80 @@ function createBot() {
     return 'Все';
   }
 
-  function buildCommandRightsText(chatId) {
+  // Paginated command-rights UI: show multiple commands per page with toggles
+  function buildCommandRightsPageText(chatId, pageIndex = 0, pageSize = 5) {
     const service = activeModerationService || defaultModerationService;
     const commands = getCommandsList();
     const rights = service.getAllCommandRights(chatId);
+    const totalPages = Math.max(1, Math.ceil(commands.length / pageSize));
+    const page = Math.max(0, Math.min(pageIndex, totalPages - 1));
+    const start = page * pageSize;
+    const end = Math.min(start + pageSize, commands.length);
 
     const lines = [
       '🔐 ПРАВА НА КОМАНДЫ',
       '',
-      'Текущие разрешения:',
+      'В этом меню вы можете настроить права следующих команд.',
+      '',
     ];
 
-    commands.forEach(({ cmd, label }) => {
+    for (let i = start; i < end; i += 1) {
+      const { cmd, label } = commands[i];
       const level = rights[cmd] || 'all';
-      const emoji = getPermissionEmoji(level);
-      const text = getPermissionLabel(level);
-      lines.push(`${emoji} ${label.padEnd(12)} ${text}`);
-    });
+      lines.push(`• ${label} » ${getPermissionEmoji(level)} ${getPermissionLabel(level)}`);
+    }
 
+    lines.push('');
+    lines.push(`Страница ${page + 1}/${totalPages}`);
     return lines.join('\n');
   }
 
-  function buildCommandRightsKeyboard(chatId, commandIndex = 0) {
+  function buildCommandRightsPageKeyboard(chatId, pageIndex = 0, pageSize = 5) {
     const commands = getCommandsList();
     const service = activeModerationService || defaultModerationService;
     const rights = service.getAllCommandRights(chatId);
+    const totalPages = Math.max(1, Math.ceil(commands.length / pageSize));
+    const page = Math.max(0, Math.min(pageIndex, totalPages - 1));
+    const start = page * pageSize;
+    const end = Math.min(start + pageSize, commands.length);
 
-    const validIndex = Math.max(0, Math.min(commandIndex, commands.length - 1));
-    const { cmd, label } = commands[validIndex];
-    const currentLevel = rights[cmd] || 'all';
+    const rows = [];
 
-    const keyboard = {
-      inline_keyboard: [
-        [{ text: `Команда: ${label}`, callback_data: 'menu:command_rights:none' }],
-        [
-          { text: `${getPermissionEmoji('all')} Все`, callback_data: `menu:command_rights:toggle:${validIndex}:all` },
-          { text: `${getPermissionEmoji('admin')} Админы`, callback_data: `menu:command_rights:toggle:${validIndex}:admin` },
-          { text: `${getPermissionEmoji('none')} Никто`, callback_data: `menu:command_rights:toggle:${validIndex}:none` },
-        ],
-        [
-          validIndex > 0 && { text: '⬅️', callback_data: `menu:command_rights:nav:${validIndex - 1}` },
-          validIndex < commands.length - 1 && { text: '➡️', callback_data: `menu:command_rights:nav:${validIndex + 1}` },
-        ].filter(Boolean),
-        [
-          { text: 'Назад к меню', callback_data: 'menu:overview' },
-        ],
-      ].filter((row) => row.length > 0),
-    };
+    for (let idx = start; idx < end; idx += 1) {
+      const { cmd, label } = commands[idx];
+      const level = rights[cmd] || 'all';
 
-    return keyboard;
+      // Left label button (non-destructive), then three toggle buttons
+      const labelButton = { text: label, callback_data: `menu:command_rights:noop:${idx}` };
+      const noneBtn = { text: getPermissionEmoji('none'), callback_data: `menu:command_rights:toggle:${idx}:none` };
+      const adminBtn = { text: getPermissionEmoji('admin'), callback_data: `menu:command_rights:toggle:${idx}:admin` };
+      const allBtn = { text: getPermissionEmoji('all'), callback_data: `menu:command_rights:toggle:${idx}:all` };
+
+      // If we want to visually indicate active level, replace button text with label+emoji
+      const row = [labelButton, noneBtn, adminBtn, allBtn].map((btn) => ({ ...btn }));
+      rows.push(row);
+    }
+
+    // navigation row
+    const navRow = [];
+    if (page > 0) navRow.push({ text: '⬅️ Назад', callback_data: `menu:command_rights:nav:${page - 1}` });
+    if (page < totalPages - 1) navRow.push({ text: 'Вперёд ➡️', callback_data: `menu:command_rights:nav:${page + 1}` });
+    if (navRow.length) rows.push(navRow);
+
+    // back button
+    rows.push([{ text: 'Назад', callback_data: 'menu:overview' }]);
+
+    return { inline_keyboard: rows };
   }
 
-  async function showMenuCommandRightsMenu(ctx, chatId, commandIndex = 0) {
+  async function showMenuCommandRightsMenu(ctx, chatId, pageIndex = 0) {
     if (!(await canManageGroupSettings(ctx, chatId))) {
       await ctx.reply('У вас нет прав менять настройки этой группы.');
       return;
     }
 
-    const text = buildCommandRightsText(chatId);
-    const keyboard = buildCommandRightsKeyboard(chatId, commandIndex);
-
+    const text = buildCommandRightsPageText(chatId, pageIndex);
+    const keyboard = buildCommandRightsPageKeyboard(chatId, pageIndex);
     await ctx.editMessageText(text, { reply_markup: keyboard });
   }
 
