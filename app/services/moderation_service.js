@@ -223,6 +223,9 @@ class ModerationService {
       hideAnonymous: {
         enabled: Boolean(chat.hideAnonymous?.enabled),
         deleteMessages: Boolean(chat.hideAnonymous?.deleteMessages),
+        allowedChannelIds: Array.isArray(chat.hideAnonymous?.allowedChannelIds)
+          ? [...new Set(chat.hideAnonymous.allowedChannelIds.map((item) => Number(item)).filter((id) => Number.isFinite(id)))]
+          : [],
       },
     };
   }
@@ -842,6 +845,38 @@ class ModerationService {
   enableDeleteAnonymousMessages(chatId) {
     this._getChat(chatId).hideAnonymous.deleteMessages = true;
     this._save();
+  }
+
+  getAllowedAnonymousChannels(chatId) {
+    return [...this._getChat(chatId).hideAnonymous.allowedChannelIds];
+  }
+
+  addAllowedAnonymousChannel(chatId, channelId) {
+    const chat = this._getChat(chatId);
+    const id = Number(channelId);
+    if (!Number.isFinite(id) || chat.hideAnonymous.allowedChannelIds.includes(id)) {
+      return false;
+    }
+    chat.hideAnonymous.allowedChannelIds.push(id);
+    this._save();
+    return true;
+  }
+
+  removeAllowedAnonymousChannel(chatId, channelId) {
+    const chat = this._getChat(chatId);
+    const id = Number(channelId);
+    const before = chat.hideAnonymous.allowedChannelIds.length;
+    chat.hideAnonymous.allowedChannelIds = chat.hideAnonymous.allowedChannelIds.filter((item) => item !== id);
+    if (chat.hideAnonymous.allowedChannelIds.length === before) {
+      return false;
+    }
+    this._save();
+    return true;
+  }
+
+  isAllowedAnonymousChannel(chatId, channelId) {
+    const id = Number(channelId);
+    return Number.isFinite(id) && this._getChat(chatId).hideAnonymous.allowedChannelIds.includes(id);
   }
 
   disableDeleteAnonymousMessages(chatId) {

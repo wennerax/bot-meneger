@@ -500,12 +500,47 @@ function buildSettingsAnonymousKeyboard(chatId) {
   return {
     inline_keyboard: [
       [
+        { text: 'Исключения', callback_data: `settings:anonymous_exceptions:${chatId}` },
+      ],
+      [
         { text: enabled ? '✅ Включено' : '❌ Отключено', callback_data: `settings:toggle_anonymous:${chatId}` },
       ],
       [
         { text: `Удалять сообщения: ${deleteMessages ? '✅' : '❌'}`, callback_data: `settings:toggle_delete_anonymous:${chatId}` },
       ],
       [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
+    ],
+  };
+}
+
+function buildSettingsAnonymousExceptionsText(chatId) {
+  const service = activeModerationService || defaultModerationService;
+  const allowedChannels = service.getAllowedAnonymousChannels(chatId);
+  const lines = [
+    '🚫 Исключения каналов',
+    '',
+    'Здесь можно добавить каналы, сообщения от которых будут приниматься как разрешённые канал-посты и не удаляться.',
+    '',
+    'Введите @username, t.me/username или numeric ID канала для добавления.',
+    '',
+    'Текущие исключения:',
+  ];
+  if (allowedChannels.length === 0) {
+    lines.push('— пока нет');
+  } else {
+    allowedChannels.forEach((channelId) => {
+      lines.push(`• ${channelId}`);
+    });
+  }
+  return lines.join('\n');
+}
+
+function buildSettingsAnonymousExceptionsKeyboard(chatId) {
+  return {
+    inline_keyboard: [
+      [{ text: 'Добавить канал', callback_data: `settings:anonymous_add_channel:${chatId}` }],
+      [{ text: 'Удалить канал', callback_data: `settings:anonymous_remove_channel:${chatId}` }],
+      [{ text: 'Назад', callback_data: `settings:section:anonymous:${chatId}` }],
     ],
   };
 }
@@ -517,6 +552,15 @@ async function showSettingsAnonymousMenu(ctx, chatId) {
   }
 
   await ctx.editMessageText(buildSettingsAnonymousMenuText(), { reply_markup: buildSettingsAnonymousKeyboard(chatId) });
+}
+
+async function showSettingsAnonymousExceptionsMenu(ctx, chatId) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  await ctx.editMessageText(buildSettingsAnonymousExceptionsText(chatId), { reply_markup: buildSettingsAnonymousExceptionsKeyboard(chatId) });
 }
 
 async function showSettingsAdminMenu(ctx, chatId) {
@@ -826,6 +870,12 @@ function parseSettingsPrompt(action) {
   }
   if (action === 'settings_link_remove') {
     return 'Отправьте ссылку или домен для удаления из списка разрешённых.';
+  }
+  if (action === 'settings_anonymous_channel_add') {
+    return 'Отправьте @username, t.me/username или ID канала для добавления в исключения.';
+  }
+  if (action === 'settings_anonymous_channel_remove') {
+    return 'Отправьте @username, t.me/username или ID канала для удаления из исключений.';
   }
   if (action === 'settings_rules_set') {
     return 'Отправьте новые правила для группы.';
@@ -1601,6 +1651,46 @@ function createBot() {
     pendingSettingsActions.delete(`${ctx.from.id}:${ctx.chat.id}`);
   }
 
+  async function resolveChannelChatId(ctx, value) {
+    const normalized = String(value || '').trim();
+    if (!normalized) {
+      return null;
+    }
+
+    const channelId = Number(normalized.replace(/^@/, ''));
+    if (Number.isFinite(channelId)) {
+      return channelId;
+    }
+
+    const username = normalized.replace(/^https?:\/\//i, '').replace(/^t\.me\//i, '').replace(/^@/, '').trim();
+    if (!username) {
+      return null;
+    }
+
+    try {
+      const chat = await ctx.telegram.getChat(username);
+      if (chat && Number.isFinite(Number(chat.id))) {
+        return Number(chat.id);
+      }
+    } catch (error) {
+      return null;
+    }
+    return null;
+  }
+
+  function isAllowedAnonymousChannel(ctx) {
+    if (!ctx || !ctx.chat || !ctx.message) {
+      return false;
+    }
+    const service = activeModerationService || defaultModerationService;
+    const message = ctx.message || {};
+    const channelId = message.sender_chat?.id || message.forward_from_chat?.id;
+    if (!Number.isFinite(Number(channelId))) {
+      return false;
+    }
+    return service.isAllowedAnonymousChannel(ctx.chat.id, channelId);
+  }
+
   function isChannelPostInGroup(ctx) {
     return isGroupChat(ctx) && isChannelPostInGroupMessage(ctx.message);
   }
@@ -1885,6 +1975,46 @@ function createBot() {
     if (pending.action === 'settings_message_text' && ctx.message.text) {
       moderationService.setMenuText(groupId, buildTextPayloadFromMessage(ctx));
       await ctx.reply('✅ Текст первого сообщения обновлён.');
+      clearPendingSettingsAction(ctx);
+      return true;
+    }
+
+    if (pending.action === 'settings_anonymous_channel_add' && ctx.message.text) {
+      const value = String(ctx.message.text).trim();
+      if (!value) {
+        await ctx.reply('⚠️ Пустое значение не сохранено.');
+        return true;
+      }
+      const resolvedChatId = await resolveChannelChatId(ctx, value);
+      if (!resolvedChatId) {
+        await ctx.reply('⚠️ Не удалось определить канал. Укажите @username, t.me/username или numeric ID.');
+        return true;
+      }
+      if (moderationService.addAllowedAnonymousChannel(groupId, resolvedChatId)) {
+        await ctx.reply(`✅ Канал добавлен в исключения: ${resolvedChatId}`);
+      } else {
+        await ctx.reply('⚠️ Этот канал уже есть в списке или ID некорректен.');
+      }
+      clearPendingSettingsAction(ctx);
+      return true;
+    }
+
+    if (pending.action === 'settings_anonymous_channel_remove' && ctx.message.text) {
+      const value = String(ctx.message.text).trim();
+      if (!value) {
+        await ctx.reply('⚠️ Пустое значение не удалено.');
+        return true;
+      }
+      const resolvedChatId = await resolveChannelChatId(ctx, value);
+      if (!resolvedChatId) {
+        await ctx.reply('⚠️ Не удалось определить канал. Укажите @username, t.me/username или numeric ID.');
+        return true;
+      }
+      if (moderationService.removeAllowedAnonymousChannel(groupId, resolvedChatId)) {
+        await ctx.reply(`✅ Канал удалён из исключений: ${resolvedChatId}`);
+      } else {
+        await ctx.reply('⚠️ Такого канала нет в списке.');
+      }
       clearPendingSettingsAction(ctx);
       return true;
     }
@@ -3282,6 +3412,23 @@ function createBot() {
       return;
     }
 
+    if (parsed.target === 'anonymous_exceptions') {
+      await showSettingsAnonymousExceptionsMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'anonymous_add_channel') {
+      setPendingSettingsAction(ctx, { action: 'settings_anonymous_channel_add', groupId: chatId });
+      await ctx.reply(parseSettingsPrompt('settings_anonymous_channel_add'));
+      return;
+    }
+
+    if (parsed.target === 'anonymous_remove_channel') {
+      setPendingSettingsAction(ctx, { action: 'settings_anonymous_channel_remove', groupId: chatId });
+      await ctx.reply(parseSettingsPrompt('settings_anonymous_channel_remove'));
+      return;
+    }
+
     if (parsed.target === 'first_button_add_row') {
       const service = activeModerationService || defaultModerationService;
       service.addMenuRow(chatId);
@@ -4257,6 +4404,11 @@ function createBot() {
       if (handled) {
         return;
       }
+    }
+
+    if (isAllowedAnonymousChannel(ctx)) {
+      await sendMenuReplyForChannelPost(ctx);
+      return;
     }
 
     if (isChannelPostInGroup(ctx)) {

@@ -195,6 +195,19 @@ test('moderation settings persist across restarts', () => {
   assert.equal(second.findFilterResponse(100, 'ПРИВЕТ всем'), 'Привет!');
 });
 
+test('allowed anonymous channels can be added and removed per chat', () => {
+  const service = new ModerationService();
+
+  assert.equal(service.isAllowedAnonymousChannel(100, 777), false);
+  assert.equal(service.addAllowedAnonymousChannel(100, 777), true);
+  assert.deepEqual(service.getAllowedAnonymousChannels(100), [777]);
+  assert.equal(service.isAllowedAnonymousChannel(100, 777), true);
+  assert.equal(service.addAllowedAnonymousChannel(100, 777), false);
+  assert.equal(service.removeAllowedAnonymousChannel(100, 777), true);
+  assert.deepEqual(service.getAllowedAnonymousChannels(100), []);
+  assert.equal(service.isAllowedAnonymousChannel(100, 777), false);
+});
+
 test('first bot comment can be enabled and disabled independently from the message text', () => {
   const service = new ModerationService();
 
