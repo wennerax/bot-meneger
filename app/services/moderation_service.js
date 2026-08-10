@@ -223,9 +223,16 @@ class ModerationService {
       hideAnonymous: {
         enabled: Boolean(chat.hideAnonymous?.enabled),
         deleteMessages: Boolean(chat.hideAnonymous?.deleteMessages),
-        allowedChannelIds: Array.isArray(chat.hideAnonymous?.allowedChannelIds)
-          ? [...new Set(chat.hideAnonymous.allowedChannelIds.map((item) => Number(item)).filter((id) => Number.isFinite(id)))]
-          : [],
+        allowedAnonymousChannels: (() => {
+          const list = [];
+          if (Array.isArray(chat.hideAnonymous?.allowedAnonymousChannels)) {
+            list.push(...chat.hideAnonymous.allowedAnonymousChannels.map((item) => normalizeAnonymousChannelIdentifier(item)).filter(Boolean));
+          }
+          if (Array.isArray(chat.hideAnonymous?.allowedChannelIds)) {
+            list.push(...chat.hideAnonymous.allowedChannelIds.map((item) => normalizeAnonymousChannelIdentifier(item)).filter(Boolean));
+          }
+          return [...new Set(list)];
+        })(),
       },
     };
   }
@@ -824,6 +831,32 @@ class ModerationService {
     });
   }
 
+  _normalizeAnonymousChannelIdentifier(value) {
+    if (value === null || value === undefined) {
+      return '';
+    }
+
+    const raw = String(value).trim();
+    if (!raw) {
+      return '';
+    }
+
+    const numeric = Number(raw);
+    if (Number.isFinite(numeric)) {
+      return String(numeric);
+    }
+
+    let username = raw.replace(/^https?:\/\//i, '');
+    username = username.replace(/^www\./i, '');
+    username = username.replace(/^t\.me\//i, '');
+    username = username.replace(/^telegram\.me\//i, '');
+    username = username.replace(/^@/, '');
+    username = username.replace(/[?#].*$/, '');
+    username = username.replace(/\/+$/, '');
+    username = username.trim().toLowerCase();
+    return username;
+  }
+
   isHideAnonymousEnabled(chatId) {
     return Boolean(this._getChat(chatId).hideAnonymous.enabled);
   }
@@ -848,35 +881,53 @@ class ModerationService {
   }
 
   getAllowedAnonymousChannels(chatId) {
-    return [...this._getChat(chatId).hideAnonymous.allowedChannelIds];
+    return [...this._getChat(chatId).hideAnonymous.allowedAnonymousChannels];
   }
 
   addAllowedAnonymousChannel(chatId, channelId) {
     const chat = this._getChat(chatId);
-    const id = Number(channelId);
-    if (!Number.isFinite(id) || chat.hideAnonymous.allowedChannelIds.includes(id)) {
+    const normalized = this._normalizeAnonymousChannelIdentifier(channelId);
+    if (!normalized || chat.hideAnonymous.allowedAnonymousChannels.includes(normalized)) {
       return false;
     }
-    chat.hideAnonymous.allowedChannelIds.push(id);
+    chat.hideAnonymous.allowedAnonymousChannels.push(normalized);
     this._save();
     return true;
   }
 
   removeAllowedAnonymousChannel(chatId, channelId) {
     const chat = this._getChat(chatId);
-    const id = Number(channelId);
-    const before = chat.hideAnonymous.allowedChannelIds.length;
-    chat.hideAnonymous.allowedChannelIds = chat.hideAnonymous.allowedChannelIds.filter((item) => item !== id);
-    if (chat.hideAnonymous.allowedChannelIds.length === before) {
+    const normalized = this._normalizeAnonymousChannelIdentifier(channelId);
+    const before = chat.hideAnonymous.allowedAnonymousChannels.length;
+    chat.hideAnonymous.allowedAnonymousChannels = chat.hideAnonymous.allowedAnonymousChannels.filter((item) => item !== normalized);
+    if (chat.hideAnonymous.allowedAnonymousChannels.length === before) {
       return false;
     }
     this._save();
     return true;
   }
 
-  isAllowedAnonymousChannel(chatId, channelId) {
-    const id = Number(channelId);
-    return Number.isFinite(id) && this._getChat(chatId).hideAnonymous.allowedChannelIds.includes(id);
+  isAllowedAnonymousChannel(chatId, channel) {
+    const chat = this._getChat(chatId);
+    const normalized = new Set(chat.hideAnonymous.allowedAnonymousChannels || []);
+    if (!normalized.size) {
+      return false;
+    }
+
+    if (channel && typeof channel === 'object') {
+      const id = channel.id;
+      const username = channel.username;
+      if (Number.isFinite(Number(id)) && normalized.has(String(id))) {
+        return true;
+      }
+      if (typeof username === 'string' && normalized.has(this._normalizeAnonymousChannelIdentifier(username))) {
+        return true;
+      }
+      return false;
+    }
+
+    const identifier = this._normalizeAnonymousChannelIdentifier(channel);
+    return Boolean(identifier && normalized.has(identifier));
   }
 
   disableDeleteAnonymousMessages(chatId) {

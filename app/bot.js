@@ -1679,6 +1679,15 @@ function createBot() {
     }
 
     try {
+      const chat = await ctx.telegram.getChat(`@${normalized}`);
+      if (chat && Number.isFinite(Number(chat.id))) {
+        return Number(chat.id);
+      }
+    } catch (error) {
+      // try again without the @ prefix
+    }
+
+    try {
       const chat = await ctx.telegram.getChat(normalized);
       if (chat && Number.isFinite(Number(chat.id))) {
         return Number(chat.id);
