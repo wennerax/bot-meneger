@@ -695,6 +695,18 @@ async function showSettingsAnonymousExceptionsMenu(ctx, chatId) {
   await ctx.editMessageText(buildSettingsAnonymousExceptionsText(chatId), { reply_markup: buildSettingsAnonymousExceptionsKeyboard(chatId) });
 }
 
+async function safeEditMessageText(ctx, text, extra = {}) {
+  try {
+    await ctx.editMessageText(text, extra);
+  } catch (error) {
+    const description = error?.response?.description || error?.description || '';
+    if (typeof description === 'string' && description.includes('message is not modified')) {
+      return;
+    }
+    throw error;
+  }
+}
+
 async function showSettingsAdminMenu(ctx, chatId) {
   if (!(await canManageGroupSettings(ctx, chatId))) {
     await ctx.reply('У вас нет прав менять настройки этой группы.');
