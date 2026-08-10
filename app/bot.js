@@ -2038,9 +2038,13 @@ function createBot() {
     pageCommands.forEach((item, idx) => {
       const index = start + idx;
       const level = rights[item.cmd] || 'all';
-      const noneButton = { text: getPermissionEmoji('none'), callback_data: `menu:command_rights:toggle:${index}:none` };
-      const adminButton = { text: getPermissionEmoji('admin'), callback_data: `menu:command_rights:toggle:${index}:admin` };
-      const allButton = { text: getPermissionEmoji('all'), callback_data: `menu:command_rights:toggle:${index}:all` };
+      const noneText = level === 'none' ? `${getPermissionEmoji('none')} Никто ✅` : `${getPermissionEmoji('none')} Никто`;
+      const adminText = level === 'admin' ? `${getPermissionEmoji('admin')} Админы ✅` : `${getPermissionEmoji('admin')} Админы`;
+      const allText = level === 'all' ? `${getPermissionEmoji('all')} Все ✅` : `${getPermissionEmoji('all')} Все`;
+
+      const noneButton = { text: noneText, callback_data: `menu:command_rights:toggle:${index}:none` };
+      const adminButton = { text: adminText, callback_data: `menu:command_rights:toggle:${index}:admin` };
+      const allButton = { text: allText, callback_data: `menu:command_rights:toggle:${index}:all` };
       const labelBtn = { text: item.label, callback_data: `menu:command_rights:select:${index}` };
 
       const row = [labelBtn, noneButton, adminButton, allButton];
@@ -3998,9 +4002,9 @@ function createBot() {
     }
 
     if (action.startsWith('command_rights:nav:')) {
-      const commandIndex = Number(action.split(':')[2]);
-      if (Number.isFinite(commandIndex)) {
-        await showMenuCommandRightsMenu(ctx, chatId, commandIndex);
+      const pageIndex = Number(action.split(':')[2]);
+      if (Number.isFinite(pageIndex)) {
+        await showMenuCommandRightsMenu(ctx, chatId, pageIndex);
       }
       return;
     }
@@ -4015,8 +4019,10 @@ function createBot() {
         const { cmd } = commands[commandIndex];
         if (['all', 'admin', 'none'].includes(newLevel)) {
           moderationService.setCommandRights(chatId, cmd, newLevel);
-          await ctx.reply(`✅ Право на ${commands[commandIndex].label} изменено на "${getPermissionLabel(newLevel)}".`);
-          await showMenuCommandRightsMenu(ctx, chatId, commandIndex);
+          await ctx.answerCbQuery(`✅ Право на ${commands[commandIndex].label} изменено на "${getPermissionLabel(newLevel)}".`);
+          // compute page index containing this command
+          const pageIndex = Math.floor(commandIndex / COMMANDS_PER_PAGE);
+          await showMenuCommandRightsMenu(ctx, chatId, pageIndex);
         }
       }
       return;
