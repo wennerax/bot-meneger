@@ -2097,7 +2097,7 @@ function createBot() {
     return header.join('\n');
   }
 
-  function buildCommandRightsPageKeyboard(chatId, pageIndex = 0) {
+  function buildCommandRightsPageKeyboard(chatId, pageIndex = 0, returnCallback = `menu:overview`, returnFlag = 'menu') {
     const commands = getCommandsList();
     const service = activeModerationService || defaultModerationService;
     const rights = service.getAllCommandRights(chatId);
@@ -2116,10 +2116,11 @@ function createBot() {
       const adminText = level === 'admin' ? `${getPermissionEmoji('admin')} Админы ✅` : `${getPermissionEmoji('admin')} Админы`;
       const allText = level === 'all' ? `${getPermissionEmoji('all')} Все ✅` : `${getPermissionEmoji('all')} Все`;
 
-      const noneButton = { text: noneText, callback_data: `menu:command_rights:toggle:${index}:none` };
-      const adminButton = { text: adminText, callback_data: `menu:command_rights:toggle:${index}:admin` };
-      const allButton = { text: allText, callback_data: `menu:command_rights:toggle:${index}:all` };
-      const labelBtn = { text: item.label, callback_data: `menu:command_rights:select:${index}` };
+      const suffix = returnFlag === 'settings' ? ':settings' : '';
+      const noneButton = { text: noneText, callback_data: `menu:command_rights:toggle:${index}:none${suffix}` };
+      const adminButton = { text: adminText, callback_data: `menu:command_rights:toggle:${index}:admin${suffix}` };
+      const allButton = { text: allText, callback_data: `menu:command_rights:toggle:${index}:all${suffix}` };
+      const labelBtn = { text: item.label, callback_data: `menu:command_rights:select:${index}${suffix}` };
 
       const row = [labelBtn, noneButton, adminButton, allButton];
       rows.push(row);
@@ -2127,23 +2128,24 @@ function createBot() {
 
     // Navigation buttons
     const nav = [];
-    if (page > 0) nav.push({ text: '⬅️ Назад', callback_data: `menu:command_rights:nav:${page - 1}` });
-    if (page < totalPages - 1) nav.push({ text: 'Вперёд ➡️', callback_data: `menu:command_rights:nav:${page + 1}` });
+    const suffix = returnFlag === 'settings' ? ':settings' : '';
+    if (page > 0) nav.push({ text: '⬅️ Назад', callback_data: `menu:command_rights:nav:${page - 1}${suffix}` });
+    if (page < totalPages - 1) nav.push({ text: 'Вперёд ➡️', callback_data: `menu:command_rights:nav:${page + 1}${suffix}` });
 
     if (nav.length) rows.push(nav);
-    rows.push([{ text: 'Назад', callback_data: 'menu:overview' }]);
+    rows.push([{ text: 'Назад', callback_data: returnCallback }]);
 
     return { inline_keyboard: rows };
   }
 
-  async function showMenuCommandRightsMenu(ctx, chatId, pageIndex = 0) {
+  async function showMenuCommandRightsMenu(ctx, chatId, pageIndex = 0, returnCallback = 'menu:overview', returnFlag = 'menu') {
     if (!(await canManageGroupSettings(ctx, chatId))) {
       await ctx.reply('У вас нет прав менять настройки этой группы.');
       return;
     }
 
     const text = buildCommandRightsPageText(chatId, pageIndex);
-    const keyboard = buildCommandRightsPageKeyboard(chatId, pageIndex);
+    const keyboard = buildCommandRightsPageKeyboard(chatId, pageIndex, returnCallback, returnFlag);
     await ctx.editMessageText(text, { reply_markup: keyboard });
   }
 
@@ -3591,8 +3593,8 @@ function createBot() {
       } else if (parsed.section === 'anonymous') {
         await showSettingsAnonymousMenu(ctx, chatId);
       } else if (parsed.section === 'commands') {
-        // Open interactive command rights UI (same as /menu)
-        await showMenuCommandRightsMenu(ctx, chatId, 0);
+        // Open interactive command rights UI from settings menu
+        await showMenuCommandRightsMenu(ctx, chatId, 0, `settings:main:${chatId}`, 'settings');
       }
       return;
     }
@@ -4080,14 +4082,17 @@ function createBot() {
     }
 
     if (action === 'command_rights') {
-      await showMenuCommandRightsMenu(ctx, chatId, 0);
+      await showMenuCommandRightsMenu(ctx, chatId, 0, 'menu:overview', 'menu');
       return;
     }
 
     if (action.startsWith('command_rights:nav:')) {
-      const pageIndex = Number(action.split(':')[2]);
+      const parts = action.split(':');
+      const pageIndex = Number(parts[2]);
+      const returnFlag = parts.includes('settings') ? 'settings' : 'menu';
+      const returnCallback = returnFlag === 'settings' ? `settings:main:${chatId}` : 'menu:overview';
       if (Number.isFinite(pageIndex)) {
-        await showMenuCommandRightsMenu(ctx, chatId, pageIndex);
+        await showMenuCommandRightsMenu(ctx, chatId, pageIndex, returnCallback, returnFlag);
       }
       return;
     }
@@ -4097,15 +4102,17 @@ function createBot() {
       const commandIndex = Number(parts[2]);
       const newLevel = String(parts[3]);
       const commands = getCommandsList();
+      const returnFlag = parts.includes('settings') ? 'settings' : 'menu';
+      const returnCallback = returnFlag === 'settings' ? `settings:main:${chatId}` : 'menu:overview';
 
       if (Number.isFinite(commandIndex) && commandIndex >= 0 && commandIndex < commands.length) {
         const { cmd } = commands[commandIndex];
         if (['all', 'admin', 'none'].includes(newLevel)) {
           moderationService.setCommandRights(chatId, cmd, newLevel);
-          await ctx.answerCbQuery(`✅ Право на ${commands[commandIndex].label} изменено на "${getPermissionLabel(newLevel)}".`);
+          await safeAnswerCbQuery(ctx, `✅ Право на ${commands[commandIndex].label} изменено на "${getPermissionLabel(newLevel)}".`);
           // compute page index containing this command
           const pageIndex = Math.floor(commandIndex / COMMANDS_PER_PAGE);
-          await showMenuCommandRightsMenu(ctx, chatId, pageIndex);
+          await showMenuCommandRightsMenu(ctx, chatId, pageIndex, returnCallback, returnFlag);
         }
       }
       return;
