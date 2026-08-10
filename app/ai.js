@@ -105,8 +105,14 @@ function buildAiUrl(apiBaseUrl) {
   }
 
   const normalized = url.replace(/\/$/, '');
-  if (normalized.includes('/chat/completions')) {
+  if (/\/chat\/completions$/i.test(normalized)) {
     return normalized;
+  }
+  if (/\/api\/v1$/i.test(normalized)) {
+    return `${normalized}/chat/completions`;
+  }
+  if (/openrouter\.ai$/i.test(normalized) || /api\.openrouter\.ai$/i.test(normalized)) {
+    return `${normalized}/api/v1/chat/completions`;
   }
 
   return `${normalized}/chat/completions`;
@@ -129,9 +135,11 @@ async function requestAi(prompt, options = {}) {
   });
 
   if (!res.ok) {
-    const err = new Error('ai_request_failed');
+    const body = await res.text();
+    const err = new Error(`ai_request_failed: ${res.status} ${res.statusText} ${body.slice(0, 300)}`);
     err.status = res.status;
     err.statusText = res.statusText;
+    err.body = body;
     throw err;
   }
 
