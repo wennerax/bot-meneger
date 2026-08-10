@@ -276,6 +276,9 @@ function buildSettingsMainKeyboard(chatId) {
       { text: 'Правила', callback_data: `settings:section:rules:${chatId}` },
     ],
     [
+      { text: 'Команды', callback_data: `settings:section:commands:${chatId}` },
+    ],
+    [
       { text: 'Первый Коммент', callback_data: `settings:open_menu:${chatId}` },
     ],
     [
@@ -4228,7 +4231,7 @@ function createBot() {
       return;
     }
 
-    await ctx.reply(formatMenuOverview(chatId), { reply_markup: getMenuKeyboard(chatId) });
+    await openSettingsForCurrentContext(ctx, chatId);
   });
 
   bot.command(['miniapp', 'миниприложение'], async (ctx) => {
