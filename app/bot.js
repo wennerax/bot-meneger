@@ -4228,7 +4228,7 @@ function createBot() {
       return;
     }
 
-    await openSettingsForCurrentContext(ctx, chatId);
+    await ctx.reply(formatMenuOverview(chatId), { reply_markup: getMenuKeyboard(chatId) });
   });
 
   bot.command(['miniapp', 'миниприложение'], async (ctx) => {
