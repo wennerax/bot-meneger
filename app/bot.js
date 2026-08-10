@@ -1651,24 +1651,35 @@ function createBot() {
     pendingSettingsActions.delete(`${ctx.from.id}:${ctx.chat.id}`);
   }
 
+  function normalizeChannelUsername(value) {
+    const raw = String(value || '').trim();
+    if (!raw) {
+      return '';
+    }
+
+    let username = raw.replace(/^https?:\/\//i, '');
+    username = username.replace(/^www\./i, '');
+    username = username.replace(/^t\.me\//i, '');
+    username = username.replace(/^telegram\.me\//i, '');
+    username = username.replace(/^@/, '');
+    username = username.replace(/[?#].*$/, '');
+    username = username.replace(/\/+$/, '');
+    return username.trim();
+  }
+
   async function resolveChannelChatId(ctx, value) {
-    const normalized = String(value || '').trim();
+    const normalized = normalizeChannelUsername(value);
     if (!normalized) {
       return null;
     }
 
-    const channelId = Number(normalized.replace(/^@/, ''));
+    const channelId = Number(normalized);
     if (Number.isFinite(channelId)) {
       return channelId;
     }
 
-    const username = normalized.replace(/^https?:\/\//i, '').replace(/^t\.me\//i, '').replace(/^@/, '').trim();
-    if (!username) {
-      return null;
-    }
-
     try {
-      const chat = await ctx.telegram.getChat(username);
+      const chat = await ctx.telegram.getChat(normalized);
       if (chat && Number.isFinite(Number(chat.id))) {
         return Number(chat.id);
       }
