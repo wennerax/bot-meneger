@@ -2452,12 +2452,23 @@ function createBot() {
         // ignore deletion errors
       }
 
+      // delete prompt message that asked the moderator to write the report
+      try {
+        const promptMessageId = Number(pending.promptMessageId || 0);
+        if (Number.isFinite(promptMessageId) && promptMessageId > 0) {
+          await ctx.deleteMessage(promptMessageId);
+        }
+      } catch (err) {
+        // ignore deletion errors
+      }
+
       // remove stored report
       adminReports.delete(reportId);
       clearPendingSettingsAction(ctx);
       // optionally confirm in the admin chat
       try {
-        await ctx.reply('✅ Отчёт добавлен в уведомление.');
+        const confirmation = await ctx.reply('✅ Отчёт добавлен в уведомление.');
+        await ctx.deleteMessage(confirmation.message_id);
       } catch (err) {
         // ignore
       }
@@ -3990,8 +4001,8 @@ function createBot() {
     }
 
     // set pending action so the moderator can write the report text; scope to moderator user in current chat
-    setPendingSettingsAction(ctx, { action: 'admin_report_write', reportId, groupId: ctx.chat.id });
-    await ctx.reply('Напишите краткий отчёт по жалобе. После отправки ваше сообщение будет удалено и включено в уведомление.');
+    const promptMessage = await ctx.reply('Напишите краткий отчёт по жалобе. После отправки ваше сообщение будет удалено и включено в уведомление.');
+    setPendingSettingsAction(ctx, { action: 'admin_report_write', reportId, groupId: ctx.chat.id, promptMessageId: promptMessage.message_id });
     return;
   });
 
