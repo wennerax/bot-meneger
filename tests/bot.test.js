@@ -76,14 +76,13 @@ test('buildSettingsMainKeyboard returns a grouped layout with section buttons', 
   assert.equal(keyboard.length, 4);
   assert.deepEqual(keyboard[0].map((button) => button.text), ['Капча', 'Ссылки']);
   assert.deepEqual(keyboard[1].map((button) => button.text), ['Анти(СФС)', 'Правила']);
-  assert.deepEqual(keyboard[2].map((button) => button.text), ['Первый Коммент', 'Настройка прав команд']);
+  assert.deepEqual(keyboard[2].map((button) => button.text), ['Первый Коммент']);
   assert.deepEqual(keyboard[3].map((button) => button.text), ['@admin', '🚫 Скрытые пользователи']);
   assert.equal(keyboard[0][0].callback_data, 'settings:section:captcha:42');
   assert.equal(keyboard[0][1].callback_data, 'settings:section:links:42');
   assert.equal(keyboard[1][0].callback_data, 'settings:section:anti:42');
   assert.equal(keyboard[1][1].callback_data, 'settings:section:rules:42');
   assert.equal(keyboard[2][0].callback_data, 'settings:open_menu:42');
-  assert.equal(keyboard[2][1].callback_data, 'settings:section:commands:42');
   assert.equal(keyboard[3][0].callback_data, 'settings:section:admin:42');
   assert.equal(keyboard[3][1].callback_data, 'settings:section:anonymous:42');
 });

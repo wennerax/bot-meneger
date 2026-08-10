@@ -277,7 +277,6 @@ function buildSettingsMainKeyboard(chatId) {
     ],
     [
       { text: 'Первый Коммент', callback_data: `settings:open_menu:${chatId}` },
-      { text: 'Настройка прав команд', callback_data: `settings:section:commands:${chatId}` },
     ],
     [
       { text: '@admin', callback_data: `settings:section:admin:${chatId}` },
