@@ -1538,6 +1538,18 @@ function createBot() {
     return String(ctx.message?.text || ctx.message?.caption || '').trim();
   }
 
+  async function safeAnswerCbQuery(ctx, text) {
+    try {
+      if (typeof text === 'string') {
+        await ctx.answerCbQuery(text);
+      } else {
+        await ctx.answerCbQuery();
+      }
+    } catch (error) {
+      // ignore stale or invalid callback query errors
+    }
+  }
+
   function isMediaMessage(ctx) {
     const message = ctx.message || {};
     return Boolean(message.photo || message.video || message.document || message.animation || message.audio || message.voice || message.sticker || message.video_note);
@@ -3509,7 +3521,7 @@ function createBot() {
   bot.action(/^help:(\d+)$/, async (ctx) => {
     const pageIndex = Number(ctx.match[1]);
     const helpPage = buildHelpPage(pageIndex);
-    await ctx.answerCbQuery();
+    await safeAnswerCbQuery(ctx);
     await ctx.editMessageText(helpPage.text, { reply_markup: helpPage.reply_markup });
   });
 
@@ -3528,10 +3540,18 @@ function createBot() {
 
     const chatId = Number(parsed.chatId || ctx.chat?.id || 0);
     if (!chatId) {
-      await ctx.answerCbQuery();
+      try {
+        await ctx.answerCbQuery();
+      } catch (error) {
+        // ignore stale callback_query errors
+      }
       return;
     }
-    await ctx.answerCbQuery();
+    try {
+      await ctx.answerCbQuery();
+    } catch (error) {
+      // ignore stale callback_query errors
+    }
 
     if (!await canManageGroupSettings(ctx, chatId)) {
       await ctx.reply('У вас нет прав менять настройки этой группы.');
@@ -3895,7 +3915,7 @@ function createBot() {
 
   bot.action(/^admin_report:(.+)$/, async (ctx) => {
     const action = ctx.match[1];
-    await ctx.answerCbQuery();
+    await safeAnswerCbQuery(ctx);
     const parts = String(action || '').split(':').filter(Boolean);
     if (parts[0] !== 'accept') {
       return;
@@ -3969,7 +3989,7 @@ function createBot() {
     if (!chatId) {
       return;
     }
-    await ctx.answerCbQuery();
+    await safeAnswerCbQuery(ctx);
 
     if (!isBotAdmin(ctx)) {
       await ctx.reply('Эта команда доступна только администраторам.');
