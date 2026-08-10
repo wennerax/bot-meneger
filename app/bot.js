@@ -2038,10 +2038,10 @@ function createBot() {
     pageCommands.forEach((item, idx) => {
       const index = start + idx;
       const level = rights[item.cmd] || 'all';
-      const noneButton = { text: getPermissionEmoji('none'), callback_data: `command_rights:toggle:${index}:none` };
-      const adminButton = { text: getPermissionEmoji('admin'), callback_data: `command_rights:toggle:${index}:admin` };
-      const allButton = { text: getPermissionEmoji('all'), callback_data: `command_rights:toggle:${index}:all` };
-      const labelBtn = { text: item.label, callback_data: `command_rights:select:${index}` };
+      const noneButton = { text: getPermissionEmoji('none'), callback_data: `menu:command_rights:toggle:${index}:none` };
+      const adminButton = { text: getPermissionEmoji('admin'), callback_data: `menu:command_rights:toggle:${index}:admin` };
+      const allButton = { text: getPermissionEmoji('all'), callback_data: `menu:command_rights:toggle:${index}:all` };
+      const labelBtn = { text: item.label, callback_data: `menu:command_rights:select:${index}` };
 
       const row = [labelBtn, noneButton, adminButton, allButton];
       rows.push(row);
@@ -2049,8 +2049,8 @@ function createBot() {
 
     // Navigation buttons
     const nav = [];
-    if (page > 0) nav.push({ text: '⬅️ Назад', callback_data: `command_rights:nav:${page - 1}` });
-    if (page < totalPages - 1) nav.push({ text: 'Вперёд ➡️', callback_data: `command_rights:nav:${page + 1}` });
+    if (page > 0) nav.push({ text: '⬅️ Назад', callback_data: `menu:command_rights:nav:${page - 1}` });
+    if (page < totalPages - 1) nav.push({ text: 'Вперёд ➡️', callback_data: `menu:command_rights:nav:${page + 1}` });
 
     if (nav.length) rows.push(nav);
     rows.push([{ text: 'Назад', callback_data: 'menu:overview' }]);
