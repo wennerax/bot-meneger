@@ -11,6 +11,7 @@ const { getMentionText, resolveUsernameTarget } = require('./services/username_s
 const defaultModerationService = new ModerationService();
 let activeDatabase = null;
 let activeModerationService = null;
+let activeConfig = null;
 const adminReports = new Map();
 
 // Установите сюда ID группы модераторов, в которую будут приходить уведомления при включенном уведомлении администраторов.
@@ -709,7 +710,7 @@ async function safeEditMessageText(ctx, text, extra = {}) {
 function buildSettingsMediaAiText(chatId) {
   const service = activeModerationService || defaultModerationService;
   const enabled = service.isMediaAiEnabled(chatId);
-  const apiKeyConfigured = Boolean(config.aiApiKey);
+  const apiKeyConfigured = Boolean(activeConfig?.aiApiKey);
   return [
     '🤖 Медиа ИИ',
     '',
@@ -1326,6 +1327,7 @@ function createBot() {
   const database = new Database(config.databasePath);
   activeDatabase = database;
   activeModerationService = moderationService;
+  activeConfig = config;
   const punishmentTimers = new Map();
   const spamActivity = new Map();
   const messageHistory = new Map();
