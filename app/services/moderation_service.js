@@ -168,6 +168,12 @@ class ModerationService {
       banWords: Array.isArray(chat.banWords)
         ? [...new Set(chat.banWords.map((item) => String(item).trim().toLowerCase()).filter(Boolean))]
         : [...DEFAULT_BAN_WORDS],
+      banwordSettings: {
+        punishmentMode: ['off', 'warn', 'mute', 'ban'].includes(String(chat.banwordSettings?.punishmentMode || '').toLowerCase())
+          ? String(chat.banwordSettings.punishmentMode).toLowerCase()
+          : 'off',
+        deleteMessages: Boolean(chat.banwordSettings?.deleteMessages),
+      },
       allowedLinks: (() => {
         if (!Array.isArray(chat.allowedLinks)) {
           return [];
@@ -496,6 +502,30 @@ class ModerationService {
 
   getBanWords(chatId) {
     return [...this._getChat(chatId).banWords];
+  }
+
+  getBanwordPunishmentMode(chatId) {
+    return this._getChat(chatId).banwordSettings.punishmentMode || 'off';
+  }
+
+  setBanwordPunishmentMode(chatId, mode) {
+    const normalized = String(mode || '').trim().toLowerCase();
+    if (!['off', 'warn', 'mute', 'ban'].includes(normalized)) {
+      return false;
+    }
+    this._getChat(chatId).banwordSettings.punishmentMode = normalized;
+    this._save();
+    return true;
+  }
+
+  getBanwordDeleteMessages(chatId) {
+    return Boolean(this._getChat(chatId).banwordSettings.deleteMessages);
+  }
+
+  setBanwordDeleteMessages(chatId, enabled) {
+    this._getChat(chatId).banwordSettings.deleteMessages = Boolean(enabled);
+    this._save();
+    return this._getChat(chatId).banwordSettings.deleteMessages;
   }
 
   addBanWord(chatId, word) {

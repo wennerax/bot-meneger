@@ -389,12 +389,35 @@ function buildSettingsRulesMenuText(chatId, rulesText = '') {
 }
 
 function buildSettingsBanwordsKeyboard(chatId) {
+  const service = activeModerationService || defaultModerationService;
+  const mode = service.getBanwordPunishmentMode(chatId);
+  const deleteMessages = service.getBanwordDeleteMessages(chatId);
+  const words = service.getBanWords(chatId);
+  const modeText = {
+    off: 'Выкл',
+    warn: 'Предупрежде...',
+    mute: 'Ограничить',
+    ban: 'Заблокировать',
+  }[mode] || 'Выкл';
+
   return {
     inline_keyboard: [
-      [{ text: 'Добавить слово', callback_data: `settings:banword_add:${chatId}` }],
-      [{ text: 'Удалить слово', callback_data: `settings:banword_remove:${chatId}` }],
-      [{ text: 'Список запрещённых слов', callback_data: `settings:banword_list:${chatId}` }],
-      [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
+      [{ text: `Название: ${modeText}`, callback_data: `settings:banword_mode:${chatId}:${mode}` }],
+      [
+        { text: mode === 'off' ? '❌ Выкл ✅' : '❌ Выкл', callback_data: `settings:banword_mode:${chatId}:off` },
+        { text: mode === 'warn' ? '⚠️ Предупрежде... ✅' : '⚠️ Предупрежде...', callback_data: `settings:banword_mode:${chatId}:warn` },
+      ],
+      [
+        { text: mode === 'mute' ? '⛔ Ограничить ✅' : '⛔ Ограничить', callback_data: `settings:banword_mode:${chatId}:mute` },
+        { text: mode === 'ban' ? '🚫 Заблокировать ✅' : '🚫 Заблокировать', callback_data: `settings:banword_mode:${chatId}:ban` },
+      ],
+      [{ text: `${deleteMessages ? '✅' : '❌'} Удалять сообщения`, callback_data: `settings:banword_delete:${chatId}` }],
+      [
+        { text: '➕ Добавить', callback_data: `settings:banword_add:${chatId}` },
+        { text: '➖ Удалить', callback_data: `settings:banword_remove:${chatId}` },
+      ],
+      [{ text: `📋 ${words.length} Запрещенные слова`, callback_data: `settings:banword_list:${chatId}` }],
+      [{ text: '⬅️ Назад', callback_data: `settings:main:${chatId}` }],
     ],
   };
 }
@@ -962,10 +985,24 @@ async function showSettingsBanwordsMenu(ctx, chatId) {
 
   const service = activeModerationService || defaultModerationService;
   const words = service.getBanWords(chatId);
+  const mode = service.getBanwordPunishmentMode(chatId);
+  const deleteMessages = service.getBanwordDeleteMessages(chatId);
+  const modeText = {
+    off: 'Выкл',
+    warn: 'Предупреждение',
+    mute: 'Ограничить',
+    ban: 'Блокировка',
+  }[mode] || 'Выкл';
+
   const text = [
-    '🚫 Запрещённые слова',
+    '🚫 Запрещенные слова',
     '',
-    words.length ? `• ${words.join('\n• ')}` : 'Список пуст.',
+    'В этом меню вы можете установить наказание для тех, кто использует слова, которые вы решили запретить.',
+    '',
+    `Название: ${modeText}`,
+    `Удалять сообщения: ${deleteMessages ? 'включено' : 'выключено'}`,
+    '',
+    words.length ? `Список:\n• ${words.join('\n• ')}` : 'Список пуст.',
   ].join('\n');
 
   await ctx.editMessageText(text, { reply_markup: buildSettingsBanwordsKeyboard(chatId) });
@@ -4096,6 +4133,23 @@ function createBot() {
     if (parsed.target === 'rules_view') {
       const rules = moderationService.getRules(chatId);
       await ctx.editMessageText(rules || 'Правила ещё не заданы.', { reply_markup: buildSettingsRulesKeyboard(chatId) });
+      return;
+    }
+
+    if (parsed.target === 'banword_mode') {
+      const service = activeModerationService || defaultModerationService;
+      const mode = String(parsed.value || '').toLowerCase();
+      if (['off', 'warn', 'mute', 'ban'].includes(mode)) {
+        service.setBanwordPunishmentMode(chatId, mode);
+      }
+      await showSettingsBanwordsMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'banword_delete') {
+      const service = activeModerationService || defaultModerationService;
+      service.setBanwordDeleteMessages(chatId, !service.getBanwordDeleteMessages(chatId));
+      await showSettingsBanwordsMenu(ctx, chatId);
       return;
     }
 
