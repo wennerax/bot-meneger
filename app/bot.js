@@ -994,7 +994,7 @@ async function showSettingsBanwordsMenu(ctx, chatId) {
     `Удалять сообщения: ${deleteMessages ? '✔️' : '❌'}`,
   ].join('\n');
 
-  await ctx.editMessageText(text, { reply_markup: buildSettingsBanwordsKeyboard(chatId) });
+  await safeEditMessageText(ctx, text, { reply_markup: buildSettingsBanwordsKeyboard(chatId) });
 }
 
 async function showSettingsBanwordsListMenu(ctx, chatId) {
@@ -1016,7 +1016,7 @@ async function showSettingsBanwordsListMenu(ctx, chatId) {
     inline_keyboard: [[{ text: 'Назад', callback_data: `settings:banword_list_back:${chatId}` }]],
   };
 
-  await ctx.editMessageText(listText, { reply_markup: backKeyboard });
+  await safeEditMessageText(ctx, listText, { reply_markup: backKeyboard });
 }
 
 function parseSettingsAction(action) {
