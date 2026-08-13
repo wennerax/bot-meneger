@@ -1168,6 +1168,14 @@ function buildCaptchaChallenge(mode = 'emoji', displayName = 'пользоват
   };
 }
 
+function generateCaptchaPollOptions(challenge) {
+  if (!challenge || !Array.isArray(challenge.options) || !challenge.correctOption) {
+    return [];
+  }
+
+  return [...new Set([...challenge.options, challenge.correctOption])].sort(() => Math.random() - 0.5);
+}
+
 function shouldStartCaptchaForChat(chatId, moderationService) {
   if (!chatId || !moderationService || typeof moderationService.isCaptchaEnabled !== 'function') {
     return false;
@@ -1413,7 +1421,7 @@ function createBot() {
     }
     const mode = moderationService.getCaptchaMode(chatId);
     const challenge = buildCaptchaChallenge(mode, displayName);
-    const shuffledOptions = [...challenge.options, challenge.correctOption].sort(() => Math.random() - 0.5);
+    const shuffledOptions = generateCaptchaPollOptions(challenge);
     const correctOptionId = shuffledOptions.indexOf(challenge.correctOption);
     const timeoutMinutes = moderationService.getCaptchaTimeoutMinutes(chatId);
 
@@ -1446,6 +1454,7 @@ function createBot() {
     const instructionMessage = await ctx.telegram.sendMessage(chatId, `Пользователь ${displayName} должен пройти капчу в этом чате, чтобы писать сообщения.`, {
       disable_notification: true,
     });
+    scheduleDeleteMessage(ctx.telegram, chatId, instructionMessage?.message_id);
 
     captchaStates.set(pollId, {
       chatId,
@@ -1494,15 +1503,10 @@ function createBot() {
     } catch (error) {
       // ignore if the member cannot be removed or unbanned
     }
-    await ctx.telegram.sendMessage(state.userId, 'Капча не пройдена. Вы исключены из группы.');
-    await ctx.telegram.sendMessage(state.chatId, `Пользователь ${state.displayName} не прошёл капчу и исключён из группы.`);
-    setTimeout(async () => {
-      try {
-        await ctx.telegram.deleteMessage(state.chatId, state.pollMessageId);
-      } catch (deleteError) {
-        // ignore deletion errors
-      }
-    }, 5000);
+
+    const failedGroupMessage = await ctx.telegram.sendMessage(state.chatId, `Пользователь ${state.displayName} не прошёл капчу и исключён из группы.`);
+    scheduleDeleteMessage(ctx.telegram, state.chatId, failedGroupMessage?.message_id);
+    scheduleDeleteMessage(ctx.telegram, state.chatId, state.pollMessageId);
   }
 
   async function expirePunishment(punishment) {
@@ -1523,11 +1527,6 @@ function createBot() {
       database.removeActivePunishment(chatId, userId, action);
       database.addPunishment(chatId, userId, `expire_${action}`, `Автоматическое снятие ${action}`);
 
-      try {
-        await bot.telegram.sendMessage(userId, `Ваше автоматическое ограничение (${action}) в чате было снято.`);
-      } catch (notifyError) {
-        // ignore private message failures due to privacy settings
-      }
     } catch (error) {
       console.error(`Не удалось автоматически снять ${action} для ${userId} в чате ${chatId}:`, error?.message || error);
     }
@@ -1782,11 +1781,6 @@ function createBot() {
       await ctx.reply(buildModerationAlertMessage(userLabel, durationHours, reason));
     }
 
-    try {
-      await ctx.telegram.sendMessage(userId, buildPunishmentNotification('mute', ctx.chat.title || String(ctx.chat.id), reason, durationHours));
-    } catch (error) {
-      // ignore private message failures due to privacy settings
-    }
   }
 
   function trackSpamActivity(ctx) {
@@ -3225,15 +3219,6 @@ function createBot() {
     const targetLabel = getMentionText(targetData.target);
     const durationLabel = formatDurationLabel(details.durationHours);
     ctx.reply(`🔒 ${targetLabel} получил mute на ${durationLabel}. Причина: ${details.reason}`);
-
-    try {
-      await ctx.telegram.sendMessage(
-        targetData.target.id,
-        buildPunishmentNotification('mute', ctx.chat.title || String(ctx.chat.id), details.reason, details.durationHours)
-      );
-    } catch (error) {
-      // ignore private message failures due to privacy settings
-    }
   }
 
   async function unmuteCommand(ctx, args) {
@@ -3296,15 +3281,6 @@ function createBot() {
     const targetLabel = getMentionText(targetData.target);
     const durationLabel = formatDurationLabel(details.durationHours);
     ctx.reply(`⛔ ${targetLabel} получил ban на ${durationLabel}. Причина: ${details.reason}`);
-
-    try {
-      await ctx.telegram.sendMessage(
-        targetData.target.id,
-        buildPunishmentNotification('ban', ctx.chat.title || String(ctx.chat.id), details.reason, details.durationHours)
-      );
-    } catch (error) {
-      // ignore private message failures due to privacy settings
-    }
   }
 
   async function unbanCommand(ctx, args) {
@@ -5060,6 +5036,7 @@ function startBot(botState = null) {
 module.exports = {
   createBot,
   buildCaptchaChallenge,
+  generateCaptchaPollOptions,
   shouldStartCaptchaForChat,
   getCaptchaEmojiSet,
   parsePunishmentDetails,

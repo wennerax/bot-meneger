@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, parseSettingsAction, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage } = require('../app/bot');
+const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, parseSettingsAction, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage } = require('../app/bot');
 const { buildAiRequestPayload } = require('../app/ai');
 
 test('parsePunishmentDetails extracts duration and reason', () => {
@@ -140,6 +140,18 @@ test('buildCaptchaChallenge uses a valid option set for word mode', () => {
   assert.equal(challenge.correctOption, 'кот');
   assert.equal(challenge.options.includes('кот'), true);
   assert.equal(new Set(challenge.options).size, challenge.options.length);
+});
+
+test('captcha poll options are deduplicated across all modes', () => {
+  const emojiChallenge = buildCaptchaChallenge('emoji', 'Алиса');
+  const wordChallenge = buildCaptchaChallenge('word', 'Алиса');
+  const colorChallenge = buildCaptchaChallenge('color', 'Алиса');
+
+  for (const challenge of [emojiChallenge, wordChallenge, colorChallenge]) {
+    const options = generateCaptchaPollOptions(challenge);
+    assert.equal(new Set(options).size, options.length);
+    assert.equal(options.includes(challenge.correctOption), true);
+  }
 });
 
 test('buildSettingsRulesMenuText includes the current rules text', () => {
