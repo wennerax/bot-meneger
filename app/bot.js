@@ -5113,6 +5113,7 @@ function createBot() {
       return;
     }
 
+    const rulesEnabled = isGroupChat(ctx) && moderationService.isRulesEnabled(ctx.chat.id);
     if (rulesEnabled) {
       const response = moderationService.findFilterResponse(ctx.chat.id, text);
       if (response) {
