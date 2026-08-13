@@ -1039,6 +1039,7 @@ function buildSettingsWarnsKeyboard(chatId) {
         { text: mode === 'ban' ? '✅ Забанить' : 'Забанить', callback_data: `settings:warn_mode:${chatId}:ban` },
       ],
       [{ text: 'Лимит предупреждений', callback_data: `settings:warn_limit_menu:${chatId}` }],
+      [{ text: 'Амнистия', callback_data: `settings:warn_amnesty:${chatId}` }],
       [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
     ],
   };
@@ -4442,6 +4443,32 @@ function createBot() {
       await showSettingsWarnsListMenu(ctx, chatId);
       return;
     }
+
+    if (parsed.target === 'warn_amnesty') {
+      const text = [
+        '⚠️ Подтверждение амнистии',
+        '',
+        'Сбросить все предупреждения всем участникам этого чата?',
+      ].join('\n');
+      await safeEditMessageText(ctx, text, {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '✅ Точно обнулить варны', callback_data: `settings:warn_amnesty_confirm:${chatId}` },
+              { text: '❌ Нет', callback_data: `settings:warn_menu:${chatId}` },
+            ],
+          ],
+        },
+      });
+      return;
+    }
+
+    if (parsed.target === 'warn_amnesty_confirm') {
+      const service = activeModerationService || defaultModerationService;
+      service.resetAllWarnings(chatId);
+      await showSettingsWarnsMenu(ctx, chatId);
+      return;
+    }
   });
 
   bot.action(/^admin_report:(.+)$/, async (ctx) => {
@@ -5407,6 +5434,7 @@ module.exports = {
   buildPunishmentListMessage,
   buildBotAdminListMessage,
   buildSettingsMainKeyboard,
+  buildSettingsWarnsKeyboard,
   buildSettingsCommandRightsKeyboard,
   buildSettingsFirstMessageKeyboard,
   buildSettingsRulesMenuText,

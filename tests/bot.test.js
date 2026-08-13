@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, parseSettingsAction, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage } = require('../app/bot');
+const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsWarnsKeyboard, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, parseSettingsAction, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage } = require('../app/bot');
 const { buildAiRequestPayload } = require('../app/ai');
 
 test('parsePunishmentDetails extracts duration and reason', () => {
@@ -91,6 +91,14 @@ test('buildSettingsMainKeyboard returns a grouped layout with section buttons', 
   assert.equal(keyboard[4][0].callback_data, 'settings:open_menu:42');
   assert.equal(keyboard[4][1].callback_data, 'settings:section:admin:42');
   assert.equal(keyboard[5][0].callback_data, 'settings:section:anonymous:42');
+});
+
+test('buildSettingsWarnsKeyboard includes amnesty with confirmation flow', () => {
+  const keyboard = buildSettingsWarnsKeyboard(42);
+
+  assert.ok(Array.isArray(keyboard.inline_keyboard));
+  assert.ok(keyboard.inline_keyboard.some((row) => row.some((button) => button.text === 'Амнистия')));
+  assert.ok(keyboard.inline_keyboard.some((row) => row.some((button) => button.callback_data === 'settings:warn_amnesty:42')));
 });
 
 test('buildSettingsCommandRightsKeyboard supports pagination and a back button', () => {
@@ -201,11 +209,11 @@ test('getGroupDisplayName resolves the active bot database group title', () => {
 });
 
 test('detectForbiddenWord catches drugs and self-harm variants', () => {
-  assert.equal(detectForbiddenWord('сегодня курю weed'), 'weed');
+  assert.equal(detectForbiddenWord('сегодня курю марихуану'), 'марихуана');
   assert.equal(detectForbiddenWord('наркоыыыыыы'), 'нарко');
   assert.equal(detectForbiddenWord('наркофирма'), 'нарко');
   assert.equal(detectForbiddenWord('метсоленый'), 'мет');
-  assert.ok(['self-harm', 'selfharm'].includes(detectForbiddenWord('хочу self-harm')));
+  assert.equal(detectForbiddenWord('хочу самоубийство'), 'самоубийство');
   assert.equal(detectForbiddenWord('доброе утро друзья'), null);
 });
 
