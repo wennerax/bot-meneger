@@ -248,41 +248,41 @@ async function getManagedGroupsForUser(ctx) {
 async function showSettingsGroupSelector(ctx) {
   const managedGroups = await getManagedGroupsForUser(ctx);
   if (!managedGroups.length) {
-    await ctx.reply('У вас нет групп, где вы можете менять настройки бота.');
+    await ctx.reply('⚠️ У вас пока нет групп, где можно менять настройки бота.');
     return;
   }
 
   const keyboard = {
     inline_keyboard: [
-      ...managedGroups.map((group) => [{ text: group.title, callback_data: `settings:select:${group.chatId}` }]),
-      [{ text: 'Закрыть', callback_data: 'settings:close' }],
+      ...managedGroups.map((group) => [{ text: `🏘️ ${group.title}`, callback_data: `settings:select:${group.chatId}` }]),
+      [{ text: '❌ Закрыть', callback_data: 'settings:close' }],
     ],
   };
 
   if (ctx.callbackQuery) {
-    await ctx.editMessageText('Выберите группу для настроек:', { reply_markup: keyboard });
+    await ctx.editMessageText('🎛️ Выберите группу для настроек:', { reply_markup: keyboard });
   } else {
-    await ctx.reply('Выберите группу для настроек:', { reply_markup: keyboard });
+    await ctx.reply('🎛️ Выберите группу для настроек:', { reply_markup: keyboard });
   }
 }
 
 function buildSettingsMainKeyboard(chatId) {
   return [
     [
-      { text: 'Капча', callback_data: `settings:section:captcha:${chatId}` },
-      { text: 'Ссылки', callback_data: `settings:section:links:${chatId}` },
+      { text: '🧩 Капча', callback_data: `settings:section:captcha:${chatId}` },
+      { text: '🔗 Ссылки', callback_data: `settings:section:links:${chatId}` },
     ],
     [
-      { text: 'Анти(СФС)', callback_data: `settings:section:anti:${chatId}` },
-      { text: 'Правила', callback_data: `settings:section:rules:${chatId}` },
+      { text: '🛡️ Антиспам', callback_data: `settings:section:anti:${chatId}` },
+      { text: '📜 Правила', callback_data: `settings:section:rules:${chatId}` },
     ],
     [
-      { text: 'Команды', callback_data: `settings:section:commands:${chatId}` },
-      { text: 'Медиа ИИ', callback_data: `settings:section:media_ai:${chatId}` },
+      { text: '⚙️ Команды', callback_data: `settings:section:commands:${chatId}` },
+      { text: '🤖 Медиа ИИ', callback_data: `settings:section:media_ai:${chatId}` },
     ],
     [
-      { text: 'Первый Коммент', callback_data: `settings:open_menu:${chatId}` },
-      { text: '@admin', callback_data: `settings:section:admin:${chatId}` },
+      { text: '💬 Первый комментарий', callback_data: `settings:open_menu:${chatId}` },
+      { text: '🚨 @admin', callback_data: `settings:section:admin:${chatId}` },
       { text: '🚫 Скрытые пользователи', callback_data: `settings:section:anonymous:${chatId}` },
     ],
   ];
@@ -714,13 +714,13 @@ function buildSettingsMediaAiText(chatId) {
   return [
     '🤖 Медиа ИИ',
     '',
-    'При включённой функции все медиа в группе будут проверяться ИИ на наличие 18+ контента.',
-    'Если ИИ определит запрещённое взрослое содержание, сообщение будет удалено, а отправитель заблокирован.',
+    '🛡️ При включении ИИ будет проверять медиа в чате на контент 18+.',
+    '🚫 Если файл считается запрещённым, сообщение будет удалено, а отправитель получит блокировку.',
     '',
-    `Статус: ${enabled ? 'Включено' : 'Отключено'}`,
-    `AI ключ: ${apiKeyConfigured ? 'настроен' : 'не найден'}`,
+    `📌 Статус: ${enabled ? '✅ Включено' : '❌ Отключено'}`,
+    `🔑 AI-ключ: ${apiKeyConfigured ? 'настроен' : 'не найден'}`,
     '',
-    apiKeyConfigured ? 'Нажмите кнопку ниже, чтобы переключить состояние.' : 'Чтобы функция работала, установите OPENROUTER_API_KEY или AI_API_KEY в .env.',
+    apiKeyConfigured ? '👉 Нажмите кнопку ниже, чтобы включить или отключить защиту.' : '⚠️ Чтобы функция работала, добавьте OPENROUTER_API_KEY или AI_API_KEY в .env.',
   ].join('\n');
 }
 
@@ -755,12 +755,12 @@ async function showSettingsAdminMenu(ctx, chatId) {
 
 async function showSettingsMainMenu(ctx, chatId) {
   if (!(await canManageGroupSettings(ctx, chatId))) {
-    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    await ctx.reply('⚠️ У вас нет прав менять настройки этой группы.');
     return;
   }
 
   const title = getGroupDisplayName(chatId, String(chatId));
-  const text = `⚙️ Настройки бота для группы:\n${title}`;
+  const text = `⚙️ Панель управления группой\n\n🏘️ ${title}\n\nВыберите раздел настроек ниже:`;
   const replyMarkup = { inline_keyboard: buildSettingsMainKeyboard(chatId) };
   if (ctx.callbackQuery) {
     await ctx.editMessageText(text, { reply_markup: replyMarkup });
@@ -1882,8 +1882,8 @@ function createBot() {
 
   function startCommand(ctx) {
     const isNew = userService.register(ctx.from.id);
-    const status = isNew ? 'Рад знакомству' : 'С возвращением';
-    ctx.reply(`${status}, ${ctx.from.first_name || 'пользователь'}!\n\nИспользуйте /help или !помощь, чтобы увидеть команды.`);
+    const status = isNew ? '✨ Рад знакомству' : '👋 С возвращением';
+    ctx.reply(`${status}, ${ctx.from.first_name || 'пользователь'}!\n\n✅ Я готов помогать в чате и управлять модерацией.\nИспользуйте /help или !помощь, чтобы увидеть доступные команды.`);
   }
 
   function getMenuKey(chatId) {
@@ -2791,8 +2791,15 @@ function createBot() {
       buttons.push({ text: 'Вперёд ➡️', callback_data: `help:${page + 1}` });
     }
 
+    const header = [
+      '📘 Справка по боту',
+      '',
+      `📄 Раздел ${page + 1}/${pages.length}`,
+      '',
+    ].join('\n');
+
     return {
-      text: `${pages[page]}\n\nСтраница ${page + 1}/${pages.length}`,
+      text: `${header}${pages[page]}`,
       reply_markup: {
         inline_keyboard: [buttons],
       },
