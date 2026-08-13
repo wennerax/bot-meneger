@@ -2594,6 +2594,16 @@ function createBot() {
         await ctx.reply('⚠️ Это слово уже есть в списке.');
       }
       clearPendingSettingsAction(ctx);
+      
+      // Show updated word list
+      const service = activeModerationService || defaultModerationService;
+      const words = service.getBanWords(groupId);
+      const listText = [
+        '📋 Список запрещенных слов',
+        '',
+        words.length ? `Всего слов: ${words.length}\n\n• ${words.join('\n• ')}` : 'Список пуст.',
+      ].join('\n');
+      await ctx.reply(listText);
       return true;
     }
 
@@ -2609,6 +2619,16 @@ function createBot() {
         await ctx.reply('⚠️ Такого слова нет в списке.');
       }
       clearPendingSettingsAction(ctx);
+      
+      // Show updated word list
+      const service = activeModerationService || defaultModerationService;
+      const words = service.getBanWords(groupId);
+      const listText = [
+        '📋 Список запрещенных слов',
+        '',
+        words.length ? `Всего слов: ${words.length}\n\n• ${words.join('\n• ')}` : 'Список пуст.',
+      ].join('\n');
+      await ctx.reply(listText);
       return true;
     }
 
@@ -4213,12 +4233,14 @@ function createBot() {
     }
 
     if (parsed.target === 'banword_add') {
+      await safeAnswerCbQuery(ctx);
       setPendingSettingsAction(ctx, { action: 'settings_banword_add', groupId: chatId });
       await ctx.reply(parseSettingsPrompt('settings_banword_add'));
       return;
     }
 
     if (parsed.target === 'banword_remove') {
+      await safeAnswerCbQuery(ctx);
       setPendingSettingsAction(ctx, { action: 'settings_banword_remove', groupId: chatId });
       await ctx.reply(parseSettingsPrompt('settings_banword_remove'));
       return;
