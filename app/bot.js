@@ -683,7 +683,7 @@ async function showSettingsAnonymousMenu(ctx, chatId) {
     return;
   }
 
-  await ctx.editMessageText(buildSettingsAnonymousMenuText(), { reply_markup: buildSettingsAnonymousKeyboard(chatId) });
+  await safeEditMessageText(ctx, buildSettingsAnonymousMenuText(), { reply_markup: buildSettingsAnonymousKeyboard(chatId) });
 }
 
 async function showSettingsAnonymousExceptionsMenu(ctx, chatId) {
@@ -692,7 +692,7 @@ async function showSettingsAnonymousExceptionsMenu(ctx, chatId) {
     return;
   }
 
-  await ctx.editMessageText(buildSettingsAnonymousExceptionsText(chatId), { reply_markup: buildSettingsAnonymousExceptionsKeyboard(chatId) });
+  await safeEditMessageText(ctx, buildSettingsAnonymousExceptionsText(chatId), { reply_markup: buildSettingsAnonymousExceptionsKeyboard(chatId) });
 }
 
 async function safeEditMessageText(ctx, text, extra = {}) {
@@ -700,9 +700,25 @@ async function safeEditMessageText(ctx, text, extra = {}) {
     await ctx.editMessageText(text, extra);
   } catch (error) {
     const description = error?.response?.description || error?.description || '';
+    const retryAfter = Number(error?.response?.parameters?.retry_after ?? error?.parameters?.retry_after ?? error?.retry_after ?? 0);
+
     if (typeof description === 'string' && description.includes('message is not modified')) {
       return;
     }
+
+    if (retryAfter > 0) {
+      await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
+      try {
+        await ctx.editMessageText(text, extra);
+        return;
+      } catch (retryError) {
+        const retryDescription = retryError?.response?.description || retryError?.description || '';
+        if (typeof retryDescription === 'string' && retryDescription.includes('message is not modified')) {
+          return;
+        }
+      }
+    }
+
     throw error;
   }
 }
@@ -763,7 +779,7 @@ async function showSettingsMainMenu(ctx, chatId) {
   const text = `⚙️ Панель управления группой\n\n🏘️ ${title}\n\nВыберите раздел настроек ниже:`;
   const replyMarkup = { inline_keyboard: buildSettingsMainKeyboard(chatId) };
   if (ctx.callbackQuery) {
-    await ctx.editMessageText(text, { reply_markup: replyMarkup });
+    await safeEditMessageText(ctx, text, { reply_markup: replyMarkup });
   } else {
     await ctx.reply(text, { reply_markup: replyMarkup });
   }
@@ -1604,9 +1620,25 @@ function createBot() {
       await ctx.editMessageText(text, extra);
     } catch (error) {
       const description = error?.response?.description || error?.description || '';
+      const retryAfter = Number(error?.response?.parameters?.retry_after ?? error?.parameters?.retry_after ?? error?.retry_after ?? 0);
+
       if (typeof description === 'string' && description.includes('message is not modified')) {
         return;
       }
+
+      if (retryAfter > 0) {
+        await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
+        try {
+          await ctx.editMessageText(text, extra);
+          return;
+        } catch (retryError) {
+          const retryDescription = retryError?.response?.description || retryError?.description || '';
+          if (typeof retryDescription === 'string' && retryDescription.includes('message is not modified')) {
+            return;
+          }
+        }
+      }
+
       throw error;
     }
   }
