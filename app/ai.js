@@ -1,4 +1,11 @@
 const fetch = global.fetch || require('node-fetch');
+const OpenAI = (() => {
+  try {
+    return require('openai');
+  } catch (error) {
+    return null;
+  }
+})();
 
 async function fetchNewsSummary() {
   try {
@@ -119,6 +126,51 @@ async function requestAi(prompt, options = {}) {
   const { apiKey, apiBaseUrl, model } = options;
   if (!apiKey) {
     throw new Error('no_api_key');
+  }
+
+  const baseUrl = String(apiBaseUrl || '').trim();
+  const normalizedBaseUrl = baseUrl ? baseUrl.replace(/\/$/, '') : '';
+  const usesOpenAIResponses = /api\.openai\.com|openai\.com/i.test(normalizedBaseUrl) || options.useOpenAI === true;
+
+  if (OpenAI && usesOpenAIResponses) {
+    const client = new OpenAI({
+      apiKey,
+      baseURL: normalizedBaseUrl || undefined,
+    });
+
+    const response = await client.responses.create({
+      model: model || 'gpt-4o-mini',
+      input: Array.isArray(prompt)
+        ? prompt
+        : [{ role: 'user', content: String(prompt || '') }],
+      text: {
+        format: { type: 'text' },
+        verbosity: 'medium',
+      },
+      reasoning: {
+        effort: 'medium',
+        mode: 'standard',
+        summary: 'auto',
+      },
+      store: true,
+    });
+
+    if (typeof response?.output_text === 'string' && response.output_text.trim()) {
+      return response.output_text.trim();
+    }
+
+    const textParts = [];
+    for (const item of response?.output || []) {
+      if (item?.type === 'message') {
+        const messageText = item?.content?.map((part) => part?.text || '').join('') || '';
+        if (messageText) {
+          textParts.push(messageText);
+        }
+      }
+    }
+
+    const joined = textParts.join('\n').trim();
+    return joined || null;
   }
 
   const url = buildAiUrl(apiBaseUrl);

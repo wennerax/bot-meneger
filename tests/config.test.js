@@ -41,3 +41,15 @@ test('production ignores default .env file for BOT_TOKEN', () => {
     process.env.BOT_TOKEN = originalToken;
   }
 });
+
+test('OpenAI env variables are recognized by config loader', () => {
+  const settings = loadConfig({
+    OPENAI_API_KEY: 'sk-openai-test',
+    OPENAI_MODEL: 'gpt-4o-mini',
+    OPENAI_BASE_URL: 'https://api.openai.com/v1',
+  }, { filePath: '.env' });
+
+  assert.equal(settings.aiApiKey, 'sk-openai-test');
+  assert.equal(settings.aiModel, 'gpt-4o-mini');
+  assert.equal(settings.aiApiBaseUrl, 'https://api.openai.com/v1');
+});

@@ -64,10 +64,11 @@ function loadConfig(overrides = {}, options = {}) {
   }
 
   const merged = { ...envFile, ...process.env, ...overrides };
-  const aiApiKey = merged.OPENROUTER_API_KEY || merged.AI_API_KEY || '';
-  const aiApiBaseUrl = merged.OPENROUTER_API_BASE_URL || merged.AI_API_BASE_URL || 'https://openrouter.ai';
-  const aiModel = merged.AI_MODEL || merged.OPENROUTER_MODEL || 'gpt-4o-mini';
-  const aiImageModel = merged.AI_IMAGE_MODEL || merged.OPENROUTER_IMAGE_MODEL || (aiApiBaseUrl.includes('openrouter.ai') ? 'openrouter' : aiModel);
+  const aiApiKey = merged.OPENAI_API_KEY || merged.OPENROUTER_API_KEY || merged.AI_API_KEY || '';
+  const defaultAiBaseUrl = merged.OPENAI_API_KEY ? 'https://api.openai.com/v1' : 'https://api.openrouter.ai/v1';
+  const aiApiBaseUrl = merged.OPENAI_BASE_URL || merged.OPENROUTER_API_BASE_URL || merged.AI_API_BASE_URL || defaultAiBaseUrl;
+  const aiModel = merged.OPENAI_MODEL || merged.AI_MODEL || merged.OPENROUTER_MODEL || 'gpt-4o-mini';
+  const aiImageModel = merged.OPENAI_IMAGE_MODEL || merged.AI_IMAGE_MODEL || merged.OPENROUTER_IMAGE_MODEL || (aiApiBaseUrl.includes('openrouter.ai') ? 'openrouter' : aiModel);
 
   return {
     botToken: merged.BOT_TOKEN || '',
