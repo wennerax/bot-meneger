@@ -1871,13 +1871,14 @@ function createBot() {
     const mode = service.getBanwordPunishmentMode(ctx.chat.id);
     const deleteMessages = service.getBanwordDeleteMessages(ctx.chat.id);
 
-    if (mode === 'off') {
-      return;
-    }
-
-    // Delete message if deletion is enabled
+    // Delete message if deletion is enabled (regardless of punishment mode)
     if (deleteMessages) {
       await deleteMessageSafely(ctx, ctx.message.message_id);
+    }
+
+    // Skip punishment if mode is off
+    if (mode === 'off') {
+      return;
     }
 
     const reason = `Запрещённое слово: ${forbiddenWord}`;
