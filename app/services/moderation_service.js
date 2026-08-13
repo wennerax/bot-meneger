@@ -174,6 +174,19 @@ class ModerationService {
           : 'off',
         deleteMessages: Boolean(chat.banwordSettings?.deleteMessages),
       },
+      warnSettings: {
+        punishmentMode: ['off', 'warn', 'mute', 'ban', 'kick'].includes(String(chat.warnSettings?.punishmentMode || '').toLowerCase())
+          ? String(chat.warnSettings.punishmentMode).toLowerCase()
+          : 'off',
+        warningLimit: (() => {
+          const limit = Number(chat.warnSettings?.warningLimit);
+          return Number.isFinite(limit) && limit >= 2 && limit <= 6 ? limit : 3;
+        })(),
+        blockDuration: (() => {
+          const duration = Number(chat.warnSettings?.blockDuration);
+          return Number.isFinite(duration) && duration > 0 ? duration : 24;
+        })(),
+      },
       allowedLinks: (() => {
         if (!Array.isArray(chat.allowedLinks)) {
           return [];
@@ -359,6 +372,13 @@ class ModerationService {
     this._save();
   }
 
+  getAllWarnings(chatId) {
+    const warnings = this._getChat(chatId).warnings;
+    return Object.entries(warnings)
+      .filter(([, count]) => Number(count) > 0)
+      .sort(([, a], [, b]) => Number(b) - Number(a));
+  }
+
   enableSpamProtection(chatId) {
     this._getChat(chatId).spamProtectionEnabled = true;
     this._save();
@@ -526,6 +546,48 @@ class ModerationService {
     this._getChat(chatId).banwordSettings.deleteMessages = Boolean(enabled);
     this._save();
     return this._getChat(chatId).banwordSettings.deleteMessages;
+  }
+
+  getWarnPunishmentMode(chatId) {
+    return this._getChat(chatId).warnSettings.punishmentMode || 'off';
+  }
+
+  setWarnPunishmentMode(chatId, mode) {
+    const normalized = String(mode || '').trim().toLowerCase();
+    if (!['off', 'warn', 'mute', 'ban', 'kick'].includes(normalized)) {
+      return false;
+    }
+    this._getChat(chatId).warnSettings.punishmentMode = normalized;
+    this._save();
+    return true;
+  }
+
+  getWarnLimit(chatId) {
+    return this._getChat(chatId).warnSettings.warningLimit || 3;
+  }
+
+  setWarnLimit(chatId, limit) {
+    const normalized = Number(limit);
+    if (!Number.isFinite(normalized) || normalized < 2 || normalized > 6) {
+      return false;
+    }
+    this._getChat(chatId).warnSettings.warningLimit = normalized;
+    this._save();
+    return true;
+  }
+
+  getWarnBlockDuration(chatId) {
+    return this._getChat(chatId).warnSettings.blockDuration || 24;
+  }
+
+  setWarnBlockDuration(chatId, hours) {
+    const normalized = Number(hours);
+    if (!Number.isFinite(normalized) || normalized <= 0) {
+      return false;
+    }
+    this._getChat(chatId).warnSettings.blockDuration = normalized;
+    this._save();
+    return true;
   }
 
   addBanWord(chatId, word) {

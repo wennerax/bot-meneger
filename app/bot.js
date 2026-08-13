@@ -278,14 +278,17 @@ function buildSettingsMainKeyboard(chatId) {
     ],
     [
       { text: '🚫 Банворды', callback_data: `settings:section:banwords:${chatId}` },
+      { text: '⚠️ Варны', callback_data: `settings:section:warns:${chatId}` },
+    ],
+    [
       { text: '⚙️ Команды', callback_data: `settings:section:commands:${chatId}` },
-    ],
-    [
       { text: '🤖 Медиа ИИ', callback_data: `settings:section:media_ai:${chatId}` },
-      { text: '💬 Первый комментарий', callback_data: `settings:open_menu:${chatId}` },
     ],
     [
+      { text: '💬 Первый комментарий', callback_data: `settings:open_menu:${chatId}` },
       { text: '🚨 @admin', callback_data: `settings:section:admin:${chatId}` },
+    ],
+    [
       { text: '🚫 Скрытые пользователи', callback_data: `settings:section:anonymous:${chatId}` },
     ],
   ];
@@ -1014,6 +1017,99 @@ async function showSettingsBanwordsListMenu(ctx, chatId) {
 
   const backKeyboard = {
     inline_keyboard: [[{ text: 'Назад', callback_data: `settings:banword_list_back:${chatId}` }]],
+  };
+
+  await safeEditMessageText(ctx, listText, { reply_markup: backKeyboard });
+}
+
+function buildSettingsWarnsKeyboard(chatId) {
+  const service = activeModerationService || defaultModerationService;
+  const mode = service.getWarnPunishmentMode(chatId);
+  const limit = service.getWarnLimit(chatId);
+
+  return {
+    inline_keyboard: [
+      [{ text: 'Список предупреждений', callback_data: `settings:warn_list:${chatId}` }],
+      [
+        { text: mode === 'off' ? '✅ Выкл' : 'Выкл', callback_data: `settings:warn_mode:${chatId}:off` },
+        { text: mode === 'kick' ? '✅ Исключить' : 'Исключить', callback_data: `settings:warn_mode:${chatId}:kick` },
+      ],
+      [
+        { text: mode === 'mute' ? '✅ Замутить' : 'Замутить', callback_data: `settings:warn_mode:${chatId}:mute` },
+        { text: mode === 'ban' ? '✅ Забанить' : 'Забанить', callback_data: `settings:warn_mode:${chatId}:ban` },
+      ],
+      [{ text: 'Лимит предупреждений', callback_data: `settings:warn_limit_menu:${chatId}` }],
+      [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
+    ],
+  };
+}
+
+async function showSettingsWarnsMenu(ctx, chatId) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  const service = activeModerationService || defaultModerationService;
+  const mode = service.getWarnPunishmentMode(chatId);
+  const limit = service.getWarnLimit(chatId);
+  const duration = service.getWarnBlockDuration(chatId);
+
+  const modeText = {
+    off: 'Выкл',
+    kick: 'Исключить',
+    mute: 'Замутить',
+    ban: 'Забанить',
+  }[mode] || 'Выкл';
+
+  const text = [
+    '⚠️ Управление предупреждениями',
+    '',
+    'В этом меню вы можете установить наказание при достижении лимита предупреждений.',
+    '',
+    `Наказание: ${modeText}`,
+    `Лимит предупреждений: ${limit}`,
+    `Длительность блокировки: ${duration} часов`,
+  ].join('\n');
+
+  await safeEditMessageText(ctx, text, { reply_markup: buildSettingsWarnsKeyboard(chatId) });
+}
+
+function buildSettingsWarnsLimitKeyboard(chatId) {
+  const service = activeModerationService || defaultModerationService;
+  const limit = service.getWarnLimit(chatId);
+
+  return {
+    inline_keyboard: [
+      [
+        { text: limit === 2 ? '✅ 2' : '2', callback_data: `settings:warn_limit:${chatId}:2` },
+        { text: limit === 3 ? '✅ 3' : '3', callback_data: `settings:warn_limit:${chatId}:3` },
+        { text: limit === 4 ? '✅ 4' : '4', callback_data: `settings:warn_limit:${chatId}:4` },
+        { text: limit === 5 ? '✅ 5' : '5', callback_data: `settings:warn_limit:${chatId}:5` },
+        { text: limit === 6 ? '✅ 6' : '6', callback_data: `settings:warn_limit:${chatId}:6` },
+      ],
+      [{ text: 'Назад', callback_data: `settings:warn_menu:${chatId}` }],
+    ],
+  };
+}
+
+async function showSettingsWarnsListMenu(ctx, chatId) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  const service = activeModerationService || defaultModerationService;
+  const warnings = service.getAllWarnings(chatId);
+
+  const listText = warnings.length
+    ? '📋 Предупреждения пользователей\n\n' + warnings
+        .map(([userId, count]) => `• Пользователь ${userId}: ${count}/${service.getWarnLimit(chatId)}`)
+        .join('\n')
+    : '📋 Предупреждения пользователей\n\nНет предупреждений.';
+
+  const backKeyboard = {
+    inline_keyboard: [[{ text: 'Назад', callback_data: `settings:warn_menu:${chatId}` }]],
   };
 
   await safeEditMessageText(ctx, listText, { reply_markup: backKeyboard });
@@ -1888,8 +1984,31 @@ function createBot() {
       moderationService.addWarning(ctx.chat.id, userId);
       database.addPunishment(ctx.chat.id, userId, 'warn', reason, null);
       const warningCount = moderationService.getWarnings(ctx.chat.id, userId);
+      const warnLimit = moderationService.getWarnLimit(ctx.chat.id);
       const userLabel = getMentionText(ctx.from || { id: userId });
-      await ctx.reply(`${userLabel}: Предупреждение ${warningCount}/3. Причина: ${reason}`);
+      
+      if (warningCount >= warnLimit) {
+        // Auto-ban after reaching limit
+        const blockDuration = moderationService.getWarnBlockDuration(ctx.chat.id);
+        const untilDate = Math.floor(Date.now() / 1000) + Math.round(blockDuration * 3600);
+        try {
+          await ctx.telegram.banChatMember(ctx.chat.id, userId, untilDate);
+        } catch (error) {
+          await ctx.reply(`${userLabel}: Получил ${warnLimit}-е предупреждение и должен быть забанен, но бот не может выполнить бан.`);
+          return;
+        }
+        database.addPunishment(ctx.chat.id, userId, 'ban', `Автобан после ${warnLimit} предупреждений. Последнее: ${reason}`, untilDate);
+        database.addActivePunishment(ctx.chat.id, userId, 'ban', `Автобан после ${warnLimit} предупреждений. Последнее: ${reason}`, untilDate);
+        schedulePunishmentExpiry({
+          chatId: ctx.chat.id,
+          userId,
+          action: 'ban',
+          untilAt: untilDate,
+        });
+        await ctx.reply(`${userLabel}: Получил ${warnLimit}-е предупреждение и забанен на ${blockDuration}ч.`);
+      } else {
+        await ctx.reply(`${userLabel}: Предупреждение ${warningCount}/${warnLimit}. Причина: ${reason}`);
+      }
     } else if (mode === 'mute') {
       // Apply mute
       await applyAutomaticMute(ctx, userId, 24, reason);
@@ -3302,7 +3421,31 @@ function createBot() {
     const details = parsePunishmentDetails(targetData.remainingArgs, !!ctx.message.reply_to_message);
     moderationService.addWarning(ctx.chat.id, targetData.target.id);
     database.addPunishment(ctx.chat.id, targetData.target.id, 'warn', details.reason, null);
-    ctx.reply(`Предупреждение для ${targetData.target.first_name || targetData.target.username || targetData.target.id}: ${moderationService.getWarnings(ctx.chat.id, targetData.target.id)}/3. Причина: ${details.reason}`);
+    const warningCount = moderationService.getWarnings(ctx.chat.id, targetData.target.id);
+    const warnLimit = moderationService.getWarnLimit(ctx.chat.id);
+    
+    if (warningCount >= warnLimit) {
+      // Auto-ban after reaching limit
+      const blockDuration = moderationService.getWarnBlockDuration(ctx.chat.id);
+      const untilDate = Math.floor(Date.now() / 1000) + Math.round(blockDuration * 3600);
+      try {
+        await ctx.telegram.banChatMember(ctx.chat.id, targetData.target.id, untilDate);
+      } catch (error) {
+        ctx.reply(`⚠️ Не удалось выполнить автобан для ${targetData.target.first_name || targetData.target.username || targetData.target.id} после ${warnLimit} предупреждений.`);
+        return;
+      }
+      database.addPunishment(ctx.chat.id, targetData.target.id, 'ban', `Автобан после ${warnLimit} предупреждений. Последнее: ${details.reason}`, untilDate);
+      database.addActivePunishment(ctx.chat.id, targetData.target.id, 'ban', `Автобан после ${warnLimit} предупреждений. Последнее: ${details.reason}`, untilDate);
+      schedulePunishmentExpiry({
+        chatId: ctx.chat.id,
+        userId: targetData.target.id,
+        action: 'ban',
+        untilAt: untilDate,
+      });
+      ctx.reply(`🚫 ${targetData.target.first_name || targetData.target.username || targetData.target.id}: Получил ${warnLimit}-е предупреждение и забанен на ${blockDuration}ч. Причина: ${details.reason}`);
+    } else {
+      ctx.reply(`Предупреждение для ${targetData.target.first_name || targetData.target.username || targetData.target.id}: ${warningCount}/${warnLimit}. Причина: ${details.reason}`);
+    }
   }
 
   async function warningsCommand(ctx, args = '') {
@@ -3315,7 +3458,8 @@ function createBot() {
       }
       target = targetData.target;
     }
-    ctx.reply(`Предупреждений: ${moderationService.getWarnings(ctx.chat.id, target.id)}/3`);
+    const warnLimit = moderationService.getWarnLimit(ctx.chat.id);
+    ctx.reply(`Предупреждений: ${moderationService.getWarnings(ctx.chat.id, target.id)}/${warnLimit}`);
   }
 
   async function unwarnCommand(ctx, args) {
@@ -3898,6 +4042,8 @@ function createBot() {
         await showSettingsMediaAiMenu(ctx, chatId);
       } else if (parsed.section === 'banwords') {
         await showSettingsBanwordsMenu(ctx, chatId);
+      } else if (parsed.section === 'warns') {
+        await showSettingsWarnsMenu(ctx, chatId);
       } else if (parsed.section === 'anonymous') {
         await showSettingsAnonymousMenu(ctx, chatId);
       } else if (parsed.section === 'commands') {
@@ -4253,6 +4399,47 @@ function createBot() {
 
     if (parsed.target === 'banword_list_back') {
       await showSettingsBanwordsMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'warn_menu') {
+      await showSettingsWarnsMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'warn_mode') {
+      const service = activeModerationService || defaultModerationService;
+      const mode = String(parsed.value || '').toLowerCase();
+      if (['off', 'kick', 'mute', 'ban'].includes(mode)) {
+        service.setWarnPunishmentMode(chatId, mode);
+      }
+      await showSettingsWarnsMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'warn_limit_menu') {
+      const text = [
+        '⚠️ Выберите лимит предупреждений',
+        '',
+        'Когда пользователь достигнет этого количества предупреждений,',
+        'будет применено выбранное наказание.',
+      ].join('\n');
+      await safeEditMessageText(ctx, text, { reply_markup: buildSettingsWarnsLimitKeyboard(chatId) });
+      return;
+    }
+
+    if (parsed.target === 'warn_limit') {
+      const service = activeModerationService || defaultModerationService;
+      const limit = Number(parsed.value);
+      if (Number.isFinite(limit) && limit >= 2 && limit <= 6) {
+        service.setWarnLimit(chatId, limit);
+      }
+      await showSettingsWarnsMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'warn_list') {
+      await showSettingsWarnsListMenu(ctx, chatId);
       return;
     }
   });
