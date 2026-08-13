@@ -392,32 +392,24 @@ function buildSettingsBanwordsKeyboard(chatId) {
   const service = activeModerationService || defaultModerationService;
   const mode = service.getBanwordPunishmentMode(chatId);
   const deleteMessages = service.getBanwordDeleteMessages(chatId);
-  const words = service.getBanWords(chatId);
-  const modeText = {
-    off: 'Выкл',
-    warn: 'Предупрежде...',
-    mute: 'Ограничить',
-    ban: 'Заблокировать',
-  }[mode] || 'Выкл';
 
   return {
     inline_keyboard: [
-      [{ text: `Название: ${modeText}`, callback_data: `settings:banword_mode:${chatId}:${mode}` }],
       [
-        { text: mode === 'off' ? '❌ Выкл ✅' : '❌ Выкл', callback_data: `settings:banword_mode:${chatId}:off` },
-        { text: mode === 'warn' ? '⚠️ Предупрежде... ✅' : '⚠️ Предупрежде...', callback_data: `settings:banword_mode:${chatId}:warn` },
+        { text: mode === 'off' ? '✅ Выкл' : 'Выкл', callback_data: `settings:banword_mode:${chatId}:off` },
+        { text: mode === 'warn' ? '✅ Варн' : 'Варн', callback_data: `settings:banword_mode:${chatId}:warn` },
+        { text: mode === 'ban' ? '✅ Забанить' : 'Забанить', callback_data: `settings:banword_mode:${chatId}:ban` },
       ],
       [
-        { text: mode === 'mute' ? '⛔ Ограничить ✅' : '⛔ Ограничить', callback_data: `settings:banword_mode:${chatId}:mute` },
-        { text: mode === 'ban' ? '🚫 Заблокировать ✅' : '🚫 Заблокировать', callback_data: `settings:banword_mode:${chatId}:ban` },
+        { text: mode === 'mute' ? '✅ Замутить' : 'Замутить', callback_data: `settings:banword_mode:${chatId}:mute` },
       ],
-      [{ text: `${deleteMessages ? '✅' : '❌'} Удалять сообщения`, callback_data: `settings:banword_delete:${chatId}` }],
+      [{ text: `Удалять сообщения ${deleteMessages ? '✔️' : '❌'}`, callback_data: `settings:banword_delete:${chatId}` }],
       [
-        { text: '➕ Добавить', callback_data: `settings:banword_add:${chatId}` },
-        { text: '➖ Удалить', callback_data: `settings:banword_remove:${chatId}` },
+        { text: 'Добавить', callback_data: `settings:banword_add:${chatId}` },
+        { text: 'Удалить', callback_data: `settings:banword_remove:${chatId}` },
       ],
-      [{ text: `📋 ${words.length} Запрещенные слова`, callback_data: `settings:banword_list:${chatId}` }],
-      [{ text: '⬅️ Назад', callback_data: `settings:main:${chatId}` }],
+      [{ text: 'Список', callback_data: `settings:banword_list:${chatId}` }],
+      [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
     ],
   };
 }
@@ -989,9 +981,9 @@ async function showSettingsBanwordsMenu(ctx, chatId) {
   const deleteMessages = service.getBanwordDeleteMessages(chatId);
   const modeText = {
     off: 'Выкл',
-    warn: 'Предупреждение',
-    mute: 'Ограничить',
-    ban: 'Блокировка',
+    warn: 'Варн',
+    mute: 'Замутить',
+    ban: 'Забанить',
   }[mode] || 'Выкл';
 
   const text = [
@@ -999,8 +991,8 @@ async function showSettingsBanwordsMenu(ctx, chatId) {
     '',
     'В этом меню вы можете установить наказание для тех, кто использует слова, которые вы решили запретить.',
     '',
-    `Название: ${modeText}`,
-    `Удалять сообщения: ${deleteMessages ? 'включено' : 'выключено'}`,
+    `Наказание: ${modeText}`,
+    `Удалять сообщения: ${deleteMessages ? '✔️' : '❌'}`,
     '',
     words.length ? `Список:\n• ${words.join('\n• ')}` : 'Список пуст.',
   ].join('\n');
