@@ -1866,6 +1866,53 @@ function createBot() {
 
   }
 
+  async function applyBanwordPunishment(ctx, userId, forbiddenWord) {
+    const service = activeModerationService || defaultModerationService;
+    const mode = service.getBanwordPunishmentMode(ctx.chat.id);
+    const deleteMessages = service.getBanwordDeleteMessages(ctx.chat.id);
+
+    if (mode === 'off') {
+      return;
+    }
+
+    // Delete message if deletion is enabled
+    if (deleteMessages) {
+      await deleteMessageSafely(ctx, ctx.message.message_id);
+    }
+
+    const reason = `Запрещённое слово: ${forbiddenWord}`;
+
+    if (mode === 'warn') {
+      // Add warning
+      moderationService.addWarning(ctx.chat.id, userId);
+      database.addPunishment(ctx.chat.id, userId, 'warn', reason, null);
+      const warningCount = moderationService.getWarnings(ctx.chat.id, userId);
+      const userLabel = getMentionText(ctx.from || { id: userId });
+      await ctx.reply(`${userLabel}: Предупреждение ${warningCount}/3. Причина: ${reason}`);
+    } else if (mode === 'mute') {
+      // Apply mute
+      await applyAutomaticMute(ctx, userId, 24, reason);
+    } else if (mode === 'ban') {
+      // Apply ban
+      const untilDate = Math.floor(Date.now() / 1000) + Math.round(24 * 3600); // 24 hours ban
+      try {
+        await ctx.telegram.banChatMember(ctx.chat.id, userId, untilDate);
+      } catch (error) {
+        return;
+      }
+      database.addPunishment(ctx.chat.id, userId, 'ban', reason, untilDate);
+      database.addActivePunishment(ctx.chat.id, userId, 'ban', reason, untilDate);
+      schedulePunishmentExpiry({
+        chatId: ctx.chat.id,
+        userId,
+        action: 'ban',
+        untilAt: untilDate,
+      });
+      const userLabel = getMentionText(ctx.from || { id: userId });
+      await ctx.reply(`${userLabel} забанен на 24ч. Причина: ${reason}`);
+    }
+  }
+
   function trackSpamActivity(ctx) {
     if (!isGroupChat(ctx)) {
       return false;
@@ -5046,14 +5093,11 @@ function createBot() {
       }
     }
 
-    const rulesEnabled = isGroupChat(ctx) && moderationService.isRulesEnabled(ctx.chat.id);
-    if (rulesEnabled) {
-      const forbiddenWord = moderationService.findBanWord(ctx.chat.id, text);
-      if (forbiddenWord) {
-        await deleteMessageSafely(ctx, ctx.message.message_id);
-        await applyAutomaticMute(ctx, ctx.from.id, 24, `Запрещённое слово: ${forbiddenWord}`);
-        return;
-      }
+    // Check for banned words
+    const forbiddenWord = isGroupChat(ctx) && moderationService.findBanWord(ctx.chat.id, text);
+    if (forbiddenWord) {
+      await applyBanwordPunishment(ctx, ctx.from.id, forbiddenWord);
+      return;
     }
 
     if (isGroupChat(ctx) && moderationService.isLinkProtectionEnabled(ctx.chat.id) && isLinkMessage(text, (link) => moderationService.isAllowedLink(ctx.chat.id, link))) {
