@@ -2300,7 +2300,7 @@ function createBot() {
       const result = await ai.requestAi(prompt, {
         apiKey: config.aiApiKey,
         apiBaseUrl: config.aiApiBaseUrl,
-        model: config.aiModel,
+        model: config.aiImageModel || config.aiModel,
         enableRealtime: false,
         systemMessage: [
           'Ты — модуль модерации контента для Telegram-бота.',
@@ -2322,6 +2322,28 @@ function createBot() {
       return positive && !negative;
     } catch (error) {
       console.warn('AI media analysis failed:', error?.message || error);
+      // If the failure is due to billing (402 / Insufficient Balance), disable Media AI for this chat
+      try {
+        const bodyText = error?.body || error?.message || '';
+        const isBillingError = (error && error.status === 402) || /Insufficient Balance|Payment Required|402/i.test(String(bodyText));
+        if (isBillingError) {
+          const service = activeModerationService || defaultModerationService;
+          try {
+            service.disableMediaAi(ctx.chat.id);
+          } catch (e) {
+            console.warn('Failed to disable Media AI for chat after billing error:', e?.message || e);
+          }
+
+          try {
+            await ctx.reply('⚠️ Медиа-модерация ИИ временно отключена в этом чате: недостаточно средств для запросов к AI. Администраторы должны пополнить баланс или отключить функцию.');
+          } catch (e) {
+            // ignore reply errors
+          }
+        }
+      } catch (e) {
+        // ignore unexpected errors in billing handling
+      }
+
       return false;
     }
   }

@@ -65,6 +65,9 @@ function loadConfig(overrides = {}, options = {}) {
 
   const merged = { ...envFile, ...process.env, ...overrides };
   const aiApiKey = merged.OPENROUTER_API_KEY || merged.AI_API_KEY || '';
+  const aiApiBaseUrl = merged.OPENROUTER_API_BASE_URL || merged.AI_API_BASE_URL || 'https://openrouter.ai';
+  const aiModel = merged.AI_MODEL || merged.OPENROUTER_MODEL || 'gpt-4o-mini';
+  const aiImageModel = merged.AI_IMAGE_MODEL || merged.OPENROUTER_IMAGE_MODEL || (aiApiBaseUrl.includes('openrouter.ai') ? 'openrouter' : aiModel);
 
   return {
     botToken: merged.BOT_TOKEN || '',
@@ -79,8 +82,9 @@ function loadConfig(overrides = {}, options = {}) {
     miniAppUrl: merged.MINIAPP_URL || merged.MINI_APP_URL || merged.APP_URL || '',
     // Support generic AI provider env and OpenRouter-specific env names.
     aiApiKey,
-    aiModel: merged.AI_MODEL || merged.OPENROUTER_MODEL || 'gpt-4o-mini',
-    aiApiBaseUrl: merged.OPENROUTER_API_BASE_URL || merged.AI_API_BASE_URL || 'https://openrouter.ai/api/v1',
+    aiModel,
+    aiImageModel,
+    aiApiBaseUrl,
     weatherLocation: merged.WEATHER_LOCATION || 'Moscow',
   };
 }

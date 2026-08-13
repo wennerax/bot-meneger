@@ -111,9 +111,6 @@ function buildAiUrl(apiBaseUrl) {
   if (/\/api\/v1$/i.test(normalized)) {
     return `${normalized}/chat/completions`;
   }
-  if (/openrouter\.ai$/i.test(normalized) || /api\.openrouter\.ai$/i.test(normalized)) {
-    return `${normalized}/api/v1/chat/completions`;
-  }
 
   return `${normalized}/chat/completions`;
 }
