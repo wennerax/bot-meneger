@@ -138,8 +138,10 @@ async function requestAi(prompt, options = {}) {
       baseURL: normalizedBaseUrl || undefined,
     });
 
-    const response = await client.responses.create({
-      model: model || 'gpt-4o-mini',
+    const selectedModel = model || 'gpt-4o-mini';
+    const supportsReasoningModel = /^(o[1-9]|gpt-5|gpt-5-mini|gpt-5-nano|gpt-5-chat)/i.test(selectedModel);
+    const payload = {
+      model: selectedModel,
       input: Array.isArray(prompt)
         ? prompt
         : [{ role: 'user', content: String(prompt || '') }],
@@ -147,13 +149,26 @@ async function requestAi(prompt, options = {}) {
         format: { type: 'text' },
         verbosity: 'medium',
       },
-      reasoning: {
+      store: true,
+    };
+
+    if (supportsReasoningModel) {
+      payload.reasoning = {
         effort: 'medium',
         mode: 'standard',
         summary: 'auto',
-      },
-      store: true,
-    });
+      };
+    }
+
+    if (Array.isArray(options.tools) && options.tools.length) {
+      payload.tools = options.tools;
+    }
+
+    if (Array.isArray(options.include) && options.include.length) {
+      payload.include = options.include;
+    }
+
+    const response = await client.responses.create(payload);
 
     if (typeof response?.output_text === 'string' && response.output_text.trim()) {
       return response.output_text.trim();
