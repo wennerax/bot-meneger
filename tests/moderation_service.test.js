@@ -173,6 +173,16 @@ test('captcha settings can be enabled, disabled and switched by mode', () => {
   assert.equal(service.getCaptchaTimeoutMinutes(100), 10);
 });
 
+test('ban words are detected with suffixes and shortened variations', () => {
+  const service = new ModerationService();
+
+  assert.equal(service.findBanWord(100, 'наркомыы'), 'нарко');
+  assert.equal(service.findBanWord(100, 'мефедрончик'), 'мефедрон');
+  assert.equal(service.findBanWord(100, 'я хочу вздернуться прямо сейчас'), 'вздернусь');
+  assert.equal(service.findBanWord(100, 'самоубийство это тот путь'), 'самоубийство');
+  assert.equal(service.findBanWord(100, 'тут метадоновый ответ'), 'метадон');
+});
+
 test('moderation settings persist across restarts', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-meneger-'));
   const filePath = path.join(dir, 'bot.json');

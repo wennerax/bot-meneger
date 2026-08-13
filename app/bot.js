@@ -277,11 +277,14 @@ function buildSettingsMainKeyboard(chatId) {
       { text: '📜 Правила', callback_data: `settings:section:rules:${chatId}` },
     ],
     [
+      { text: '🚫 Банворды', callback_data: `settings:section:banwords:${chatId}` },
       { text: '⚙️ Команды', callback_data: `settings:section:commands:${chatId}` },
-      { text: '🤖 Медиа ИИ', callback_data: `settings:section:media_ai:${chatId}` },
     ],
     [
+      { text: '🤖 Медиа ИИ', callback_data: `settings:section:media_ai:${chatId}` },
       { text: '💬 Первый комментарий', callback_data: `settings:open_menu:${chatId}` },
+    ],
+    [
       { text: '🚨 @admin', callback_data: `settings:section:admin:${chatId}` },
       { text: '🚫 Скрытые пользователи', callback_data: `settings:section:anonymous:${chatId}` },
     ],

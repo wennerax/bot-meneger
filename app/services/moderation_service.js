@@ -522,21 +522,98 @@ class ModerationService {
   }
 
   findBanWord(chatId, text) {
-    const normalizedText = String(text || '').toLowerCase().replace(/[^a-zа-я0-9]/g, '');
-    if (!normalizedText) {
+    const normalize = (value) => String(value || '').toLowerCase().replace(/[^a-zа-я0-9]/g, '');
+    const compressRepeated = (value) => value.replace(/(.)\1+/g, '$1');
+    const commonSuffixes = [
+      'ться', 'тся', 'уть', 'усь', 'ать', 'ять', 'ить', 'ыы', 'я', 'и', 'а', 'е', 'о', 'ы', 'ь',
+      'ов', 'ев', 'овка', 'овый', 'овой', 'ник', 'чик', 'щик', 'ка', 'ча', 'ный', 'ние', 'ание', 'ение'
+    ];
+    const explicitVariantChecks = [
+      ['self-harm', 'selfharm'],
+      ['селфхарм', 'selfharm'],
+      ['selfharm', 'self-harm'],
+      ['self-harm', 'sel f harm'],
+    ];
+
+    const buildComparisonValues = (value) => {
+      const source = normalize(value);
+      if (!source) {
+        return [];
+      }
+
+      const values = new Set();
+      const forms = [source, compressRepeated(source)];
+      forms.forEach((candidate) => {
+        if (!candidate || candidate.length < 3) {
+          return;
+        }
+        values.add(candidate);
+        for (const suffix of commonSuffixes) {
+          if (candidate.length > suffix.length + 2 && candidate.endsWith(suffix)) {
+            values.add(candidate.slice(0, -suffix.length));
+          }
+        }
+      });
+
+      return [...values].filter((candidate) => candidate.length >= 3);
+    };
+
+    const textValues = new Set();
+    const rawText = String(text || '').toLowerCase();
+    const textTokens = rawText.match(/[a-zа-я0-9]+/g) || [];
+    for (const [primary, alternate] of explicitVariantChecks) {
+      const primaryText = normalize(rawText);
+      const alternateText = normalize(alternate);
+      if (primaryText.includes(primary) || primaryText.includes(alternateText) || rawText.includes(primary) || rawText.includes(alternate)) {
+        return primary;
+      }
+    }
+    if (!textTokens.length) {
       return null;
     }
+    textTokens.forEach((token) => {
+      buildComparisonValues(token).forEach((candidate) => textValues.add(candidate));
+    });
+
+    const wholeText = normalize(rawText);
+    if (wholeText) {
+      buildComparisonValues(wholeText).forEach((candidate) => textValues.add(candidate));
+    }
+
+    let bestMatch = null;
+    let bestScore = -1;
 
     for (const word of this._getChat(chatId).banWords) {
-      const normalizedWord = String(word || '').toLowerCase().replace(/[^a-zа-я0-9]/g, '');
+      const normalizedWord = normalize(word);
       if (!normalizedWord) {
         continue;
       }
-      if (normalizedText.includes(normalizedWord) || normalizedWord.includes(normalizedText)) {
-        return word;
+
+      const wordValues = buildComparisonValues(normalizedWord);
+      let wordBestScore = -1;
+
+      for (const candidate of wordValues) {
+        for (const textCandidate of textValues) {
+          if (!textCandidate || !candidate) {
+            continue;
+          }
+
+          if (textCandidate === candidate || textCandidate.includes(candidate) || candidate.includes(textCandidate)) {
+            const score = candidate.length + (textCandidate === candidate ? 10 : 0);
+            if (score > wordBestScore) {
+              wordBestScore = score;
+            }
+          }
+        }
+      }
+
+      if (wordBestScore > bestScore) {
+        bestMatch = word;
+        bestScore = wordBestScore;
       }
     }
-    return null;
+
+    return bestMatch;
   }
 
   getAllowedLinks(chatId) {
