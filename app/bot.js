@@ -976,7 +976,6 @@ async function showSettingsBanwordsMenu(ctx, chatId) {
   }
 
   const service = activeModerationService || defaultModerationService;
-  const words = service.getBanWords(chatId);
   const mode = service.getBanwordPunishmentMode(chatId);
   const deleteMessages = service.getBanwordDeleteMessages(chatId);
   const modeText = {
@@ -993,11 +992,31 @@ async function showSettingsBanwordsMenu(ctx, chatId) {
     '',
     `Наказание: ${modeText}`,
     `Удалять сообщения: ${deleteMessages ? '✔️' : '❌'}`,
-    '',
-    words.length ? `Список:\n• ${words.join('\n• ')}` : 'Список пуст.',
   ].join('\n');
 
   await ctx.editMessageText(text, { reply_markup: buildSettingsBanwordsKeyboard(chatId) });
+}
+
+async function showSettingsBanwordsListMenu(ctx, chatId) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  const service = activeModerationService || defaultModerationService;
+  const words = service.getBanWords(chatId);
+
+  const listText = [
+    '📋 Список запрещенных слов',
+    '',
+    words.length ? `Всего слов: ${words.length}\n\n• ${words.join('\n• ')}` : 'Список пуст.',
+  ].join('\n');
+
+  const backKeyboard = {
+    inline_keyboard: [[{ text: 'Назад', callback_data: `settings:banword_list_back:${chatId}` }]],
+  };
+
+  await ctx.editMessageText(listText, { reply_markup: backKeyboard });
 }
 
 function parseSettingsAction(action) {
@@ -4158,6 +4177,11 @@ function createBot() {
     }
 
     if (parsed.target === 'banword_list') {
+      await showSettingsBanwordsListMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'banword_list_back') {
       await showSettingsBanwordsMenu(ctx, chatId);
       return;
     }
