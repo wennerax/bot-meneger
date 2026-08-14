@@ -57,8 +57,11 @@ function isChannelPostInGroupMessage(message = {}) {
   const isSenderChatChannel = message.sender_chat?.type === 'channel';
   const isForwardedFromChannel = message.forward_from_chat?.type === 'channel';
   const hasRegularUser = Boolean(message.from && typeof message.from === 'object' && message.from.id);
+  
+  // Поддержка forum topics: если есть message_thread_id и нет from, это пост в topic
+  const isTopicPost = message.message_thread_id && message.message_thread_id !== 0 && !hasRegularUser;
 
-  return !hasRegularUser && (isSenderChatChannel || isForwardedFromChannel);
+  return (isTopicPost || !hasRegularUser) && (isSenderChatChannel || isForwardedFromChannel);
 }
 
 function isAnonymousSenderMessage(message = {}) {
@@ -2674,7 +2677,15 @@ function createBot() {
       .filter((row) => Array.isArray(row) && row.length)
       .map((row) => row.map((item) => ({ text: item.text, url: item.url }))) } : null;
     const { text: formattedText, entities } = moderationService.formatTextWithLinks(menuTextPayload);
-    const replyOptions = { reply_to_message_id: ctx.message.message_id };
+    
+    // Для первого комментария в topic используем message_thread_id, иначе reply_to_message_id
+    const replyOptions = {};
+    if (ctx.message.message_thread_id && ctx.message.message_thread_id !== 0) {
+      replyOptions.message_thread_id = ctx.message.message_thread_id;
+    } else {
+      replyOptions.reply_to_message_id = ctx.message.message_id;
+    }
+    
     if (entities.length) {
       replyOptions.entities = entities;
     }
@@ -2689,8 +2700,13 @@ function createBot() {
           caption: formattedText,
           caption_entities: entities.length ? entities : undefined,
           reply_markup: replyOptions.reply_markup,
-          reply_to_message_id: replyOptions.reply_to_message_id,
         };
+        if (replyOptions.message_thread_id) {
+          mediaOptions.message_thread_id = replyOptions.message_thread_id;
+        } else {
+          mediaOptions.reply_to_message_id = replyOptions.reply_to_message_id;
+        }
+        
         if (menuMedia.type === 'photo') {
           sentMessage = await ctx.replyWithPhoto(menuMedia.fileId, mediaOptions);
         } else if (menuMedia.type === 'video') {
