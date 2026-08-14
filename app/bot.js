@@ -289,7 +289,7 @@ function buildSettingsMainKeyboard(chatId) {
       { text: '🚨 @admin', callback_data: `settings:section:admin:${chatId}` },
     ],
     [
-      { text: '🚫 Скрытые пользователи', callback_data: `settings:section:anonymous:${chatId}` },
+      { text: '�‍🌫️ Скрытые пользователи', callback_data: `settings:section:anonymous:${chatId}` },
     ],
   ];
 }
@@ -633,7 +633,7 @@ function buildSettingsAdminMenuText() {
 
 function buildSettingsAnonymousMenuText() {
   return [
-    '🚫 Скрытые пользователи',
+    '�‍🌫️ Скрытые пользователи',
     '',
     'Через это меню вы можете установить наказание для пользователей, которые пишут в группу, маскируясь под канал.',
     '',
@@ -1114,6 +1114,10 @@ function buildSettingsWarnsDurationKeyboard(chatId) {
           text: duration === value ? `✅ ${value}ч` : `${value}ч`,
           callback_data: `settings:warn_duration:${chatId}:${value}`,
         })),
+      ],
+      [
+        { text: duration === 0 ? '✅ ∞ Навсегда' : '∞ Навсегда', callback_data: `settings:warn_duration:${chatId}:0` },
+        { text: '✍️ Кастом', callback_data: `settings:warn_duration_custom:${chatId}` },
       ],
       [{ text: 'Назад', callback_data: `settings:warn_menu:${chatId}` }],
     ],
@@ -2930,6 +2934,43 @@ function createBot() {
       return true;
     }
 
+    if (pending.action === 'settings_warn_duration_custom' && ctx.message.text) {
+      const input = String(ctx.message.text).trim().toLowerCase();
+      const groupId = Number(pending.groupId || ctx.chat.id);
+      const service = activeModerationService || defaultModerationService;
+
+      // Parse custom duration format: 1ч, 2д, 1мес, 1год, etc.
+      const match = input.match(/^(\d+(?:\.\d+)?)\s*(ч|час|часа|часов|д|день|дня|дней|мес|месяц|месяца|месяцев|г|год|года|лет)?$/i);
+      if (!match) {
+        await replyWithAutoDelete(ctx, '⚠️ Неверный формат. Выполните по шаблону: 1ч, 2д, 1мес, 1год');
+        return true;
+      }
+
+      const value = Number(match[1]);
+      const unit = (match[2] || 'ч').toLowerCase();
+      let durationHours = 0;
+
+      if (['ч', 'час', 'часа', 'часов'].includes(unit)) {
+        durationHours = value;
+      } else if (['д', 'день', 'дня', 'дней'].includes(unit)) {
+        durationHours = value * 24;
+      } else if (['мес', 'месяц', 'месяца', 'месяцев'].includes(unit)) {
+        durationHours = value * 24 * 30;
+      } else if (['г', 'год', 'года', 'лет'].includes(unit)) {
+        durationHours = value * 24 * 365;
+      }
+
+      if (durationHours <= 0) {
+        await replyWithAutoDelete(ctx, '⚠️ Время должно быть положительным.');
+        return true;
+      }
+
+      service.setWarnBlockDuration(groupId, durationHours);
+      await replyWithAutoDelete(ctx, `✅ Время бана установлено: ${durationHours}ч`);
+      clearPendingSettingsAction(ctx);
+      return true;
+    }
+
     return false;
   }
 
@@ -4498,10 +4539,16 @@ function createBot() {
     if (parsed.target === 'warn_duration') {
       const service = activeModerationService || defaultModerationService;
       const duration = Number(parsed.value);
-      if (Number.isFinite(duration) && duration > 0) {
-        service.setWarnBlockDuration(chatId, duration);
+      if (Number.isFinite(duration) && duration >= 0) {
+        service.setWarnBlockDuration(chatId, duration === 0 ? 0 : duration);
       }
       await showSettingsWarnsMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'warn_duration_custom') {
+      setPendingSettingsAction(ctx, { action: 'settings_warn_duration_custom', groupId: chatId });
+      await ctx.reply('✍️ Напишите время бана в одном из форматов:\nПримеры: 1ч, 2ч, 1д, 7д, 1мес, 1год');
       return;
     }
 
