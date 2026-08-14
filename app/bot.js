@@ -973,7 +973,18 @@ async function showSettingsStreaksMenu(ctx, chatId) {
     '• система учитывает ежедневную активность и отображается в /stats и /top',
   ].join('\n');
 
-  await ctx.editMessageText(text, { reply_markup: buildSettingsStreaksKeyboard(chatId) });
+  const entities = [];
+  const seriesEmojiInfo = premiumEmojis.getCustomEmojiInfo('series_premium');
+  if (seriesEmojiInfo && seriesEmojiInfo.id) {
+    entities.push({
+      type: 'custom_emoji',
+      offset: 0,
+      length: seriesEmojiInfo.fallback.length,
+      custom_emoji_id: seriesEmojiInfo.id,
+    });
+  }
+
+  await ctx.editMessageText(text, { reply_markup: buildSettingsStreaksKeyboard(chatId), entities: entities.length ? entities : undefined });
 }
 
 async function showSettingsFirstMessageMenu(ctx, chatId) {
