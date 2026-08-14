@@ -1065,6 +1065,8 @@ async function showSettingsWarnsMenu(ctx, chatId) {
     ban: 'Забанить',
   }[mode] || 'Выкл';
 
+  const durationText = duration === 0 ? '∞ Навсегда' : `${duration} часов`;
+
   const text = [
     '⚠️ Управление предупреждениями',
     '',
@@ -1072,7 +1074,7 @@ async function showSettingsWarnsMenu(ctx, chatId) {
     '',
     `Наказание: ${modeText}`,
     `Лимит предупреждений: ${limit}`,
-    `Длительность блокировки: ${duration} часов`,
+    `Длительность блокировки: ${durationText}`,
   ].join('\n');
 
   await safeEditMessageText(ctx, text, { reply_markup: buildSettingsWarnsKeyboard(chatId) });
@@ -4542,6 +4544,8 @@ function createBot() {
       const duration = Number(parsed.value);
       if (Number.isFinite(duration) && duration >= 0) {
         service.setWarnBlockDuration(chatId, duration === 0 ? 0 : duration);
+        const durationText = duration === 0 ? '∞ Навсегда' : `${duration}ч`;
+        await replyWithAutoDelete(ctx, `✅ Время бана установлено: ${durationText}`);
       }
       await showSettingsWarnsMenu(ctx, chatId);
       return;
