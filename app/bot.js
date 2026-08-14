@@ -153,6 +153,17 @@ async function canManageGroupSettings(ctx, targetChatId) {
   }
 }
 
+async function safeEditMessageText(ctx, text, extra) {
+  try {
+    await ctx.editMessageText(text, extra);
+  } catch (err) {
+    // Ignore "message is not modified" error - happens when content is identical to current message
+    if (err.response?.description && !err.response.description.includes('message is not modified')) {
+      throw err;
+    }
+  }
+}
+
 function getMessageLink(chatId, messageId) {
   const id = String(chatId || '');
   const msgId = Number(messageId) || 0;
@@ -2558,7 +2569,7 @@ function createBot() {
 
     const text = buildCommandRightsPageText(chatId, pageIndex);
     const keyboard = buildCommandRightsPageKeyboard(chatId, pageIndex, returnCallback, returnFlag);
-    await ctx.editMessageText(text, { reply_markup: keyboard });
+    await safeEditMessageText(ctx, text, { reply_markup: keyboard });
   }
 
   function getMediaPayloadFromMessage(ctx) {
