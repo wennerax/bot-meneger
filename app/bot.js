@@ -7,6 +7,7 @@ const ModerationService = require('./services/moderation_service');
 const Database = require('./services/database');
 const { getFunnyDescription } = require('./services/moderation_service');
 const { getMentionText, resolveUsernameTarget } = require('./services/username_service');
+const premiumEmojis = require('./premium_emojis');
 
 const defaultModerationService = new ModerationService();
 let activeDatabase = null;
@@ -2038,7 +2039,7 @@ function createBot() {
         try {
           await ctx.telegram.banChatMember(ctx.chat.id, userId, untilDate);
         } catch (error) {
-          await replyWithAutoDelete(ctx, `${userLabel}: Получил ${warnLimit}-е предупреждение и должен быть забанен, но бот не может выполнить бан.`);
+          await replyWithAutoDelete(ctx, `{alert} ${userLabel}: Получил ${warnLimit}-е предупреждение и должен быть забанен, но бот не может выполнить бан.`);
           return;
         }
         database.addPunishment(ctx.chat.id, userId, 'ban', `Автобан после ${warnLimit} предупреждений. Последнее: ${reason}`, untilDate);
@@ -2049,9 +2050,9 @@ function createBot() {
           action: 'ban',
           untilAt: untilDate,
         });
-        await replyWithAutoDelete(ctx, `${userLabel}: Получил ${warnLimit}-е предупреждение и забанен на ${blockDuration}ч.`);
+        await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} ${userLabel}: Получил ${warnLimit}-е предупреждение и забанен на ${blockDuration}ч.`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
       } else {
-        await replyWithAutoDelete(ctx, `${userLabel}: Предупреждение ${warningCount}/${warnLimit}. Причина: ${reason}`);
+        await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} ${userLabel}: Предупреждение ${warningCount}/${warnLimit}. Причина: ${reason}`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
       }
     } else if (mode === 'mute') {
       // Apply mute
@@ -3513,7 +3514,7 @@ function createBot() {
       try {
         await ctx.telegram.banChatMember(ctx.chat.id, targetData.target.id, untilDate);
       } catch (error) {
-        await replyWithAutoDelete(ctx, `⚠️ Не удалось выполнить автобан для ${targetData.target.first_name || targetData.target.username || targetData.target.id} после ${warnLimit} предупреждений.`);
+        await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} Не удалось выполнить автобан для ${targetData.target.first_name || targetData.target.username || targetData.target.id} после ${warnLimit} предупреждений.`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
         return;
       }
       database.addPunishment(ctx.chat.id, targetData.target.id, 'ban', `Автобан после ${warnLimit} предупреждений. Последнее: ${details.reason}`, untilDate);
@@ -3524,9 +3525,9 @@ function createBot() {
         action: 'ban',
         untilAt: untilDate,
       });
-      await replyWithAutoDelete(ctx, `🚫 ${targetData.target.first_name || targetData.target.username || targetData.target.id}: Получил ${warnLimit}-е предупреждение и забанен на ${blockDuration}ч. Причина: ${details.reason}`);
+      await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} ${targetData.target.first_name || targetData.target.username || targetData.target.id}: Получил ${warnLimit}-е предупреждение и забанен на ${blockDuration}ч. Причина: ${details.reason}`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
     } else {
-      await replyWithAutoDelete(ctx, `emoji:id(5071126104668898462) Предупреждение для ${targetData.target.first_name || targetData.target.username || targetData.target.id}: ${warningCount}/${warnLimit}. Причина: ${details.reason}`);
+      await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} Предупреждение для ${targetData.target.first_name || targetData.target.username || targetData.target.id}: ${warningCount}/${warnLimit}. Причина: ${details.reason}`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
     }
   }
 
