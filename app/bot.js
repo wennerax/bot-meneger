@@ -312,9 +312,23 @@ function buildSettingsMainKeyboard(chatId) {
       { text: '🚨 @admin', callback_data: `settings:section:admin:${chatId}` },
     ],
     [
+      { text: '� Серия', callback_data: `settings:section:streaks:${chatId}` },
       { text: '😶‍🌫️ Скрытые пользователи', callback_data: `settings:section:anonymous:${chatId}` },
     ],
   ];
+}
+
+function buildSettingsStreaksKeyboard(chatId) {
+  const service = activeModerationService || defaultModerationService;
+  const enabled = service.isStreaksEnabled(chatId);
+  const label = service.getStreaksLabel(chatId);
+  return {
+    inline_keyboard: [
+      [{ text: enabled ? 'Выключить серию' : 'Включить серию', callback_data: `settings:toggle_streaks:${chatId}:${enabled ? 'off' : 'on'}` }],
+      [{ text: `Название: ${label}`, callback_data: `settings:streaks_label:${chatId}` }],
+      [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
+    ],
+  };
 }
 
 function buildSettingsLinksKeyboard(chatId) {
@@ -937,6 +951,29 @@ async function showSettingsAntiMenu(ctx, chatId) {
   ].join('\n');
 
   await ctx.editMessageText(text, { reply_markup: buildSettingsAntiKeyboard(chatId) });
+}
+
+async function showSettingsStreaksMenu(ctx, chatId) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  const service = activeModerationService || defaultModerationService;
+  const enabled = service.isStreaksEnabled(chatId);
+  const label = service.getStreaksLabel(chatId);
+  const text = [
+    '🔥 Настройка системы серий',
+    '',
+    `Статус: ${enabled ? 'включена' : 'отключена'}`,
+    `Название: ${label}`,
+    '',
+    '• можно включить или выключить систему',
+    '• можно заменить название раздела: Серия, Стрик, Рейтинг, Стаж',
+    '• система учитывает ежедневную активность и отображается в /stats и /top',
+  ].join('\n');
+
+  await ctx.editMessageText(text, { reply_markup: buildSettingsStreaksKeyboard(chatId) });
 }
 
 async function showSettingsFirstMessageMenu(ctx, chatId) {
@@ -2843,6 +2880,18 @@ function createBot() {
       return true;
     }
 
+    if (pending.action === 'settings_streaks_label' && ctx.message.text) {
+      const value = String(ctx.message.text).trim();
+      if (!value) {
+        await ctx.reply('⚠️ Пустое название не сохранено.');
+        return true;
+      }
+      moderationService.setStreaksLabel(groupId, value);
+      await ctx.reply(`✅ Название системы изменено на: ${value}`);
+      clearPendingSettingsAction(ctx);
+      return true;
+    }
+
     if (pending.action === 'settings_anonymous_channel_add' && ctx.message.text) {
       const value = String(ctx.message.text).trim();
       if (!value) {
@@ -3086,8 +3135,8 @@ function createBot() {
         '/id, !айди - показать ваши ID',
         '/about, !информация - информация о боте',
         '/whoami, !кто я - забавное описание вас',
-        '/stats, !статистика - личная статистика пользователя',
-        '/top, !топ - топ пользователей по сообщениям в группе',
+        '/stats, !статистика - личная статистика (сообщения, серия дней, активность)',
+        '/top, !топ - топ по сообщениям (с бейджами серии)',
       ].join('\n'),
       [
         '📋 СПРАВКА ПО КОМАНДАМ',
@@ -3102,10 +3151,12 @@ function createBot() {
         '-антифлуд - выключить антифлуд',
         '+ссылки - включить антиссылки',
         '-ссылки - выключить антиссылки',
-        '/menu - открыть настройки первого сообщения бота',
-        '/menu + текст - настроить текст сообщения',
-        '/menu + кнопки - настроить кнопки и ряды',
-        '/menu + медиа - добавить фото/видео/документ в сообщение',
+        '/menu - открыть настройки группы (капча, ссылки, антиспам, первый комментарий, серия)',
+        '  • 🛡️ Капча - включить капчу при входе',
+        '  • 🔗 Ссылки - управлять разрешёнными ссылками',
+        '  • 🛡️ Антиспам - антиспам, антифлуд, антиссылки',
+        '  • 💬 Первый комментарий - текст, кнопки, медиа',
+        '  • 🔥 Серия - включить/выключить систему серий, изменить название',
         '/warn, !предупреждение @юз - выдать предупреждение',
         '/warnings, !варны [@юз] - показать варны пользователя',
         '/unwarn, !снять предупреждение @юз - снять предупреждения',
@@ -3162,6 +3213,31 @@ function createBot() {
         '/ai <текст> - спросить AI и получить ответ',
         '',
         'Используйте русские команды с ! и английские с /',
+      ].join('\n'),
+      [
+        '🔥 СИСТЕМА СЕРИЙ (STREAK)',
+        '',
+        'Система серий отслеживает ежедневную активность пользователей в группе.',
+        '',
+        'КАК ЭТО РАБОТАЕТ:',
+        '• Каждый день, когда пользователь пишет сообщение, фиксируется его активность',
+        '• Серия считается как количество ПОСЛЕДОВАТЕЛЬНЫХ дней активности',
+        '• Если пользователь не пишет день - серия сбивается',
+        '• Бейджи появляются в /stats и /top с разными уровнями:',
+        '  1-19 дней — уровень 1',
+        '  20-49 дней — уровень 2',
+        '  50-99 дней — уровень 3',
+        '  100-499 дней — уровень 4',
+        '  500+ дней — уровень 5',
+        '',
+        'УПРАВЛЕНИЕ СИСТЕМОЙ:',
+        '• Администратор может включить/выключить систему серий через /menu',
+        '• Можно изменить название раздела (Серия, Стриик, Рейтинг, Стаж и т.д.)',
+        '• По умолчанию система включена для всех новых групп',
+        '',
+        'КОМАНДЫ:',
+        '/stats - посмотреть свою активность и текущую серию',
+        '/top - посмотреть топ по активности с бейджами серий',
       ].join('\n'),
     ];
   }
@@ -3419,6 +3495,9 @@ function createBot() {
 
     const profile = database.getUserProfile(ctx.chat.id, targetUser.id);
     const activity = database.getUserActivity(ctx.chat.id, targetUser.id, 7);
+    const moderationService = activeModerationService || defaultModerationService;
+    const streaksEnabled = moderationService.isStreaksEnabled(ctx.chat.id);
+    const streakLabel = moderationService.getStreaksLabel(ctx.chat.id);
     const username = profile.username || getMentionText(targetUser);
     const punishments = profile.punishments.length
       ? profile.punishments.map((item) => `${item.action}${item.reason ? `: ${item.reason}` : ''}`).join(', ')
@@ -3427,8 +3506,8 @@ function createBot() {
     const topLabel = profile.topPosition ? `${profile.topPosition} место` : 'не в топе';
     const streakBadgeText = premiumEmojis.getStreakBadge(profile.streak);
     const streakInfo = premiumEmojis.getStreakBadgeInfo(profile.streak);
-    const streakPrefix = 'Серия: ';
-    const streakLine = `${streakPrefix}${streakBadgeText}`;
+    const streakPrefix = `${streakLabel}: `;
+    const streakLine = streaksEnabled ? `${streakPrefix}${streakBadgeText}` : null;
     const lastSeenLabel = profile.lastSeenAt ? new Date(profile.lastSeenAt).toLocaleString('ru-RU') : 'неизвестно';
     const chartSvg = buildActivityChartSvg(activity);
     const captionLines = [
@@ -3437,7 +3516,7 @@ function createBot() {
       `Описание: ${escapeCaptionText(description)}`,
       `Наказания: ${escapeCaptionText(punishments)}`,
       `Сообщений: ${escapeCaptionText(profile.messageCount)}`,
-      streakLine,
+      ...(streakLine ? [streakLine] : []),
       `Место в топе: ${escapeCaptionText(topLabel)}`,
       `Последний вход: ${escapeCaptionText(lastSeenLabel)}`,
       '',
@@ -3446,7 +3525,7 @@ function createBot() {
     const captionText = captionLines.join('\n');
     const captionEntities = [];
 
-    if (streakInfo && streakBadgeText) {
+    if (streaksEnabled && streakInfo && streakBadgeText && streakLine) {
       const badgeString = String(streakInfo.fallback);
       const lineStart = captionText.indexOf(streakLine);
       const badgeStart = captionText.indexOf(badgeString, lineStart >= 0 ? lineStart : 0);
@@ -3486,33 +3565,38 @@ function createBot() {
       ctx.reply('Пока нет статистики сообщений в этой группе.');
       return;
     }
+    const moderationService = activeModerationService || defaultModerationService;
+    const streaksEnabled = moderationService.isStreaksEnabled(ctx.chat.id);
+    const streakLabel = moderationService.getStreaksLabel(ctx.chat.id);
     const lines = top.map((item, index) => {
-      const badge = premiumEmojis.getStreakBadge(item.streak || 0);
       const label = item.displayName || item.userId;
-      return `${index + 1}. ${badge} ${label} — ${item.messageCount} сообщений`;
+      const badge = streaksEnabled ? premiumEmojis.getStreakBadge(item.streak || 0) : '';
+      return `${index + 1}. ${badge ? `${badge} ` : ''}${label} — ${item.messageCount} сообщений`;
     });
     const topText = `🏆 Топ по сообщениям в этой группе:\n${lines.join('\n')}`;
     const topEntities = [];
 
-    top.forEach((item, index) => {
-      const badgeInfo = premiumEmojis.getStreakBadgeInfo(item.streak || 0);
-      if (!badgeInfo) {
-        return;
-      }
-      const badgeText = premiumEmojis.getStreakBadge(item.streak || 0);
-      const line = lines[index];
-      const lineStart = topText.indexOf(line);
-      const fallbackText = String(badgeInfo.fallback);
-      const badgeStart = topText.indexOf(fallbackText, lineStart >= 0 ? lineStart : 0);
-      if (badgeStart >= 0) {
-        topEntities.push({
-          type: 'custom_emoji',
-          offset: badgeStart,
-          length: fallbackText.length,
-          custom_emoji_id: badgeInfo.id,
-        });
-      }
-    });
+    if (streaksEnabled) {
+      top.forEach((item, index) => {
+        const badgeInfo = premiumEmojis.getStreakBadgeInfo(item.streak || 0);
+        if (!badgeInfo) {
+          return;
+        }
+        const badgeText = premiumEmojis.getStreakBadge(item.streak || 0);
+        const line = lines[index];
+        const lineStart = topText.indexOf(line);
+        const fallbackText = String(badgeInfo.fallback);
+        const badgeStart = topText.indexOf(fallbackText, lineStart >= 0 ? lineStart : 0);
+        if (badgeStart >= 0) {
+          topEntities.push({
+            type: 'custom_emoji',
+            offset: badgeStart,
+            length: fallbackText.length,
+            custom_emoji_id: badgeInfo.id,
+          });
+        }
+      });
+    }
 
     ctx.reply(topText, {
       entities: topEntities.length ? topEntities : undefined,
@@ -4300,6 +4384,8 @@ function createBot() {
         await showSettingsBanwordsMenu(ctx, chatId);
       } else if (parsed.section === 'warns') {
         await showSettingsWarnsMenu(ctx, chatId);
+      } else if (parsed.section === 'streaks') {
+        await showSettingsStreaksMenu(ctx, chatId);
       } else if (parsed.section === 'anonymous') {
         await showSettingsAnonymousMenu(ctx, chatId);
       } else if (parsed.section === 'commands') {
@@ -4327,6 +4413,23 @@ function createBot() {
         service.enableRules(chatId);
       }
       await showSettingsRulesMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'toggle_streaks') {
+      const service = activeModerationService || defaultModerationService;
+      if (parsed.value === 'on') {
+        service.enableStreaks(chatId);
+      } else {
+        service.disableStreaks(chatId);
+      }
+      await showSettingsStreaksMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'streaks_label') {
+      setPendingSettingsAction(ctx, { action: 'settings_streaks_label', groupId: chatId });
+      await ctx.reply('Введите название системы серий. Например: Серия, Стрик, Рейтинг, Стаж или Прогресс.');
       return;
     }
 

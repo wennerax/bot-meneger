@@ -69,6 +69,18 @@ test('rules feature can be enabled and disabled per chat', () => {
   assert.equal(service.isRulesEnabled(100), true);
 });
 
+test('streak feature can be enabled and disabled per chat', () => {
+  const service = new ModerationService();
+
+  assert.equal(service.isStreaksEnabled(100), true);
+
+  service.disableStreaks(100);
+  assert.equal(service.isStreaksEnabled(100), false);
+
+  service.enableStreaks(100);
+  assert.equal(service.isStreaksEnabled(100), true);
+});
+
 test('chat starts with no allowed links by default', () => {
   const service = new ModerationService();
 

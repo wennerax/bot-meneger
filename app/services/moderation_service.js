@@ -226,6 +226,8 @@ class ModerationService {
       linkProtectionEnabled: Boolean(chat.linkProtectionEnabled),
       floodProtectionEnabled: Boolean(chat.floodProtectionEnabled),
       rulesEnabled: chat.rulesEnabled === undefined ? true : Boolean(chat.rulesEnabled),
+      streaksEnabled: chat.streaksEnabled === undefined ? true : Boolean(chat.streaksEnabled),
+      streaksLabel: typeof chat.streaksLabel === 'string' ? chat.streaksLabel.trim() || 'Серия' : 'Серия',
       captchaEnabled: chat.captchaEnabled === undefined ? true : Boolean(chat.captchaEnabled),
       captchaMode: chat.captchaMode || 'emoji',
       mediaAiEnabled: Boolean(chat.mediaAiEnabled),
@@ -447,6 +449,33 @@ class ModerationService {
 
   isRulesEnabled(chatId) {
     return this._getChat(chatId).rulesEnabled !== false;
+  }
+
+  enableStreaks(chatId) {
+    this._getChat(chatId).streaksEnabled = true;
+    this._save();
+    return true;
+  }
+
+  disableStreaks(chatId) {
+    this._getChat(chatId).streaksEnabled = false;
+    this._save();
+    return true;
+  }
+
+  isStreaksEnabled(chatId) {
+    return this._getChat(chatId).streaksEnabled !== false;
+  }
+
+  setStreaksLabel(chatId, label) {
+    const text = String(label || '').trim();
+    this._getChat(chatId).streaksLabel = text || 'Серия';
+    this._save();
+    return true;
+  }
+
+  getStreaksLabel(chatId) {
+    return this._getChat(chatId).streaksLabel || 'Серия';
   }
 
   enableCaptcha(chatId) {
