@@ -400,7 +400,7 @@ async function replyWithCustomEmoji(ctx, text, emojis = {}, options = {}) {
     entities.push({
       type: 'custom_emoji',
       offset: actualOffset,
-      length: 2,
+      length: info.fallback.length,
       custom_emoji_id: info.id,
     });
 
@@ -408,10 +408,13 @@ async function replyWithCustomEmoji(ctx, text, emojis = {}, options = {}) {
   }
 
   // Отправить сообщение с entities
-  const finalOptions = {
-    ...options,
-    entities: entities.length > 0 ? entities : undefined,
-  };
+  // Когда используются entities, parse_mode не должен быть указан
+  const finalOptions = { ...options };
+  if (entities.length > 0) {
+    finalOptions.entities = entities;
+    // Удалить parse_mode если он был указан, т.к. entities несовместимы с parse_mode
+    delete finalOptions.parse_mode;
+  }
 
   return ctx.reply(processedText, finalOptions);
 }
