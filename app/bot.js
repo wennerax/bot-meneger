@@ -3425,37 +3425,51 @@ function createBot() {
       : 'нет';
     const description = profile.description ? profile.description : 'нет';
     const topLabel = profile.topPosition ? `${profile.topPosition} место` : 'не в топе';
-    const streakLabel = profile.streak > 0 ? `${profile.streakBadge || '🔥'} ${profile.streak} дней` : '🔥 0 дней';
+    const streakBadgeText = premiumEmojis.getStreakBadge(profile.streak);
     const streakInfo = premiumEmojis.getStreakBadgeInfo(profile.streak);
     const streakPrefix = 'Серия: ';
-    const streakBadgeText = premiumEmojis.getStreakBadge(profile.streak);
-    const streakBadgeEntity = streakInfo ? premiumEmojis.getStreakBadgeEntity(profile.streak, streakPrefix.length) : null;
+    const streakLine = `${streakPrefix}${streakBadgeText}`;
     const lastSeenLabel = profile.lastSeenAt ? new Date(profile.lastSeenAt).toLocaleString('ru-RU') : 'неизвестно';
     const chartSvg = buildActivityChartSvg(activity);
-    const captionText = [
+    const captionLines = [
       `📊 Анкета пользователя ${escapeCaptionText(username)}`,
       `Имя: ${escapeCaptionText(profile.displayName || targetUser.first_name || targetUser.username || targetUser.id)}`,
       `Описание: ${escapeCaptionText(description)}`,
       `Наказания: ${escapeCaptionText(punishments)}`,
       `Сообщений: ${escapeCaptionText(profile.messageCount)}`,
-      `${streakPrefix}${escapeCaptionText(streakLabel)}`,
+      streakLine,
       `Место в топе: ${escapeCaptionText(topLabel)}`,
       `Последний вход: ${escapeCaptionText(lastSeenLabel)}`,
       '',
       'Активность за последние 7 дней',
-    ].join('\n');
-    const captionEntities = streakBadgeEntity ? [streakBadgeEntity] : [];
+    ];
+    const captionText = captionLines.join('\n');
+    const captionEntities = [];
+
+    if (streakInfo && streakBadgeText) {
+      const badgeString = String(streakInfo.fallback);
+      const lineStart = captionText.indexOf(streakLine);
+      const badgeStart = captionText.indexOf(badgeString, lineStart >= 0 ? lineStart : 0);
+      if (badgeStart >= 0) {
+        captionEntities.push({
+          type: 'custom_emoji',
+          offset: badgeStart,
+          length: badgeString.length,
+          custom_emoji_id: streakInfo.id,
+        });
+      }
+    }
 
     try {
       const chartPng = await buildActivityChartPng(activity);
       await ctx.replyWithPhoto({ source: chartPng }, {
-        caption: captionText.replace(`${streakPrefix}${escapeCaptionText(streakLabel)}`, `${streakPrefix}${streakBadgeText}`),
+        caption: captionText,
         caption_entities: captionEntities.length ? captionEntities : undefined,
       });
     } catch (error) {
       console.error('Failed to convert chart to PNG:', error);
       await ctx.replyWithDocument({ source: Buffer.from(chartSvg, 'utf8'), filename: 'stats.svg' }, {
-        caption: captionText.replace(`${streakPrefix}${escapeCaptionText(streakLabel)}`, `${streakPrefix}${streakBadgeText}`),
+        caption: captionText,
         caption_entities: captionEntities.length ? captionEntities : undefined,
       });
     }
@@ -3477,32 +3491,31 @@ function createBot() {
       const label = item.displayName || item.userId;
       return `${index + 1}. ${badge} ${label} — ${item.messageCount} сообщений`;
     });
+    const topText = `🏆 Топ по сообщениям в этой группе:\n${lines.join('\n')}`;
+    const topEntities = [];
 
-    const entities = [];
-    let currentOffset = 0;
-    const renderedLines = lines.map((line) => {
-      const badgeInfo = premiumEmojis.getStreakBadgeInfo(Number(line.match(/\d+$/)?.[0] || 0));
+    top.forEach((item, index) => {
+      const badgeInfo = premiumEmojis.getStreakBadgeInfo(item.streak || 0);
       if (!badgeInfo) {
-        return line;
+        return;
       }
-      const badgeStart = line.indexOf('🔥');
-      const fallbackStart = line.indexOf('⭐');
-      const fallbackStartAlt = line.indexOf('✨');
-      const fallbackStartTrophy = line.indexOf('🏆');
-      const fallbackStartCrown = line.indexOf('👑');
-      const emojiIndex = [badgeStart, fallbackStart, fallbackStartAlt, fallbackStartTrophy, fallbackStartCrown].find((pos) => pos >= 0);
-      if (emojiIndex < 0) {
-        return line;
+      const badgeText = premiumEmojis.getStreakBadge(item.streak || 0);
+      const line = lines[index];
+      const lineStart = topText.indexOf(line);
+      const fallbackText = String(badgeInfo.fallback);
+      const badgeStart = topText.indexOf(fallbackText, lineStart >= 0 ? lineStart : 0);
+      if (badgeStart >= 0) {
+        topEntities.push({
+          type: 'custom_emoji',
+          offset: badgeStart,
+          length: fallbackText.length,
+          custom_emoji_id: badgeInfo.id,
+        });
       }
-      const entity = premiumEmojis.getStreakBadgeEntity(Number(line.match(/\d+$/)?.[0] || 0), currentOffset + emojiIndex);
-      if (entity) {
-        entities.push(entity);
-      }
-      return line;
     });
 
-    ctx.reply(`🏆 Топ по сообщениям в этой группе:\n${renderedLines.join('\n')}`, {
-      entities: entities.length ? entities : undefined,
+    ctx.reply(topText, {
+      entities: topEntities.length ? topEntities : undefined,
     });
   }
 
