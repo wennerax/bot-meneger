@@ -3526,7 +3526,7 @@ function createBot() {
       });
       await replyWithAutoDelete(ctx, `🚫 ${targetData.target.first_name || targetData.target.username || targetData.target.id}: Получил ${warnLimit}-е предупреждение и забанен на ${blockDuration}ч. Причина: ${details.reason}`);
     } else {
-      await replyWithAutoDelete(ctx, `Предупреждение для ${targetData.target.first_name || targetData.target.username || targetData.target.id}: ${warningCount}/${warnLimit}. Причина: ${details.reason}`);
+      await replyWithAutoDelete(ctx, `emoji:id(5071126104668898462) Предупреждение для ${targetData.target.first_name || targetData.target.username || targetData.target.id}: ${warningCount}/${warnLimit}. Причина: ${details.reason}`);
     }
   }
 
