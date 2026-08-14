@@ -116,3 +116,37 @@ test('daily activity history is tracked per chat user', () => {
 
   db.close();
 });
+
+test('user streak is calculated from consecutive days and exposed in profile and top list', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-meneger-'));
+  const db = new Database(path.join(dir, 'bot.json'));
+
+  db.ensureGroup(700, 'Streaks', 1);
+  const today = new Date();
+  const dayKeys = Array.from({ length: 3 }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - (2 - index));
+    return date.toISOString().slice(0, 10);
+  });
+
+  db.data.dailyActivity[700] = {
+    2: [
+      { day: dayKeys[0], count: 1 },
+      { day: dayKeys[1], count: 2 },
+      { day: dayKeys[2], count: 3 },
+      { day: '2020-01-01', count: 1 },
+    ],
+  };
+  db.data.messageCounts[700] = {
+    2: { displayName: 'Alice', messageCount: 42 },
+  };
+
+  const profile = db.getUserProfile(700, 2);
+  const top = db.topMessages(700, 10);
+
+  assert.equal(profile.streak, 3);
+  assert.equal(profile.streakBadge.includes('3'), true);
+  assert.equal(top[0].streak, 3);
+
+  db.close();
+});

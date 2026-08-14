@@ -121,6 +121,32 @@ const CUSTOM_EMOJI_IDS = {
     fallback: '❤️‍🔥',
     displayName: 'Горящее сердце'
   },
+
+  streak_1_19: {
+    id: '5078042926160806918',
+    fallback: '🔥',
+    displayName: 'Серия 1-19 дней'
+  },
+  streak_20_49: {
+    id: '5076098152084275955',
+    fallback: '⭐',
+    displayName: 'Серия 20-49 дней'
+  },
+  streak_50_99: {
+    id: '5416009478866746241',
+    fallback: '✨',
+    displayName: 'Серия 50-99 дней'
+  },
+  streak_100_499: {
+    id: '5415907164155824790',
+    fallback: '🏆',
+    displayName: 'Серия 100-499 дней'
+  },
+  streak_500_plus: {
+    id: '5409263541238644365',
+    fallback: '👑',
+    displayName: 'Серия 500+ дней'
+  },
   
   // Цветы и природа (премиум)
   flower_pink: {
@@ -185,6 +211,9 @@ const EMOJI_NAMES = {
   'fire': '🔥',
   'boom': '💥',
   'lightning': '⚡',
+  'crown': '👑',
+  'trophy': '🏆',
+  'starburst': '✨',
 
   // Жесты
   'like': '👍',
@@ -284,6 +313,58 @@ function getPremiumEmoji(key) {
 
   // Вернуть как есть, если не найдено
   return key;
+}
+
+function getStreakBadgeKey(streak) {
+  const value = Number(streak) || 0;
+
+  if (value >= 500) {
+    return 'streak_500_plus';
+  }
+  if (value >= 100) {
+    return 'streak_100_499';
+  }
+  if (value >= 50) {
+    return 'streak_50_99';
+  }
+  if (value >= 20) {
+    return 'streak_20_49';
+  }
+  if (value >= 1) {
+    return 'streak_1_19';
+  }
+
+  return 'streak_1_19';
+}
+
+function getStreakBadgeInfo(streak) {
+  const key = getStreakBadgeKey(streak);
+  return CUSTOM_EMOJI_IDS[key] || null;
+}
+
+function getStreakBadge(streak) {
+  const value = Number(streak) || 0;
+  const info = getStreakBadgeInfo(value);
+
+  if (!info) {
+    return `🔥 ${value}`;
+  }
+
+  return `${info.fallback} ${value}`;
+}
+
+function getStreakBadgeEntity(streak, offset = 0) {
+  const info = getStreakBadgeInfo(streak);
+  if (!info) {
+    return null;
+  }
+
+  return {
+    type: 'custom_emoji',
+    offset,
+    length: String(info.fallback).length,
+    custom_emoji_id: info.id,
+  };
 }
 
 /**
@@ -551,6 +632,10 @@ async function sendWithEmojiSyntax(ctx, text, options = {}) {
 module.exports = {
   replacePremiumEmojis,
   getPremiumEmoji,
+  getStreakBadgeKey,
+  getStreakBadgeInfo,
+  getStreakBadge,
+  getStreakBadgeEntity,
   createCustomEmojiMap,
   getEmojiMap,
   setCustomEmojiMap,

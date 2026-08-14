@@ -3425,31 +3425,38 @@ function createBot() {
       : 'нет';
     const description = profile.description ? profile.description : 'нет';
     const topLabel = profile.topPosition ? `${profile.topPosition} место` : 'не в топе';
+    const streakLabel = profile.streak > 0 ? `${profile.streakBadge || '🔥'} ${profile.streak} дней` : '🔥 0 дней';
+    const streakInfo = premiumEmojis.getStreakBadgeInfo(profile.streak);
+    const streakPrefix = 'Серия: ';
+    const streakBadgeText = premiumEmojis.getStreakBadge(profile.streak);
+    const streakBadgeEntity = streakInfo ? premiumEmojis.getStreakBadgeEntity(profile.streak, streakPrefix.length) : null;
     const lastSeenLabel = profile.lastSeenAt ? new Date(profile.lastSeenAt).toLocaleString('ru-RU') : 'неизвестно';
     const chartSvg = buildActivityChartSvg(activity);
-    const caption = [
+    const captionText = [
       `📊 Анкета пользователя ${escapeCaptionText(username)}`,
       `Имя: ${escapeCaptionText(profile.displayName || targetUser.first_name || targetUser.username || targetUser.id)}`,
       `Описание: ${escapeCaptionText(description)}`,
       `Наказания: ${escapeCaptionText(punishments)}`,
       `Сообщений: ${escapeCaptionText(profile.messageCount)}`,
+      `${streakPrefix}${escapeCaptionText(streakLabel)}`,
       `Место в топе: ${escapeCaptionText(topLabel)}`,
       `Последний вход: ${escapeCaptionText(lastSeenLabel)}`,
       '',
       'Активность за последние 7 дней',
     ].join('\n');
+    const captionEntities = streakBadgeEntity ? [streakBadgeEntity] : [];
 
     try {
       const chartPng = await buildActivityChartPng(activity);
       await ctx.replyWithPhoto({ source: chartPng }, {
-        caption,
-        parse_mode: 'HTML',
+        caption: captionText.replace(`${streakPrefix}${escapeCaptionText(streakLabel)}`, `${streakPrefix}${streakBadgeText}`),
+        caption_entities: captionEntities.length ? captionEntities : undefined,
       });
     } catch (error) {
       console.error('Failed to convert chart to PNG:', error);
       await ctx.replyWithDocument({ source: Buffer.from(chartSvg, 'utf8'), filename: 'stats.svg' }, {
-        caption,
-        parse_mode: 'HTML',
+        caption: captionText.replace(`${streakPrefix}${escapeCaptionText(streakLabel)}`, `${streakPrefix}${streakBadgeText}`),
+        caption_entities: captionEntities.length ? captionEntities : undefined,
       });
     }
   }
@@ -3465,8 +3472,38 @@ function createBot() {
       ctx.reply('Пока нет статистики сообщений в этой группе.');
       return;
     }
-    const lines = top.map((item, index) => `${index + 1}. ${item.displayName || item.userId} — ${item.messageCount} сообщений`);
-    ctx.reply(`🏆 Топ по сообщениям в этой группе:\n${lines.join('\n')}`);
+    const lines = top.map((item, index) => {
+      const badge = premiumEmojis.getStreakBadge(item.streak || 0);
+      const label = item.displayName || item.userId;
+      return `${index + 1}. ${badge} ${label} — ${item.messageCount} сообщений`;
+    });
+
+    const entities = [];
+    let currentOffset = 0;
+    const renderedLines = lines.map((line) => {
+      const badgeInfo = premiumEmojis.getStreakBadgeInfo(Number(line.match(/\d+$/)?.[0] || 0));
+      if (!badgeInfo) {
+        return line;
+      }
+      const badgeStart = line.indexOf('🔥');
+      const fallbackStart = line.indexOf('⭐');
+      const fallbackStartAlt = line.indexOf('✨');
+      const fallbackStartTrophy = line.indexOf('🏆');
+      const fallbackStartCrown = line.indexOf('👑');
+      const emojiIndex = [badgeStart, fallbackStart, fallbackStartAlt, fallbackStartTrophy, fallbackStartCrown].find((pos) => pos >= 0);
+      if (emojiIndex < 0) {
+        return line;
+      }
+      const entity = premiumEmojis.getStreakBadgeEntity(Number(line.match(/\d+$/)?.[0] || 0), currentOffset + emojiIndex);
+      if (entity) {
+        entities.push(entity);
+      }
+      return line;
+    });
+
+    ctx.reply(`🏆 Топ по сообщениям в этой группе:\n${renderedLines.join('\n')}`, {
+      entities: entities.length ? entities : undefined,
+    });
   }
 
   function listPunishmentsCommand(ctx, kind, args = '') {
@@ -3505,6 +3542,51 @@ function createBot() {
     ctx.reply(buildBotAdminListMessage(grouped));
   }
 
+  function getBotAdminActionPermissionLevel(actionName) {
+    const normalizedAction = String(actionName || '').toLowerCase();
+    if (['warn', 'unwarn', 'mute', 'unmute'].includes(normalizedAction)) {
+      return 5;
+    }
+    if (['ban', 'unban'].includes(normalizedAction)) {
+      return 4;
+    }
+    if (['manage_admins'].includes(normalizedAction)) {
+      return 1;
+    }
+    return null;
+  }
+
+  function canUseBotAdminAction(ctx, actionName) {
+    const actorLevel = database.isPrimaryBotAdmin(ctx.chat.id, ctx.from.id)
+      ? 1
+      : database.getBotAdminLevel(ctx.chat.id, ctx.from.id);
+    const maxAllowedLevel = getBotAdminActionPermissionLevel(actionName);
+
+    if (!maxAllowedLevel || !Number.isFinite(Number(actorLevel))) {
+      return false;
+    }
+
+    return Number(actorLevel) <= Number(maxAllowedLevel);
+  }
+
+  function ensureBotAdminCanPunishTarget(ctx, targetUserId, actionName) {
+    if (!database.isBotAdmin(ctx.chat.id, targetUserId)) {
+      return true;
+    }
+
+    if (!database.canPunishBotAdmin(ctx.chat.id, ctx.from.id, targetUserId)) {
+      ctx.reply('Ты не можешь наказывать админов выше себя.');
+      return false;
+    }
+
+    if (!canUseBotAdminAction(ctx, actionName)) {
+      ctx.reply('У тебя нет прав на это действие.');
+      return false;
+    }
+
+    return true;
+  }
+
   function rulesCommand(ctx) {
     if (isGroupChat(ctx) && !moderationService.isRulesEnabled(ctx.chat.id)) {
       ctx.reply('⚠️ Функция правил отключена в этом чате. Включите её через /menu.');
@@ -3538,6 +3620,10 @@ function createBot() {
 
     const targetData = await resolveCommandTarget(ctx, args, '/warn @юз причина');
     if (!targetData) {
+      return;
+    }
+
+    if (!ensureBotAdminCanPunishTarget(ctx, targetData.target.id, 'warn')) {
       return;
     }
 
@@ -3606,6 +3692,10 @@ function createBot() {
       return;
     }
 
+    if (!ensureBotAdminCanPunishTarget(ctx, targetData.target.id, 'unwarn')) {
+      return;
+    }
+
     moderationService.resetWarnings(ctx.chat.id, targetData.target.id);
     await replyWithAutoDelete(ctx, `Предупреждения пользователя ${targetData.target.first_name || targetData.target.username || targetData.target.id} сброшены.`);
   }
@@ -3620,6 +3710,10 @@ function createBot() {
 
     const targetData = await resolveCommandTarget(ctx, args, '/mute @юз <время> <причина>');
     if (!targetData) {
+      return;
+    }
+
+    if (!ensureBotAdminCanPunishTarget(ctx, targetData.target.id, 'mute')) {
       return;
     }
 
@@ -3663,6 +3757,10 @@ function createBot() {
       return;
     }
 
+    if (!ensureBotAdminCanPunishTarget(ctx, targetData.target.id, 'unmute')) {
+      return;
+    }
+
     try {
       await ctx.telegram.restrictChatMember(ctx.chat.id, targetData.target.id, buildMutePermissions(true));
       database.removeActivePunishment(ctx.chat.id, targetData.target.id, 'mute');
@@ -3685,6 +3783,10 @@ function createBot() {
 
     const targetData = await resolveCommandTarget(ctx, args, '/ban @юз <время> <причина>');
     if (!targetData) {
+      return;
+    }
+
+    if (!ensureBotAdminCanPunishTarget(ctx, targetData.target.id, 'ban')) {
       return;
     }
 
@@ -3724,6 +3826,10 @@ function createBot() {
 
     const targetData = await resolveCommandTarget(ctx, args, '/unban @юз');
     if (!targetData) {
+      return;
+    }
+
+    if (!ensureBotAdminCanPunishTarget(ctx, targetData.target.id, 'unban')) {
       return;
     }
 
@@ -3782,8 +3888,8 @@ function createBot() {
       return;
     }
 
-    if (!isPrimary && (!actorLevel || actorLevel > 2)) {
-      ctx.reply('Только главный или ведущий админ уровня 2 может назначать новых админов.');
+    if (!isPrimary && (!actorLevel || actorLevel !== 1)) {
+      ctx.reply('Только главный админ может назначать новых админов.');
       return;
     }
 
@@ -3854,8 +3960,8 @@ function createBot() {
       return;
     }
 
-    if (!isPrimary && (!actorLevel || actorLevel > 2)) {
-      ctx.reply('Только главный или ведущий админ уровня 2 может снимать админов.');
+    if (!isPrimary && (!actorLevel || actorLevel !== 1)) {
+      ctx.reply('Только главный админ может снимать админов.');
       return;
     }
 
@@ -3889,8 +3995,8 @@ function createBot() {
     const isPrimary = database.isPrimaryBotAdmin(ctx.chat.id, ctx.from.id);
     const actorLevel = isPrimary ? 1 : database.getBotAdminLevel(ctx.chat.id, ctx.from.id);
 
-    if (!isPrimary && (!actorLevel)) {
-      ctx.reply('Нельзя выполнять эту команду.');
+    if (!isPrimary && (!actorLevel || actorLevel === 2)) {
+      ctx.reply('Ведущий админ не может управлять администраторами.');
       return;
     }
 

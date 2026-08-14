@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const premiumEmojis = require('../premium_emojis');
 
 class Database {
   constructor(filePath = 'data/bot.json') {
@@ -217,8 +218,41 @@ class Database {
       return false;
     }
 
-    // Lower numeric level = higher privileges (1 = owner). Actor can manage target when actor has a higher privilege
+    if (Number(actorLevel) === 2) {
+      return false;
+    }
+
+    // Lower numeric level = higher privileges (1 = owner). Actor can manage lower-rank admins only.
     return Number(actorLevel) < Number(targetLevel);
+  }
+
+  canPunishBotAdmin(chatId, actorUserId, targetUserId) {
+    const id = Number(chatId);
+    const actorId = Number(actorUserId);
+    const targetId = Number(targetUserId);
+    const primaryAdminId = this.getPrimaryBotAdmin(id);
+
+    if (actorId === targetId) {
+      return false;
+    }
+
+    if (targetId === Number(primaryAdminId)) {
+      return false;
+    }
+
+    const actorLevel = this.getBotAdminLevel(id, actorId);
+    const targetLevel = this.getBotAdminLevel(id, targetId);
+
+    if (!actorLevel) {
+      return false;
+    }
+
+    if (targetLevel === null || targetLevel === undefined) {
+      return true;
+    }
+
+    // Lower numeric level = higher priority. An admin can punish only lower-priority admins.
+    return Number(targetLevel) > Number(actorLevel);
   }
 
   isPrimaryBotAdmin(chatId, userId) {
@@ -335,6 +369,41 @@ class Database {
     this._save();
   }
 
+  getUserStreak(chatId, userId) {
+    const id = Number(chatId);
+    const user = Number(userId);
+    const history = this.data.dailyActivity[id]?.[user] || [];
+
+    if (!history.length) {
+      return 0;
+    }
+
+    const activeDates = [...new Set(history
+      .filter((item) => Number(item.count) > 0)
+      .map((item) => String(item.day)))]
+      .sort();
+
+    if (!activeDates.length) {
+      return 0;
+    }
+
+    let streak = 0;
+    const latestDay = new Date(`${activeDates[activeDates.length - 1]}T00:00:00Z`);
+    let cursor = new Date(latestDay);
+
+    while (true) {
+      const dayKey = cursor.toISOString().slice(0, 10);
+      const hasActivity = history.some((item) => item.day === dayKey && Number(item.count) > 0);
+      if (!hasActivity) {
+        break;
+      }
+      streak += 1;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+
+    return streak;
+  }
+
   getUserProfile(chatId, userId) {
     const id = Number(chatId);
     const user = Number(userId);
@@ -351,6 +420,7 @@ class Database {
 
     const topPosition = sorted.findIndex((item) => item.userId === user) + 1;
     const messageCount = counts?.messageCount || 0;
+    const streak = this.getUserStreak(id, user);
 
     return {
       userId: user,
@@ -358,6 +428,8 @@ class Database {
       username: userData?.username ? `@${userData.username}` : null,
       description: this.data.userDescriptions[id]?.[user] || null,
       messageCount,
+      streak,
+      streakBadge: premiumEmojis.getStreakBadge(streak),
       topPosition: topPosition > 0 ? topPosition : null,
       punishments: [...punishments, ...activePunishments],
       lastSeenAt: userData?.lastSeenAt || null,
@@ -368,11 +440,16 @@ class Database {
     const id = Number(chatId);
     const counts = this.data.messageCounts[id] || {};
     return Object.entries(counts)
-      .map(([userId, item]) => ({
-        userId: Number(userId),
-        displayName: item.displayName,
-        messageCount: item.messageCount,
-      }))
+      .map(([userId, item]) => {
+        const streak = this.getUserStreak(id, Number(userId));
+        return {
+          userId: Number(userId),
+          displayName: item.displayName,
+          messageCount: item.messageCount,
+          streak,
+          streakBadge: premiumEmojis.getStreakBadge(streak),
+        };
+      })
       .sort((left, right) => right.messageCount - left.messageCount)
       .slice(0, limit);
   }
