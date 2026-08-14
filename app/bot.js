@@ -4543,9 +4543,13 @@ function createBot() {
       const service = activeModerationService || defaultModerationService;
       const duration = Number(parsed.value);
       if (Number.isFinite(duration) && duration >= 0) {
-        service.setWarnBlockDuration(chatId, duration === 0 ? 0 : duration);
-        const durationText = duration === 0 ? '∞ Навсегда' : `${duration}ч`;
-        await replyWithAutoDelete(ctx, `✅ Время бана установлено: ${durationText}`);
+        const saved = service.setWarnBlockDuration(chatId, duration);
+        if (saved) {
+          const durationText = duration === 0 ? '∞ Навсегда' : `${duration}ч`;
+          await replyWithAutoDelete(ctx, `✅ Время бана установлено: ${durationText}`);
+        } else {
+          await replyWithAutoDelete(ctx, '⚠️ Ошибка при установке времени бана');
+        }
       }
       await showSettingsWarnsMenu(ctx, chatId);
       return;

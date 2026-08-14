@@ -577,12 +577,13 @@ class ModerationService {
   }
 
   getWarnBlockDuration(chatId) {
-    return this._getChat(chatId).warnSettings.blockDuration || 24;
+    const duration = this._getChat(chatId).warnSettings.blockDuration;
+    return typeof duration === 'number' ? duration : 24;
   }
 
   setWarnBlockDuration(chatId, hours) {
     const normalized = Number(hours);
-    if (!Number.isFinite(normalized) || normalized <= 0) {
+    if (!Number.isFinite(normalized) || normalized < 0) {
       return false;
     }
     this._getChat(chatId).warnSettings.blockDuration = normalized;
