@@ -1,4 +1,4 @@
-const path = require('node:path');
+﻿const path = require('node:path');
 const { Telegraf } = require('telegraf');
 const sharp = require('sharp');
 const { loadConfig, getMiniAppPort, detectPublicMiniAppUrl } = require('./config');
@@ -290,7 +290,7 @@ function buildSettingsMainKeyboard(chatId) {
       { text: '🚨 @admin', callback_data: `settings:section:admin:${chatId}` },
     ],
     [
-      { text: '�‍🌫️ Скрытые пользователи', callback_data: `settings:section:anonymous:${chatId}` },
+      { text: '😶‍🌫️ Скрытые пользователи', callback_data: `settings:section:anonymous:${chatId}` },
     ],
   ];
 }
@@ -634,7 +634,7 @@ function buildSettingsAdminMenuText() {
 
 function buildSettingsAnonymousMenuText() {
   return [
-    '�‍🌫️ Скрытые пользователи',
+    '😶‍🌫️ Скрытые пользователи',
     '',
     'Через это меню вы можете установить наказание для пользователей, которые пишут в группу, маскируясь под канал.',
     '',
