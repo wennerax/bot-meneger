@@ -148,6 +148,20 @@ const CUSTOM_EMOJI_IDS = {
     displayName: 'Серия 500+ дней'
   },
   
+  // Трофей (премиум)
+  trophy_premium: {
+    id: '5413396833080718242',
+    fallback: '🏆',
+    displayName: 'Премиум трофей'
+  },
+  
+  // Серия (премиум)
+  series_premium: {
+    id: '5195252583668661012',
+    fallback: '🔥',
+    displayName: 'Премиум серия'
+  },
+  
   // Цветы и природа (премиум)
   flower_pink: {
     id: '5312948834137047286',   // Розовый цветок

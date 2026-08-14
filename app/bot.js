@@ -312,7 +312,7 @@ function buildSettingsMainKeyboard(chatId) {
       { text: '🚨 @admin', callback_data: `settings:section:admin:${chatId}` },
     ],
     [
-      { text: '� Серия', callback_data: `settings:section:streaks:${chatId}` },
+      { text: premiumEmojis.getCustomEmojiFallback('series_premium') + ' Серия', callback_data: `settings:section:streaks:${chatId}` },
       { text: '😶‍🌫️ Скрытые пользователи', callback_data: `settings:section:anonymous:${chatId}` },
     ],
   ];
@@ -3573,8 +3573,20 @@ function createBot() {
       const badge = streaksEnabled ? premiumEmojis.getStreakBadge(item.streak || 0) : '';
       return `${index + 1}. ${badge ? `${badge} ` : ''}${label} — ${item.messageCount} сообщений`;
     });
-    const topText = `🏆 Топ по сообщениям в этой группе:\n${lines.join('\n')}`;
+    const trophyEmoji = premiumEmojis.getCustomEmojiFallback('trophy_premium');
+    const topText = `${trophyEmoji} Топ по сообщениям в этой группе:\n${lines.join('\n')}`;
     const topEntities = [];
+
+    // Добавляем кастомный трофей эмоджи в старт
+    const trophyInfo = premiumEmojis.getCustomEmojiInfo('trophy_premium');
+    if (trophyInfo && trophyInfo.id) {
+      topEntities.push({
+        type: 'custom_emoji',
+        offset: 0,
+        length: trophyInfo.fallback.length,
+        custom_emoji_id: trophyInfo.id,
+      });
+    }
 
     if (streaksEnabled) {
       top.forEach((item, index) => {
