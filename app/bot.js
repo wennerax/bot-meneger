@@ -179,6 +179,25 @@ function formatAdminReportText(report, acceptedBy = null) {
   ].filter(Boolean).join('\n');
 }
 
+/**
+ * Извлечь текст и entities из сообщения Telegram
+ * @param {Object} ctx - Контекст Telegraf
+ * @returns {Object} - { text: string, entities: Array }
+ */
+function buildTextPayloadFromMessage(ctx) {
+  if (!ctx || !ctx.message) {
+    return { text: '', entities: [] };
+  }
+
+  const text = ctx.message.text || ctx.message.caption || '';
+  const entities = ctx.message.entities || ctx.message.caption_entities || [];
+
+  return {
+    text: String(text),
+    entities: Array.isArray(entities) ? entities.filter(e => e && typeof e === 'object') : [],
+  };
+}
+
 function buildAdminReportKeyboard(report) {
   const url = getMessageLink(report.chatId, report.target.messageId);
   return {
@@ -2032,7 +2051,7 @@ function createBot() {
       database.addPunishment(ctx.chat.id, userId, 'warn', reason, null);
       const warningCount = moderationService.getWarnings(ctx.chat.id, userId);
       const warnLimit = moderationService.getWarnLimit(ctx.chat.id);
-      const userLabel = escapeCaptionText(getMentionText(ctx.from || { id: userId }));
+      const userLabel = getMentionText(ctx.from || { id: userId });
       
       if (warningCount >= warnLimit) {
         // Auto-ban after reaching limit
@@ -2056,7 +2075,7 @@ function createBot() {
         const sentMsg1 = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} ${userLabel}: Получил ${warnLimit}-е предупреждение и забанен на ${blockDuration}ч.`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
         scheduleDeleteForContext(ctx, sentMsg1?.message_id, 5000);
       } else {
-        const sentMsg2 = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} ${userLabel}: Предупреждение ${warningCount}/${warnLimit}. Причина: ${escapeCaptionText(reason)}`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
+        const sentMsg2 = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} ${userLabel}: Предупреждение ${warningCount}/${warnLimit}. Причина: ${reason}`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
         scheduleDeleteForContext(ctx, sentMsg2?.message_id, 5000);
       }
     } else if (mode === 'mute') {
@@ -3512,9 +3531,9 @@ function createBot() {
     const warningCount = moderationService.getWarnings(ctx.chat.id, targetData.target.id);
     const warnLimit = moderationService.getWarnLimit(ctx.chat.id);
     
-    // Экранировать данные пользователя для HTML режима
-    const userName = escapeCaptionText(targetData.target.first_name || targetData.target.username || String(targetData.target.id));
-    const reasonEscaped = escapeCaptionText(details.reason);
+    // Никнейм и причина без экранирования (репливитьКастомЭмоджи использует entities, а не parse_mode)
+    const userName = targetData.target.first_name || targetData.target.username || String(targetData.target.id);
+    const reasonEscaped = details.reason;
     
     if (warningCount >= warnLimit) {
       // Auto-ban after reaching limit
@@ -3611,7 +3630,8 @@ function createBot() {
 
     const targetLabel = getMentionText(targetData.target);
     const durationLabel = formatDurationLabel(details.durationHours);
-    await replyWithAutoDelete(ctx, `🔒 ${targetLabel} получил mute на ${durationLabel}. Причина: ${details.reason}`);
+    const sentMsg = await premiumEmojis.replyWithCustomEmoji(ctx, `{lock} ${targetLabel} получил mute на ${durationLabel}. Причина: ${details.reason}`, { '{lock}': 'mute_lock' });
+    scheduleDeleteForContext(ctx, sentMsg?.message_id, 5000);
   }
 
   async function unmuteCommand(ctx, args) {
