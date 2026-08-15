@@ -498,6 +498,19 @@ class Database {
     this._save();
   }
 
+  clearUserPunishmentHistory(chatId, userId) {
+    const id = Number(chatId);
+    const user = Number(userId);
+
+    this.data.punishments = this.data.punishments.filter(
+      (entry) => !(entry.chatId === id && entry.userId === user)
+    );
+    this.data.activePunishments = this.data.activePunishments.filter(
+      (entry) => !(entry.chatId === id && entry.userId === user)
+    );
+    this._save();
+  }
+
   addBlacklist(chatId, userId, reason) {
     const id = Number(chatId);
     const user = Number(userId);

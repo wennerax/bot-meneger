@@ -150,3 +150,20 @@ test('user streak is calculated from consecutive days and exposed in profile and
 
   db.close();
 });
+
+test('punishment history can be cleared for a specific user', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-meneger-'));
+  const db = new Database(path.join(dir, 'bot.json'));
+
+  db.ensureGroup(800, 'History', 1);
+  db.addPunishment(800, 2, 'warn', 'спам', null);
+  db.addPunishment(800, 2, 'mute', 'шум', 1800000000);
+  db.addActivePunishment(800, 2, 'mute', 'шум', 1800000000);
+
+  db.clearUserPunishmentHistory(800, 2);
+
+  const profile = db.getUserProfile(800, 2);
+  assert.deepEqual(profile.punishments, []);
+
+  db.close();
+});

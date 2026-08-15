@@ -576,28 +576,31 @@ function getHelpPages() {
       '/demote @юз [уровень], !разжалование @юз [уровень] - понизить администратора (если уровень не указан, понижает на 1)',
     ].join('\n'),
     [
-      '📋 Система уровней администраторов',
+      '📋 Админ-система бота',
+      '',
+      'Админ-система бота управляет правами и доступом в группе. Все права привязаны к ролям и уровню администрирования.',
       '',
       'Уровни (1 = наивысший):',
-      '1 — Главный админ (владелец группы). Только владелец получает этот уровень автоматически.',
-      '2 — Ведущий админ. Почти все команды модерации (кроме антиспам/антиссылки/антифлуд). Может добавлять и снимать админов ниже себя.',
-      '3 — Старший админ. Доступ к ban и управлению пользователями ниже по уровню (может наказывать, но не снимать права).',
-      '4 — Средний админ. Доступ к warn и mute и их снятию.',
-      '5 — Младший админ. Доступ только к выдаче предупреждений и просмотру варн-листа.',
+      '1 — Главный админ (владелец группы). Автоматически получает максимум прав и защищён от понижения другими администраторами.',
+      '2 — Ведущий админ. Управляет большинством модераторских команд, кроме антиспам/антиссылки/антифлуд. Может назначать и снимать админов ниже себя.',
+      '3 — Старший админ. Доступ к банам и управлению участниками ниже по уровню. Может наказывать, но не отнимать права у админов.',
+      '4 — Средний админ. Доступ к предупреждениям, мутам и их снятию.',
+      '5 — Младший админ. Доступ только к выдаче предупреждений и просмотре списка варнов.',
       '',
-      'Команды управления админами:',
-      '/admins — показать админов по уровням',
-      '/addadmin @user [уровень] — назначить админа (по умолчанию уровень 5)',
-      '/removeadmin @user — снять админа',
-      '/promote @user [уровень] — повысить администратора (без уровня повышает на 1). Нельзя повысить до уровня не ниже вашего.',
-      '/demote @user [уровень] — понизить администратора (без уровня понижает на 1).',
+      'Команды управления админ-правами:',
+      '/admins — показать список администраторов бота и их уровни',
+      '/addadmin @user [уровень] — назначить админ-роль бота',
+      '/removeadmin @user — снять админ-роль бота',
+      '/promote @user [уровень] — повысить админа на один уровень или до указанного',
+      '/demote @user [уровень] — понизить админа на один уровень или до указанного',
       '',
-      'Правила:',
-      '- Нельзя наказывать админов выше себя. При попытке будет сообщение: "Ты не можешь наказывать админов выше себя".',
-      '- Главный админ защищён: его нельзя снять/изменить другими администраторами.',
+      'Важно:',
+      '- Нельзя наказывать админов выше себя. При попытке выводится предупреждение: "Ты не можешь наказывать админов выше себя".',
+      '- Владелец группы всегда остаётся главным админом и не может быть снят другими администраторами.',
+      '- Доступ к /menu дан только администраторам группы, у которых есть право "Изменить профиль группы".',
       '',
       'Примеры:',
-      '/addadmin @ivan 4 — назначить @ivan админом уровня 4 (средний)',
+      '/addadmin @ivan 4 — назначить @ivan админом уровня 4',
       '/promote @petya — повысить @petya на один уровень',
     ].join('\n'),
     [
@@ -2370,8 +2373,47 @@ function createBot() {
         [
           { text: 'Настройки команд', callback_data: 'menu:command_rights' },
         ],
+        [
+          { text: 'Управление Участниками', callback_data: 'menu:members' },
+        ],
       ],
     };
+  }
+
+  function buildMembersManagementKeyboard(chatId) {
+    return {
+      inline_keyboard: [
+        [
+          { text: 'Снять запрет всем', callback_data: `menu:members:unrestrict_all:${chatId}` },
+          { text: 'Всех разблокировать', callback_data: `menu:members:unban_all:${chatId}` },
+        ],
+        [
+          { text: 'Исключить ограниченных пользователей', callback_data: `menu:members:remove_restricted:${chatId}` },
+        ],
+        [
+          { text: 'Исключить удалённые аккаунты', callback_data: `menu:members:remove_deleted:${chatId}` },
+        ],
+        [
+          { text: 'Назад', callback_data: 'menu:overview' },
+        ],
+      ],
+    };
+  }
+
+  function showMembersManagementMenu(ctx, chatId) {
+    const text = [
+      '👥 Управление участниками',
+      '',
+      'Из этого меню вы можете управлять общими действиями над участниками группы.',
+      '',
+      'Выберите нужное действие ниже.',
+    ].join('\n');
+
+    if (ctx.callbackQuery) {
+      return ctx.editMessageText(text, { reply_markup: buildMembersManagementKeyboard(chatId) });
+    }
+
+    return ctx.reply(text, { reply_markup: buildMembersManagementKeyboard(chatId) });
   }
 
   function buildMenuButtonsKeyboard(chatId) {
@@ -3532,6 +3574,10 @@ function createBot() {
     const streakLine = streaksEnabled ? `${streakPrefix}${streakBadgeText}` : null;
     const lastSeenLabel = profile.lastSeenAt ? new Date(profile.lastSeenAt).toLocaleString('ru-RU') : 'неизвестно';
     const chartSvg = buildActivityChartSvg(activity);
+    const actorLevel = database.isPrimaryBotAdmin(ctx.chat.id, ctx.from.id)
+      ? 1
+      : database.getBotAdminLevel(ctx.chat.id, ctx.from.id);
+    const canResetPunishmentHistory = Number.isFinite(Number(actorLevel)) && Number(actorLevel) <= 2;
     const captionLines = [
       `📊 Анкета пользователя ${escapeCaptionText(username)}`,
       `Имя: ${escapeCaptionText(profile.displayName || targetUser.first_name || targetUser.username || targetUser.id)}`,
@@ -3546,6 +3592,9 @@ function createBot() {
     ];
     const captionText = captionLines.join('\n');
     const captionEntities = [];
+    const extraReplyMarkup = canResetPunishmentHistory
+      ? { inline_keyboard: [[{ text: 'Сбросить историю наказаний', callback_data: `stats:clear_history:${ctx.chat.id}:${targetUser.id}` }]] }
+      : undefined;
 
     if (streaksEnabled && streakInfo && streakBadgeText && streakLine) {
       const badgeString = String(streakInfo.fallback);
@@ -3566,12 +3615,14 @@ function createBot() {
       await ctx.replyWithPhoto({ source: chartPng }, {
         caption: captionText,
         caption_entities: captionEntities.length ? captionEntities : undefined,
+        reply_markup: extraReplyMarkup,
       });
     } catch (error) {
       console.error('Failed to convert chart to PNG:', error);
       await ctx.replyWithDocument({ source: Buffer.from(chartSvg, 'utf8'), filename: 'stats.svg' }, {
         caption: captionText,
         caption_entities: captionEntities.length ? captionEntities : undefined,
+        reply_markup: extraReplyMarkup,
       });
     }
   }
@@ -3681,6 +3732,9 @@ function createBot() {
     if (['ban', 'unban'].includes(normalizedAction)) {
       return 4;
     }
+    if (['clear_history', 'clearpunishmenthistory'].includes(normalizedAction)) {
+      return 2;
+    }
     if (['manage_admins'].includes(normalizedAction)) {
       return 1;
     }
@@ -3739,6 +3793,33 @@ function createBot() {
     }
     moderationService.setRules(ctx.chat.id, text);
     ctx.reply('Правила чата обновлены.');
+  }
+
+  async function clearUserPunishmentHistoryCommand(ctx, args) {
+    ensureGroup(ctx);
+    scheduleDeleteForContext(ctx, ctx.message?.message_id);
+    if (!isBotAdmin(ctx)) {
+      await replyWithAutoDelete(ctx, 'Эта команда доступна только администраторам.');
+      return;
+    }
+
+    if (!canUseBotAdminAction(ctx, 'clear_history')) {
+      await replyWithAutoDelete(ctx, 'Эта команда доступна только админам уровня «Ведущий» и выше.');
+      return;
+    }
+
+    const targetData = await resolveCommandTarget(ctx, args, '/clearhistory @юз');
+    if (!targetData) {
+      return;
+    }
+
+    if (!ensureBotAdminCanPunishTarget(ctx, targetData.target.id, 'clear_history')) {
+      return;
+    }
+
+    database.clearUserPunishmentHistory(ctx.chat.id, targetData.target.id);
+    moderationService.resetWarnings(ctx.chat.id, targetData.target.id);
+    await replyWithAutoDelete(ctx, `История наказаний пользователя ${targetData.target.first_name || targetData.target.username || targetData.target.id} сброшена.`);
   }
 
   async function warnCommand(ctx, args) {
@@ -4965,6 +5046,34 @@ function createBot() {
     return;
   });
 
+  bot.action(/^stats:clear_history:(-?\d+):(\d+)$/, async (ctx) => {
+    const chatId = Number(ctx.match[1]);
+    const targetUserId = Number(ctx.match[2]);
+    await safeAnswerCbQuery(ctx, 'Сброс истории наказаний...');
+
+    if (!Number.isFinite(chatId) || !Number.isFinite(targetUserId)) {
+      return;
+    }
+
+    if (!isBotAdmin(ctx)) {
+      await ctx.reply('Эта команда доступна только администраторам.');
+      return;
+    }
+
+    if (!canUseBotAdminAction(ctx, 'clear_history')) {
+      await ctx.reply('Эта команда доступна только админам уровня «Ведущий» и выше.');
+      return;
+    }
+
+    if (!ensureBotAdminCanPunishTarget(ctx, targetUserId, 'clear_history')) {
+      return;
+    }
+
+    database.clearUserPunishmentHistory(chatId, targetUserId);
+    moderationService.resetWarnings(chatId, targetUserId);
+    await ctx.reply(`✅ История наказаний пользователя ${targetUserId} сброшена.`);
+  });
+
   bot.action(/^menu:(.+)$/, async (ctx) => {
     const action = ctx.match[1];
     const chatId = ctx.chat?.id;
@@ -4981,6 +5090,35 @@ function createBot() {
     if (action === 'overview' || action === 'first_message') {
       await ctx.editMessageText(formatMenuOverview(chatId), { reply_markup: getMenuKeyboard(chatId) });
       return;
+    }
+
+    if (action === 'members') {
+      await showMembersManagementMenu(ctx, chatId);
+      return;
+    }
+
+    if (action.startsWith('members:')) {
+      const [, , specificAction] = String(action).split(':');
+      if (specificAction === 'unrestrict_all') {
+        await ctx.reply('⚠️ Функция "Снять запрет всем" доступна при поддержке Telegram API для массового снятия ограничений.');
+        await showMembersManagementMenu(ctx, chatId);
+        return;
+      }
+      if (specificAction === 'unban_all') {
+        await ctx.reply('⚠️ Функция "Всех разблокировать" доступна при поддержке Telegram API для массовой разблокировки.');
+        await showMembersManagementMenu(ctx, chatId);
+        return;
+      }
+      if (specificAction === 'remove_restricted') {
+        await ctx.reply('⚠️ Функция "Исключить ограниченных пользователей" требует массового списка ограничений, который Telegram API не предоставляет напрямую.');
+        await showMembersManagementMenu(ctx, chatId);
+        return;
+      }
+      if (specificAction === 'remove_deleted') {
+        await ctx.reply('⚠️ Функция "Исключить удалённые аккаунты" требует отдельной проверки участников и доступна при расширенной интеграции с Telegram API.');
+        await showMembersManagementMenu(ctx, chatId);
+        return;
+      }
     }
 
     if (action === 'text') {
@@ -5201,6 +5339,11 @@ function createBot() {
 
   bot.command(['admins', 'админы'], (ctx) => {
     listBotAdminsCommand(ctx);
+  });
+
+  bot.command(['clearhistory', 'сбросистории', 'сброс_истории', 'clear_history'], async (ctx, next) => {
+    const args = ctx.message.text.replace(/^\/clearhistory(?:@\w+)?\s*/i, '').trim();
+    await clearUserPunishmentHistoryCommand(ctx, args || ctx.message.text.replace(/^\/(?:clearhistory|сбросистории|сброс_истории|clear_history)(?:@\w+)?\s*/i, ''));
   });
 
   bot.command(['banlist', 'баны'], (ctx) => {
