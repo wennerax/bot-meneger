@@ -4598,6 +4598,26 @@ function createBot() {
       return;
     }
 
+    if (parsed.target === 'chat_access') {
+      const service = activeModerationService || defaultModerationService;
+      const mode = String(parsed.value || '').trim().toLowerCase();
+      const labels = {
+        open: '✅ Открыт',
+        closed: '✅ Закрыт',
+        admins: '✅ Только администраторы',
+        owner: '✅ Только владелец',
+      };
+
+      if (service.setChatAccessMode(chatId, mode)) {
+        await safeAnswerCbQuery(ctx, labels[mode] || '✅ Режим изменён');
+      } else {
+        await safeAnswerCbQuery(ctx, '⚠️ Неверный режим');
+      }
+
+      await showSettingsChatMenu(ctx, chatId);
+      return;
+    }
+
     if (parsed.target === 'toggle_links') {
       if (parsed.value === 'on') {
         moderationService.enableLinkProtection(chatId);

@@ -215,6 +215,14 @@ test('buildSettingsRulesMenuText includes the current rules text', () => {
   assert.match(text, /Соблюдайте уважение в чате/);
 });
 
+test('parseSettingsAction extracts chat access mode changes', () => {
+  const parsed = parseSettingsAction('chat_access:42:closed');
+
+  assert.equal(parsed.target, 'chat_access');
+  assert.equal(parsed.chatId, 42);
+  assert.equal(parsed.value, 'closed');
+});
+
 test('parseSettingsAction extracts the selected group and action type', () => {
   const parsed = parseSettingsAction('select:42');
 
