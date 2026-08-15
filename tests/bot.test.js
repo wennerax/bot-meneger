@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsWarnsKeyboard, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, parseSettingsAction, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage } = require('../app/bot');
+const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsWarnsKeyboard, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, parseSettingsAction, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage } = require('../app/bot');
 const { buildAiRequestPayload } = require('../app/ai');
 const premiumEmojis = require('../app/premium_emojis');
 
@@ -103,6 +103,14 @@ test('buildSettingsWarnsKeyboard includes amnesty with confirmation flow', () =>
   assert.ok(Array.isArray(keyboard.inline_keyboard));
   assert.ok(keyboard.inline_keyboard.some((row) => row.some((button) => button.text === 'Амнистия')));
   assert.ok(keyboard.inline_keyboard.some((row) => row.some((button) => button.callback_data === 'settings:warn_amnesty:42')));
+});
+
+test('buildMembersManagementKeyboard returns to the settings main menu', () => {
+  const keyboard = buildMembersManagementKeyboard(42);
+  const backButton = keyboard.inline_keyboard[keyboard.inline_keyboard.length - 1][0];
+
+  assert.equal(backButton.text, 'Назад');
+  assert.equal(backButton.callback_data, 'settings:main:42');
 });
 
 test('buildSettingsCommandRightsKeyboard supports pagination and a back button', () => {

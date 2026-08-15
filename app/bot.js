@@ -332,6 +332,26 @@ function buildSettingsMainKeyboard(chatId) {
   ];
 }
 
+function buildMembersManagementKeyboard(chatId) {
+  return {
+    inline_keyboard: [
+      [
+        { text: 'Снять запрет всем', callback_data: `menu:members:unrestrict_all:${chatId}` },
+        { text: 'Всех разблокировать', callback_data: `menu:members:unban_all:${chatId}` },
+      ],
+      [
+        { text: 'Исключить ограниченных пользователей', callback_data: `menu:members:remove_restricted:${chatId}` },
+      ],
+      [
+        { text: 'Исключить удалённые аккаунты', callback_data: `menu:members:remove_deleted:${chatId}` },
+      ],
+      [
+        { text: 'Назад', callback_data: `settings:main:${chatId}` },
+      ],
+    ],
+  };
+}
+
 function buildSettingsStreaksKeyboard(chatId) {
   const service = activeModerationService || defaultModerationService;
   const enabled = service.isStreaksEnabled(chatId);
@@ -2378,26 +2398,6 @@ function createBot() {
         ],
         [
           { text: 'Управление Участниками', callback_data: 'menu:members' },
-        ],
-      ],
-    };
-  }
-
-  function buildMembersManagementKeyboard(chatId) {
-    return {
-      inline_keyboard: [
-        [
-          { text: 'Снять запрет всем', callback_data: `menu:members:unrestrict_all:${chatId}` },
-          { text: 'Всех разблокировать', callback_data: `menu:members:unban_all:${chatId}` },
-        ],
-        [
-          { text: 'Исключить ограниченных пользователей', callback_data: `menu:members:remove_restricted:${chatId}` },
-        ],
-        [
-          { text: 'Исключить удалённые аккаунты', callback_data: `menu:members:remove_deleted:${chatId}` },
-        ],
-        [
-          { text: 'Назад', callback_data: 'menu:overview' },
         ],
       ],
     };
@@ -6006,6 +6006,7 @@ module.exports = {
   buildPunishmentListMessage,
   buildBotAdminListMessage,
   buildSettingsMainKeyboard,
+  buildMembersManagementKeyboard,
   buildSettingsWarnsKeyboard,
   buildSettingsCommandRightsKeyboard,
   buildSettingsFirstMessageKeyboard,
