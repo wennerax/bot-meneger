@@ -341,9 +341,60 @@ function buildSettingsMainKeyboard(chatId) {
       { text: '😶‍🌫️ Скрытые пользователи', callback_data: `settings:section:anonymous:${chatId}` },
     ],
     [
+      { text: '💬 Чат', callback_data: `settings:section:chat:${chatId}` },
+    ],
+    [
       { text: '👥 Управление участниками', callback_data: `settings:section:members:${chatId}` },
     ],
   ];
+}
+
+function buildMenuKeyboard(chatId) {
+  return {
+    inline_keyboard: [
+      [
+        { text: 'Первое Соо', callback_data: 'menu:first_message' },
+        { text: 'Текст сообщения', callback_data: 'menu:text' },
+      ],
+      [
+        { text: 'Настройки кнопок', callback_data: 'menu:buttons' },
+        { text: 'Добавить медиа', callback_data: 'menu:media' },
+      ],
+      [
+        { text: 'Настройки команд', callback_data: 'menu:command_rights' },
+        { text: 'Чат', callback_data: 'menu:chat' },
+      ],
+      [
+        { text: 'Управление Участниками', callback_data: 'menu:members' },
+      ],
+    ],
+  };
+}
+
+function buildSettingsChatKeyboard(chatId) {
+  const service = activeModerationService || defaultModerationService;
+  const mode = service.getChatAccessMode(chatId);
+  const statusLabel = {
+    open: 'Открыт',
+    closed: 'Закрыт',
+    admins: 'Только админы',
+    owner: 'Только владелец',
+  }[mode] || 'Открыт';
+
+  return {
+    inline_keyboard: [
+      [
+        { text: '🔒 Закрыть чат', callback_data: `settings:chat_access:${chatId}:closed` },
+        { text: '📖 Открыть чат', callback_data: `settings:chat_access:${chatId}:open` },
+      ],
+      [
+        { text: '👥 Только админы', callback_data: `settings:chat_access:${chatId}:admins` },
+        { text: '👑 Только владелец', callback_data: `settings:chat_access:${chatId}:owner` },
+      ],
+      [{ text: `Статус: ${statusLabel}`, callback_data: `settings:section:chat:${chatId}` }],
+      [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
+    ],
+  };
 }
 
 function buildMembersManagementKeyboard(chatId) {
@@ -892,6 +943,35 @@ async function showSettingsMainMenu(ctx, chatId) {
   } else {
     await ctx.reply(text, { reply_markup: replyMarkup });
   }
+}
+
+async function showSettingsChatMenu(ctx, chatId) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  const service = activeModerationService || defaultModerationService;
+  const mode = service.getChatAccessMode(chatId);
+  const labels = {
+    open: '📖 Открыт — все могут писать',
+    closed: '🔒 Закрыт — писать нельзя',
+    admins: '👥 Только администраторы могут писать',
+    owner: '👑 Только владелец группы может писать',
+  };
+
+  const text = [
+    '💬 Настройки чата',
+    '',
+    `Текущий режим: ${labels[mode] || labels.open}`,
+    '',
+    '• Открыть чат — все могут писать',
+    '• Закрыть чат — никто не может писать, даже администраторы',
+    '• Только админы — писать могут администраторы и владелец',
+    '• Только владелец — писать может только владелец группы',
+  ].join('\n');
+
+  await safeEditMessageText(ctx, text, { reply_markup: buildSettingsChatKeyboard(chatId) });
 }
 
 function buildSettingsCaptchaKeyboard(chatId) {
@@ -2397,24 +2477,7 @@ function createBot() {
   }
 
   function getMenuKeyboard(chatId) {
-    return {
-      inline_keyboard: [
-        [
-          { text: 'Первое Соо', callback_data: 'menu:first_message' },
-          { text: 'Текст сообщения', callback_data: 'menu:text' },
-        ],
-        [
-          { text: 'Настройки кнопок', callback_data: 'menu:buttons' },
-          { text: 'Добавить медиа', callback_data: 'menu:media' },
-        ],
-        [
-          { text: 'Настройки команд', callback_data: 'menu:command_rights' },
-        ],
-        [
-          { text: 'Управление Участниками', callback_data: 'menu:members' },
-        ],
-      ],
-    };
+    return buildMenuKeyboard(chatId);
   }
 
   function showMembersManagementMenu(ctx, chatId) {
@@ -4524,6 +4587,8 @@ function createBot() {
         await showSettingsStreaksMenu(ctx, chatId);
       } else if (parsed.section === 'anonymous') {
         await showSettingsAnonymousMenu(ctx, chatId);
+      } else if (parsed.section === 'chat') {
+        await showSettingsChatMenu(ctx, chatId);
       } else if (parsed.section === 'members') {
         await showMembersManagementMenu(ctx, chatId);
       } else if (parsed.section === 'commands') {
@@ -5115,6 +5180,61 @@ function createBot() {
       return;
     }
 
+    if (action === 'chat') {
+      const service = activeModerationService || defaultModerationService;
+      const mode = service.getChatAccessMode(chatId);
+      const labels = {
+        open: '📖 Открыт — все могут писать',
+        closed: '🔒 Закрыт — писать нельзя',
+        admins: '👥 Только администраторы могут писать',
+        owner: '👑 Только владелец группы может писать',
+      };
+
+      const text = [
+        '💬 Настройки чата',
+        '',
+        `Текущий режим: ${labels[mode] || labels.open}`,
+        '',
+        '• Открыть чат — все могут писать',
+        '• Закрыть чат — никто не может писать, даже администраторы',
+        '• Только админы — писать могут администраторы и владелец',
+        '• Только владелец — писать может только владелец группы',
+      ].join('\n');
+
+      await ctx.editMessageText(text, { reply_markup: buildSettingsChatKeyboard(chatId) });
+      return;
+    }
+
+    if (action.startsWith('chat_access:')) {
+      const [, , mode = ''] = String(action).split(':');
+      const service = activeModerationService || defaultModerationService;
+      if (service.setChatAccessMode(chatId, mode)) {
+        const labels = {
+          open: '✅ Открыт',
+          closed: '✅ Закрыт',
+          admins: '✅ Только администраторы',
+          owner: '✅ Только владелец',
+        };
+        await safeAnswerCbQuery(ctx, labels[mode] || '✅ Режим изменён');
+      } else {
+        await safeAnswerCbQuery(ctx, '⚠️ Неверный режим');
+      }
+      await ctx.editMessageText(
+        [
+          '💬 Настройки чата',
+          '',
+          `Текущий режим: ${service.getChatAccessMode(chatId) === 'open' ? '📖 Открыт — все могут писать' : service.getChatAccessMode(chatId) === 'closed' ? '🔒 Закрыт — писать нельзя' : service.getChatAccessMode(chatId) === 'admins' ? '👥 Только администраторы могут писать' : '👑 Только владелец группы может писать'}`,
+          '',
+          '• Открыть чат — все могут писать',
+          '• Закрыть чат — никто не может писать, даже администраторы',
+          '• Только админы — писать могут администраторы и владелец',
+          '• Только владелец — писать может только владелец группы',
+        ].join('\n'),
+        { reply_markup: buildSettingsChatKeyboard(chatId) }
+      );
+      return;
+    }
+
     if (action === 'members') {
       await showMembersManagementMenu(ctx, chatId);
       return;
@@ -5611,7 +5731,40 @@ function createBot() {
     }
 
     if (isGroupChat(ctx)) {
-      database.recordMessage(ctx.chat.id, ctx.from.id, getDisplayName(ctx), ctx.from.username);
+      const chatId = ctx.chat.id;
+      const isOwner = Number(ctx.chat.owner_id) === Number(ctx.from.id);
+      let isAdmin = false;
+      try {
+        const member = await ctx.telegram.getChatMember(chatId, ctx.from.id);
+        isAdmin = Boolean(member && (member.status === 'administrator' || member.status === 'creator'));
+      } catch (error) {
+        isAdmin = false;
+      }
+
+      const allowedToWrite = moderationService.canWriteInChat(chatId, ctx.from.id, isOwner, isAdmin);
+      if (!allowedToWrite) {
+        try {
+          await deleteMessageSafely(ctx, message.message_id);
+        } catch (error) {
+          // ignore delete failures
+        }
+
+        const modeLabel = moderationService.getChatAccessMode(chatId);
+        const reasonText = modeLabel === 'admins'
+          ? 'Писать могут только администраторы.'
+          : modeLabel === 'owner'
+            ? 'Писать может только владелец группы.'
+            : 'Чат закрыт. Все сообщения удаляются.';
+
+        try {
+          await ctx.reply(`🚫 ${reasonText}`);
+        } catch (error) {
+          // ignore reply failures for blocked messages
+        }
+        return;
+      }
+
+      database.recordMessage(chatId, ctx.from.id, getDisplayName(ctx), ctx.from.username);
     }
 
     // Handle anonymous messages (sender_chat/author_signature) - messages posted through a channel or hidden sender
@@ -6024,6 +6177,8 @@ module.exports = {
   buildPunishmentListMessage,
   buildBotAdminListMessage,
   buildSettingsMainKeyboard,
+  buildSettingsChatKeyboard,
+  buildMenuKeyboard,
   buildMembersManagementKeyboard,
   canSelfClearPunishmentHistory,
   buildSettingsWarnsKeyboard,

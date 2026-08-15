@@ -228,6 +228,9 @@ class ModerationService {
       rulesEnabled: chat.rulesEnabled === undefined ? true : Boolean(chat.rulesEnabled),
       streaksEnabled: chat.streaksEnabled === undefined ? true : Boolean(chat.streaksEnabled),
       streaksLabel: typeof chat.streaksLabel === 'string' ? chat.streaksLabel.trim() || 'Серия' : 'Серия',
+      chatAccessMode: ['open', 'closed', 'admins', 'owner'].includes(String(chat.chatAccessMode || '').toLowerCase())
+        ? String(chat.chatAccessMode).toLowerCase()
+        : 'open',
       captchaEnabled: chat.captchaEnabled === undefined ? true : Boolean(chat.captchaEnabled),
       captchaMode: chat.captchaMode || 'emoji',
       mediaAiEnabled: Boolean(chat.mediaAiEnabled),
@@ -476,6 +479,46 @@ class ModerationService {
 
   getStreaksLabel(chatId) {
     return this._getChat(chatId).streaksLabel || 'Серия';
+  }
+
+  setChatAccessMode(chatId, mode) {
+    const normalized = String(mode || '').trim().toLowerCase();
+    if (!['open', 'closed', 'admins', 'owner'].includes(normalized)) {
+      return false;
+    }
+
+    this._getChat(chatId).chatAccessMode = normalized;
+    this._save();
+    return true;
+  }
+
+  getChatAccessMode(chatId) {
+    const mode = String(this._getChat(chatId).chatAccessMode || '').trim().toLowerCase();
+    return ['open', 'closed', 'admins', 'owner'].includes(mode) ? mode : 'open';
+  }
+
+  canWriteInChat(chatId, userId, isOwner = false, isGroupAdmin = false) {
+    const mode = this.getChatAccessMode(chatId);
+    const ownerFlag = Boolean(isOwner);
+    const adminFlag = Boolean(isGroupAdmin);
+
+    if (mode === 'open') {
+      return true;
+    }
+
+    if (mode === 'closed') {
+      return false;
+    }
+
+    if (mode === 'admins') {
+      return ownerFlag || adminFlag;
+    }
+
+    if (mode === 'owner') {
+      return ownerFlag;
+    }
+
+    return true;
   }
 
   enableCaptcha(chatId) {

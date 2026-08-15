@@ -81,6 +81,23 @@ test('streak feature can be enabled and disabled per chat', () => {
   assert.equal(service.isStreaksEnabled(100), true);
 });
 
+test('chat access mode restricts writes to allowed roles', () => {
+  const service = new ModerationService();
+
+  assert.equal(service.canWriteInChat(100, 7, false, false), true);
+  service.setChatAccessMode(100, 'closed');
+  assert.equal(service.canWriteInChat(100, 7, false, false), false);
+  assert.equal(service.canWriteInChat(100, 7, false, true), false);
+  service.setChatAccessMode(100, 'admins');
+  assert.equal(service.canWriteInChat(100, 7, false, false), false);
+  assert.equal(service.canWriteInChat(100, 7, false, true), true);
+  service.setChatAccessMode(100, 'owner');
+  assert.equal(service.canWriteInChat(100, 7, true, false), true);
+  assert.equal(service.canWriteInChat(100, 7, false, false), false);
+  service.setChatAccessMode(100, 'open');
+  assert.equal(service.canWriteInChat(100, 7, false, false), true);
+});
+
 test('chat starts with no allowed links by default', () => {
   const service = new ModerationService();
 
