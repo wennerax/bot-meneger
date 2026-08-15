@@ -326,6 +326,9 @@ function buildSettingsMainKeyboard(chatId) {
       { text: premiumEmojis.getCustomEmojiFallback('series_premium') + ' Серия', callback_data: `settings:section:streaks:${chatId}` },
       { text: '😶‍🌫️ Скрытые пользователи', callback_data: `settings:section:anonymous:${chatId}` },
     ],
+    [
+      { text: '👥 Управление участниками', callback_data: `settings:section:members:${chatId}` },
+    ],
   ];
 }
 
@@ -581,11 +584,11 @@ function getHelpPages() {
       'Админ-система бота управляет правами и доступом в группе. Все права привязаны к ролям и уровню администрирования.',
       '',
       'Уровни (1 = наивысший):',
-      '1 — Главный админ (владелец группы). Автоматически получает максимум прав и защищён от понижения другими администраторами.',
-      '2 — Ведущий админ. Управляет большинством модераторских команд, кроме антиспам/антиссылки/антифлуд. Может назначать и снимать админов ниже себя.',
-      '3 — Старший админ. Доступ к банам и управлению участниками ниже по уровню. Может наказывать, но не отнимать права у админов.',
-      '4 — Средний админ. Доступ к предупреждениям, мутам и их снятию.',
-      '5 — Младший админ. Доступ только к выдаче предупреждений и просмотре списка варнов.',
+      '1 — Главный админ (владелец группы). Только владелец получает этот уровень автоматически.',
+      '2 — Ведущий админ. Почти все команды модерации (кроме антиспам/антиссылки/антифлуд). Может добавлять и снимать админов ниже себя.',
+      '3 — Старший админ. Доступ к ban и управлению пользователями ниже по уровню (может наказывать, но не снимать права).',
+      '4 — Средний админ. Доступ к warn и mute и их снятию.',
+      '5 — Младший админ. Доступ только к выдаче предупреждений и просмотру варн-листа.',
       '',
       'Команды управления админ-правами:',
       '/admins — показать список администраторов бота и их уровни',
@@ -4503,6 +4506,8 @@ function createBot() {
         await showSettingsStreaksMenu(ctx, chatId);
       } else if (parsed.section === 'anonymous') {
         await showSettingsAnonymousMenu(ctx, chatId);
+      } else if (parsed.section === 'members') {
+        await showMembersManagementMenu(ctx, chatId);
       } else if (parsed.section === 'commands') {
         // Open interactive command rights UI from settings menu
         await showMenuCommandRightsMenu(ctx, chatId, 0, `settings:main:${chatId}`, 'settings');

@@ -74,13 +74,14 @@ test('buildSettingsMainKeyboard returns a grouped layout with section buttons', 
   const keyboard = buildSettingsMainKeyboard(42);
 
   assert.ok(Array.isArray(keyboard));
-  assert.equal(keyboard.length, 6);
+  assert.equal(keyboard.length, 7);
   assert.deepEqual(keyboard[0].map((button) => button.text), ['🧩 Капча', '🔗 Ссылки']);
   assert.deepEqual(keyboard[1].map((button) => button.text), ['🛡️ Антиспам', '📜 Правила']);
   assert.deepEqual(keyboard[2].map((button) => button.text), ['🚫 Банворды', '⚠️ Варны']);
   assert.deepEqual(keyboard[3].map((button) => button.text), ['⚙️ Команды', '🤖 Медиа ИИ']);
   assert.deepEqual(keyboard[4].map((button) => button.text), ['💬 Первый комментарий', '🚨 @admin']);
   assert.deepEqual(keyboard[5].map((button) => button.text), [premiumEmojis.getCustomEmojiFallback('series_premium') + ' Серия', '😶‍🌫️ Скрытые пользователи']);
+  assert.deepEqual(keyboard[6].map((button) => button.text), ['👥 Управление участниками']);
   assert.equal(keyboard[0][0].callback_data, 'settings:section:captcha:42');
   assert.equal(keyboard[0][1].callback_data, 'settings:section:links:42');
   assert.equal(keyboard[1][0].callback_data, 'settings:section:anti:42');
@@ -93,6 +94,7 @@ test('buildSettingsMainKeyboard returns a grouped layout with section buttons', 
   assert.equal(keyboard[4][1].callback_data, 'settings:section:admin:42');
   assert.equal(keyboard[5][0].callback_data, 'settings:section:streaks:42');
   assert.equal(keyboard[5][1].callback_data, 'settings:section:anonymous:42');
+  assert.equal(keyboard[6][0].callback_data, 'settings:section:members:42');
 });
 
 test('buildSettingsWarnsKeyboard includes amnesty with confirmation flow', () => {
