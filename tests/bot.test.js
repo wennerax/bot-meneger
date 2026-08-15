@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsWarnsKeyboard, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, parseSettingsAction, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage } = require('../app/bot');
+const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsWarnsKeyboard, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage } = require('../app/bot');
 const { buildAiRequestPayload } = require('../app/ai');
 const premiumEmojis = require('../app/premium_emojis');
 
@@ -118,6 +118,14 @@ test('buildSettingsCommandRightsKeyboard supports pagination and a back button',
   assert.ok(Array.isArray(keyboard.inline_keyboard));
   assert.equal(keyboard.inline_keyboard[keyboard.inline_keyboard.length - 1][0].text, 'Назад');
   assert.equal(keyboard.inline_keyboard[0].some((button) => button.callback_data === 'settings:command_rights:42:0'), true);
+});
+
+test('canSelfClearPunishmentHistory allows clearing own history only for clear_history action', () => {
+  const ctx = { from: { id: 42 }, chat: { id: 100 } };
+
+  assert.equal(canSelfClearPunishmentHistory(ctx, 42, 'clear_history'), true);
+  assert.equal(canSelfClearPunishmentHistory(ctx, 99, 'clear_history'), false);
+  assert.equal(canSelfClearPunishmentHistory(ctx, 42, 'ban'), false);
 });
 
 test('isAnonymousSenderMessage detects hidden sender messages', () => {

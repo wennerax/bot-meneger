@@ -89,6 +89,20 @@ function getGroupDisplayName(chatId, fallback = null) {
   return groupRecord?.title || fallback || String(id);
 }
 
+function canSelfClearPunishmentHistory(ctx, targetUserId, actionName) {
+  if (String(actionName || '').toLowerCase() !== 'clear_history') {
+    return false;
+  }
+
+  const actorUserId = Number(ctx.from?.id);
+  const targetId = Number(targetUserId);
+  if (!Number.isFinite(actorUserId) || !Number.isFinite(targetId)) {
+    return false;
+  }
+
+  return actorUserId === targetId;
+}
+
 function isGroupMemberWithProfileChangePermission(member) {
   if (!member || typeof member !== 'object') {
     return false;
@@ -3758,6 +3772,10 @@ function createBot() {
   }
 
   function ensureBotAdminCanPunishTarget(ctx, targetUserId, actionName) {
+    if (canSelfClearPunishmentHistory(ctx, targetUserId, actionName)) {
+      return true;
+    }
+
     if (!database.isBotAdmin(ctx.chat.id, targetUserId)) {
       return true;
     }
@@ -6007,6 +6025,7 @@ module.exports = {
   buildBotAdminListMessage,
   buildSettingsMainKeyboard,
   buildMembersManagementKeyboard,
+  canSelfClearPunishmentHistory,
   buildSettingsWarnsKeyboard,
   buildSettingsCommandRightsKeyboard,
   buildSettingsFirstMessageKeyboard,
