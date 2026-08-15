@@ -387,8 +387,16 @@ class Database {
       return 0;
     }
 
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const latestDayKey = activeDates[activeDates.length - 1];
+    const latestDay = new Date(`${latestDayKey}T00:00:00Z`);
+    const todayDate = new Date(`${todayKey}T00:00:00Z`);
+
+    if (latestDay.getTime() < todayDate.getTime()) {
+      return 0;
+    }
+
     let streak = 0;
-    const latestDay = new Date(`${activeDates[activeDates.length - 1]}T00:00:00Z`);
     let cursor = new Date(latestDay);
 
     while (true) {

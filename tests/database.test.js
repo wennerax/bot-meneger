@@ -151,6 +151,24 @@ test('user streak is calculated from consecutive days and exposed in profile and
   db.close();
 });
 
+test('user streak resets to zero after a missed day without new chat activity', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-meneger-'));
+  const db = new Database(path.join(dir, 'bot.json'));
+
+  db.ensureGroup(710, 'Missed Day', 1);
+  const twoDaysAgo = new Date();
+  twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+
+  db.data.dailyActivity[710] = {
+    2: [{ day: twoDaysAgo.toISOString().slice(0, 10), count: 1 }],
+  };
+
+  const profile = db.getUserProfile(710, 2);
+  assert.equal(profile.streak, 0);
+
+  db.close();
+});
+
 test('punishment history can be cleared for a specific user', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-meneger-'));
   const db = new Database(path.join(dir, 'bot.json'));
