@@ -5777,7 +5777,7 @@ function createBot() {
             : 'Чат закрыт. Все сообщения удаляются.';
 
         try {
-          await ctx.reply(`🚫 ${reasonText}`);
+          await replyWithAutoDelete(ctx, `🚫 ${reasonText}`, {}, 2000);
         } catch (error) {
           // ignore reply failures for blocked messages
         }
