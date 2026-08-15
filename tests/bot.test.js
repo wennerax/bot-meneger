@@ -203,6 +203,12 @@ test('isGroupMemberWithManageRights accepts group administrators with standard a
   assert.equal(isGroupMemberWithManageRights({ status: 'member' }), false);
 });
 
+test('menu access is allowed only for admins who can change group profile', () => {
+  assert.equal(isGroupMemberWithProfileChangePermission({ status: 'administrator', can_change_info: true }), true);
+  assert.equal(isGroupMemberWithProfileChangePermission({ status: 'administrator', can_change_info: false, can_delete_messages: true }), false);
+  assert.equal(isGroupMemberWithProfileChangePermission({ status: 'member', can_change_info: true }), false);
+});
+
 test('getGroupDisplayName resolves the active bot database group title', () => {
   const { database } = createBot();
   database.ensureGroup(42, 'Тестовая группа', null);

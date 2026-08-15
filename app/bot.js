@@ -128,7 +128,7 @@ async function canManageGroupSettings(ctx, targetChatId) {
 
   try {
     const member = await ctx.telegram.getChatMember(chatId, userId);
-    if (isGroupMemberWithProfileChangePermission(member) || isGroupMemberWithManageRights(member)) {
+    if (isGroupMemberWithProfileChangePermission(member)) {
       return true;
     }
   } catch (error) {
@@ -147,7 +147,7 @@ async function canManageGroupSettings(ctx, targetChatId) {
   try {
     const administrators = await ctx.telegram.getChatAdministrators(chatId);
     const member = administrators.find((entry) => Number(entry.user?.id) === userId);
-    return isGroupMemberWithProfileChangePermission(member) || isGroupMemberWithManageRights(member);
+    return isGroupMemberWithProfileChangePermission(member);
   } catch (error) {
     return false;
   }
