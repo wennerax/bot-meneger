@@ -103,6 +103,14 @@ function canSelfClearPunishmentHistory(ctx, targetUserId, actionName) {
   return actorUserId === targetId;
 }
 
+function isGroupOwnerMember(member) {
+  if (!member || typeof member !== 'object') {
+    return false;
+  }
+
+  return String(member.status || '').toLowerCase() === 'creator';
+}
+
 function isGroupMemberWithProfileChangePermission(member) {
   if (!member || typeof member !== 'object') {
     return false;
@@ -142,7 +150,7 @@ async function canManageGroupSettings(ctx, targetChatId) {
 
   try {
     const member = await ctx.telegram.getChatMember(chatId, userId);
-    if (isGroupMemberWithProfileChangePermission(member)) {
+    if (isGroupOwnerMember(member) || isGroupMemberWithProfileChangePermission(member)) {
       return true;
     }
   } catch (error) {
@@ -5752,10 +5760,11 @@ function createBot() {
 
     if (isGroupChat(ctx)) {
       const chatId = ctx.chat.id;
-      const isOwner = Number(ctx.chat.owner_id) === Number(ctx.from.id);
+      let isOwner = Number(ctx.chat.owner_id) === Number(ctx.from.id);
       let isAdmin = false;
       try {
         const member = await ctx.telegram.getChatMember(chatId, ctx.from.id);
+        isOwner = isOwner || isGroupOwnerMember(member);
         isAdmin = Boolean(member && (member.status === 'administrator' || member.status === 'creator'));
       } catch (error) {
         isAdmin = false;
@@ -6213,6 +6222,7 @@ module.exports = {
   detectForbiddenWord,
   isLinkMessage,
   isAllowedLinkUrl,
+  isGroupOwnerMember,
   isGroupMemberWithProfileChangePermission,
   isGroupMemberWithManageRights,
   getGroupDisplayName,

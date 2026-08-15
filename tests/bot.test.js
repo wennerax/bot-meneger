@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage } = require('../app/bot');
+const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage } = require('../app/bot');
 const { buildAiRequestPayload } = require('../app/ai');
 const premiumEmojis = require('../app/premium_emojis');
 
@@ -97,6 +97,12 @@ test('buildSettingsMainKeyboard returns a grouped layout with section buttons', 
   assert.equal(keyboard[5][1].callback_data, 'settings:section:anonymous:42');
   assert.equal(keyboard[6][0].callback_data, 'settings:section:chat:42');
   assert.equal(keyboard[7][0].callback_data, 'settings:section:members:42');
+});
+
+test('isGroupOwnerMember treats creator status as group owner', () => {
+  assert.equal(isGroupOwnerMember({ status: 'creator' }), true);
+  assert.equal(isGroupOwnerMember({ status: 'administrator' }), false);
+  assert.equal(isGroupOwnerMember({ status: 'member' }), false);
 });
 
 test('buildSettingsChatKeyboard exposes open and restricted write modes', () => {
