@@ -2498,7 +2498,7 @@ function createBot() {
       '',
       'Когда пользователь упоминает кого-то из уже активных участников, бот может отправить уведомление с упоминанием о ком и в каком чате это произошло.',
       '',
-      'Уведомления будут отправляться через @bredozyan_cm_bot',
+      'Уведомления будут отправляться через @model_cm_bot',
       '',
       `Статус: ${enabled ? 'Включено ✅' : 'Отключено ❌'}`,
     ].join('\n');
@@ -5837,8 +5837,7 @@ function createBot() {
               continue;
             }
 
-            const profile = database.getUserProfile(chatId, targetUserId);
-            if (!profile || Number(profile.messageCount || 0) <= 0) {
+            if (!userService.hasUser(targetUserId)) {
               continue;
             }
 

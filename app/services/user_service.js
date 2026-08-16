@@ -51,6 +51,11 @@ class UserService {
     return true;
   }
 
+  hasUser(userId) {
+    const id = Number(userId);
+    return Number.isFinite(id) && this.userIds.has(id);
+  }
+
   get count() {
     return this.userIds.size;
   }
