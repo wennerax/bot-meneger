@@ -2890,8 +2890,20 @@ function createBot() {
         console.warn('AI media analysis returned empty response for media:', fileUrl);
         return false;
       }
-      const positive = /\b(да|yes|true|adult|порно|porn|эротик|откровенн|нагота|голая|сексуал)\b/.test(normalized);
-      const negative = /\b(нет|no|false|не\s|не содержит)\b/.test(normalized);
+
+      const cleaned = normalized
+        .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      const firstWord = cleaned.split(' ')[0] || '';
+      const positive = ['да', 'yes', 'true', 'adult', 'порно', 'porn', 'эротик', 'откровенн', 'нагота', 'голая', 'сексуал'].includes(firstWord)
+        || /(?:^|[^\p{L}\p{N}])(да|yes|true|adult|порно|porn|эротик|откровенн|нагота|голая|сексуал)(?:$|[^\p{L}\p{N}])/u.test(cleaned);
+      const negative = ['нет', 'no', 'false', 'safe', 'безопасно', 'безопасный'].includes(firstWord)
+        || /(?:^|[^\p{L}\p{N}])(нет|no|false|safe|безопасно|безопасный)(?:$|[^\p{L}\p{N}])/u.test(cleaned)
+        || /(?:^|[^\p{L}\p{N}])не\s+содержит(?:$|[^\p{L}\p{N}])/u.test(cleaned)
+        || /(?:^|[^\p{L}\p{N}])не\s+содержит\s+(взросл|порно)(?:$|[^\p{L}\p{N}])/u.test(cleaned);
+
       if (!positive && !negative) {
         console.warn('AI media analysis returned unclear response:', normalized, 'for media:', fileUrl);
       }

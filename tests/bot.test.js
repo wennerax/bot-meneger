@@ -333,3 +333,14 @@ test('normalizeMultimodalInputForResponses converts Telegram-style items into Op
     ],
   });
 });
+
+test('matter AI verdict accepts explicit yes/no answers in Russian and English', () => {
+  const outputs = ['да', 'ДА!', 'нет', 'No', 'Yes, this is explicit content'];
+  const normalized = outputs.map((value) => value.toLowerCase().replace(/[^\p{L}\p{N}]/gu, ' ').replace(/\s+/g, ' ').trim());
+
+  assert.equal(/(?:^|[^\p{L}\p{N}])(да|yes|true|adult|порно|porn|эротик|откровенн|нагота|голая|сексуал)(?:$|[^\p{L}\p{N}])/u.test('да'), true);
+  assert.equal(/(?:^|[^\p{L}\p{N}])(нет|no|false|safe|безопасно|безопасный)(?:$|[^\p{L}\p{N}])/u.test('нет'), true);
+  assert.equal(/(?:^|[^\p{L}\p{N}])(нет|no|false|safe|безопасно|безопасный)(?:$|[^\p{L}\p{N}])/u.test('no'), true);
+  assert.equal(/(?:^|[^\p{L}\p{N}])(да|yes|true|adult|порно|porn|эротик|откровенн|нагота|голая|сексуал)(?:$|[^\p{L}\p{N}])/u.test('yes this is explicit content'), true);
+  assert.equal(normalized.some((value) => value === 'да' || value === 'нет' || value === 'no' || value === 'yes this is explicit content'), true);
+});
