@@ -77,6 +77,55 @@ async function getRealtimeContext(options = {}) {
   return parts.join(' ');
 }
 
+function normalizeMultimodalInputForResponses(input) {
+  const items = Array.isArray(input) ? input : [{ type: 'text', text: String(input || '') }];
+  const content = [];
+
+  for (const item of items) {
+    if (!item) {
+      continue;
+    }
+
+    if (item.type === 'text') {
+      content.push({ type: 'input_text', text: String(item.text || '') });
+      continue;
+    }
+
+    if (item.type === 'image_url') {
+      const url = typeof item.image_url === 'string'
+        ? item.image_url
+        : item.image_url?.url || '';
+
+      if (url) {
+        content.push({ type: 'input_image', image_url: String(url) });
+      }
+      continue;
+    }
+
+    if (item.role === 'user' && Array.isArray(item.content)) {
+      for (const part of item.content) {
+        if (part && part.type === 'text') {
+          content.push({ type: 'input_text', text: String(part.text || '') });
+        } else if (part && part.type === 'image_url') {
+          const url = typeof part.image_url === 'string'
+            ? part.image_url
+            : part.image_url?.url || '';
+          if (url) {
+            content.push({ type: 'input_image', image_url: String(url) });
+          }
+        }
+      }
+      continue;
+    }
+
+    if (typeof item === 'string') {
+      content.push({ type: 'input_text', text: item });
+    }
+  }
+
+  return [{ role: 'user', content: content.length ? content : [{ type: 'input_text', text: '' }] }];
+}
+
 async function buildAiRequestPayload(prompt, model, options = {}) {
   const realtimeContext = options.enableRealtime === false ? '' : await getRealtimeContext(options);
   const systemMessage = options.systemMessage || [
@@ -92,7 +141,7 @@ async function buildAiRequestPayload(prompt, model, options = {}) {
     realtimeContext,
   ].join(' ');
 
-  const userContent = Array.isArray(prompt) ? prompt : prompt;
+  const userContent = Array.isArray(prompt) ? prompt : String(prompt || '');
   return {
     model: model || 'gpt-4o-mini',
     messages: [
@@ -142,9 +191,7 @@ async function requestAi(prompt, options = {}) {
     const supportsReasoningModel = /^(o[1-9]|gpt-5|gpt-5-mini|gpt-5-nano|gpt-5-chat)/i.test(selectedModel);
     const payload = {
       model: selectedModel,
-      input: Array.isArray(prompt)
-        ? prompt
-        : [{ role: 'user', content: String(prompt || '') }],
+      input: normalizeMultimodalInputForResponses(prompt),
       text: {
         format: { type: 'text' },
         verbosity: 'medium',
@@ -240,6 +287,7 @@ async function checkAiEndpoint(options = {}) {
 
 module.exports = {
   buildAiRequestPayload,
+  normalizeMultimodalInputForResponses,
   requestAi,
   checkAiEndpoint,
 };

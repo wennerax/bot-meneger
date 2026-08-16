@@ -315,3 +315,21 @@ test('buildAiRequestPayload supports multimodal prompt arrays', async () => {
   assert.equal(payload.messages[1].role, 'user');
   assert.equal(payload.messages[1].content, multis);
 });
+
+test('normalizeMultimodalInputForResponses converts Telegram-style items into OpenAI Responses format', () => {
+  const input = [
+    { type: 'text', text: 'Есть ли порно на этом фото?' },
+    { type: 'image_url', image_url: { url: 'data:image/png;base64,AAA' } },
+  ];
+
+  const normalized = require('../app/ai').normalizeMultimodalInputForResponses(input);
+
+  assert.equal(normalized.length, 1);
+  assert.deepEqual(normalized[0], {
+    role: 'user',
+    content: [
+      { type: 'input_text', text: 'Есть ли порно на этом фото?' },
+      { type: 'input_image', image_url: 'data:image/png;base64,AAA' },
+    ],
+  });
+});
