@@ -2733,13 +2733,26 @@ function createBot() {
     await safeEditMessageText(ctx, text, { reply_markup: keyboard });
   }
 
+  function detectImageMimeTypeFromBuffer(buffer) {
+    if (!buffer || buffer.length < 4) {
+      return null;
+    }
+
+    if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) return 'image/png';
+    if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return 'image/jpeg';
+    if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) return 'image/gif';
+    if (buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50) return 'image/webp';
+
+    return null;
+  }
+
   function inferMediaMimeType(fileUrl, fallbackMimeType = null) {
     const normalizedFallback = typeof fallbackMimeType === 'string'
       ? fallbackMimeType.split(';')[0].trim().toLowerCase()
       : '';
 
-    if (normalizedFallback && normalizedFallback !== 'application/octet-stream' && normalizedFallback.startsWith('image/')) {
-      return normalizedFallback;
+    if (normalizedFallback && normalizedFallback !== 'application/octet-stream' && (normalizedFallback.startsWith('image/') || normalizedFallback === 'application/x-tgsticker')) {
+      return normalizedFallback === 'application/x-tgsticker' ? 'image/webp' : normalizedFallback;
     }
 
     const filePath = String(fileUrl || '').split('?')[0].toLowerCase();
@@ -2762,17 +2775,24 @@ function createBot() {
       return { type: 'photo', fileId: message.photo[message.photo.length - 1].file_id, mimeType: 'image/jpeg' };
     }
     if (message.video && message.video.file_id) {
-      return { type: 'video', fileId: message.video.file_id };
+      return { type: 'video', fileId: message.video.file_id, mimeType: message.video.mime_type && message.video.mime_type.startsWith('video/') ? message.video.mime_type : null };
     }
     if (message.animation && message.animation.file_id) {
-      return { type: 'animation', fileId: message.animation.file_id };
+      const mimeType = typeof message.animation.mime_type === 'string' && message.animation.mime_type.startsWith('image/')
+        ? message.animation.mime_type
+        : 'image/gif';
+      return { type: 'animation', fileId: message.animation.file_id, mimeType };
     }
     if (message.document && message.document.file_id) {
       const mimeType = typeof message.document.mime_type === 'string'
         ? message.document.mime_type
-        : 'application/octet-stream';
-      if (mimeType.startsWith('image/')) {
-        return { type: 'document', fileId: message.document.file_id, mimeType };
+        : (typeof message.document.file_name === 'string' ? message.document.file_name.toLowerCase() : '');
+      const fileName = typeof message.document.file_name === 'string' ? message.document.file_name.toLowerCase() : '';
+      const inferred = mimeType && mimeType.startsWith('image/')
+        ? mimeType
+        : (fileName.endsWith('.png') ? 'image/png' : fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') ? 'image/jpeg' : fileName.endsWith('.webp') ? 'image/webp' : fileName.endsWith('.gif') ? 'image/gif' : null);
+      if (inferred) {
+        return { type: 'document', fileId: message.document.file_id, mimeType: inferred };
       }
       return null;
     }
@@ -2814,9 +2834,13 @@ function createBot() {
         const arrayBuffer = await response.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
         const rawMimeType = response.headers.get('content-type') || '';
-        const mimeType = rawMimeType && rawMimeType !== 'application/octet-stream'
+        const detectedMimeType = detectImageMimeTypeFromBuffer(buffer) || inferMediaMimeType(fileUrl, fallbackMimeType);
+        const mimeType = rawMimeType && rawMimeType !== 'application/octet-stream' && rawMimeType.startsWith('image/')
           ? rawMimeType.split(';')[0].trim().toLowerCase()
-          : inferMediaMimeType(fileUrl, fallbackMimeType);
+          : detectedMimeType;
+        if (!mimeType || !mimeType.startsWith('image/')) {
+          return null;
+        }
         const base64 = buffer.toString('base64');
         return `data:${mimeType};base64,${base64}`;
       } finally {
@@ -6000,6 +6024,16 @@ function createBot() {
         } else {
           const isAdult = await analyzeMediaWithAi(ctx, message);
           if (isAdult) {
+            try {
+              const targetMember = await ctx.telegram.getChatMember(ctx.chat.id, ctx.from.id).catch(() => null);
+              if (targetMember && ['creator', 'administrator'].includes(targetMember.status)) {
+                console.warn('Skipping adult-media ban for protected group member:', ctx.from.id, targetMember.status);
+                return;
+              }
+            } catch (err) {
+              console.warn('Failed to inspect chat member before adult-media ban:', err?.message || err);
+            }
+
             try {
               await deleteMessageSafely(ctx, message.message_id);
             } catch (err) {
