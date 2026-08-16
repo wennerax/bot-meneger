@@ -2797,20 +2797,36 @@ function createBot() {
     }
 
     try {
-      const response = await fetch(fileUrl);
-      if (!response.ok) {
-        throw new Error(`Telegram file fetch failed with status ${response.status}`);
+      const controller = new AbortController();
+      const timeoutMs = 15000;
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+      try {
+        const response = await fetch(fileUrl, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'TelegramBot/1.0',
+          },
+        });
+        if (!response.ok) {
+          throw new Error(`Telegram file fetch failed with status ${response.status}`);
+        }
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const rawMimeType = response.headers.get('content-type') || '';
+        const mimeType = rawMimeType && rawMimeType !== 'application/octet-stream'
+          ? rawMimeType.split(';')[0].trim().toLowerCase()
+          : inferMediaMimeType(fileUrl, fallbackMimeType);
+        const base64 = buffer.toString('base64');
+        return `data:${mimeType};base64,${base64}`;
+      } finally {
+        clearTimeout(timeoutId);
       }
-      const arrayBuffer = await response.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      const rawMimeType = response.headers.get('content-type') || '';
-      const mimeType = rawMimeType && rawMimeType !== 'application/octet-stream'
-        ? rawMimeType.split(';')[0].trim().toLowerCase()
-        : inferMediaMimeType(fileUrl, fallbackMimeType);
-      const base64 = buffer.toString('base64');
-      return `data:${mimeType};base64,${base64}`;
     } catch (error) {
-      console.warn('Failed to fetch Telegram media as base64:', error?.message || error);
+      const message = error?.name === 'AbortError'
+        ? 'Telegram media download timed out after 15s'
+        : error?.message || error;
+      console.warn('Failed to fetch Telegram media as base64:', message);
       return null;
     }
   }
