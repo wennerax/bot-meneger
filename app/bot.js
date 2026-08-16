@@ -5848,10 +5848,38 @@ function createBot() {
 
             const mentionerText = getMentionText(ctx.from || { id: ctx.from.id, username: ctx.from.username });
             const chatTitle = ctx.chat.title || 'группа';
-            const notificationText = `📣 ${mentionerText} упомянул(а) вас в чате «${chatTitle}»\n\n${ctx.chat.username ? `@${ctx.chat.username}` : ''}`.trim();
+            const messageLink = (() => {
+              const messageId = Number(message.message_id || 0);
+              if (!messageId) {
+                return null;
+              }
+
+              const chatUsername = String(ctx.chat.username || '').trim();
+              if (chatUsername) {
+                return `https://t.me/${chatUsername}/${messageId}`;
+              }
+
+              const chatIdNumber = Number(ctx.chat.id || 0);
+              if (chatIdNumber) {
+                const normalized = String(Math.abs(chatIdNumber)).replace(/^100/, '');
+                return `https://t.me/c/${normalized}/${messageId}`;
+              }
+
+              return null;
+            })();
+
+            const notificationText = [
+              'Вас упомянули в чате',
+              `Кто: ${mentionerText}`,
+              `В чате: «${chatTitle}»`,
+            ].join('\n');
+
+            const replyMarkup = messageLink ? {
+              inline_keyboard: [[{ text: 'Посмотреть сообщение', url: messageLink }]],
+            } : undefined;
 
             try {
-              await ctx.telegram.sendMessage(targetUserId, notificationText);
+              await ctx.telegram.sendMessage(targetUserId, notificationText, { reply_markup: replyMarkup });
             } catch (error) {
               // ignore if user blocked the bot or has no access to DMs
             }
