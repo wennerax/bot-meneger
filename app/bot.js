@@ -1744,16 +1744,20 @@ function shouldFailClosedForMedia(payload, errorMessage = '', normalizedAnswer =
 
   const text = String(errorMessage || normalizedAnswer || '').trim();
   if (!text) {
-    return true;
+    return false;
   }
 
-  const safePatterns = /(?:^|\b)(нет|no|false|safe|безопасно|безопасный|not adult|no adult|не содержит|не содержит взросл|не содержит порно|не содержит обнаж)(?:$|\b)/i;
+  const safePatterns = /(?:^|[^\p{L}\p{N}])(?:нет|no|false|safe|безопасно|безопасный|not adult|no adult|не содержит|не содержит взросл|не содержит порно|не содержит обнаж)(?:$|[^\p{L}\p{N}])/iu;
   if (safePatterns.test(text)) {
     return false;
   }
 
-  return /invalid image|not represent a valid image|unsupported image|unclear response|image data you provided|непонятно|unclear|ambiguous|unknown|not clear|не уверен|can't determine/i.test(text)
-    || /\b(да|yes|true|adult|порно|porn|эротик|нагота|голая|сексуал|nude|nudity|sexual|sexy)\b/i.test(text);
+  const explicitAdultPatterns = /(?:^|[^\p{L}\p{N}])(?:да|yes|true|adult|18\+|porn|порно|эротик|эротика|нагота|голая|сексуал|nude|nudity|sexual|sexy|explicit|обнаж|интим|intimate|xx|nsfw)(?:$|[^\p{L}\p{N}])/iu;
+  if (explicitAdultPatterns.test(text)) {
+    return true;
+  }
+
+  return false;
 }
 
 function createBot() {
