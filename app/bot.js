@@ -2532,7 +2532,7 @@ function createBot() {
         [
           { text: enabled ? 'Отключить' : 'Включить', callback_data: `menu:mention_toggle:${enabled ? 'off' : 'on'}:${chatId}` },
         ],
-        [{ text: 'Назад', callback_data: 'menu:overview' }],
+        [{ text: 'Назад', callback_data: 'menu:none' }],
       ],
     };
 
