@@ -2733,10 +2733,33 @@ function createBot() {
     await safeEditMessageText(ctx, text, { reply_markup: keyboard });
   }
 
+  function inferMediaMimeType(fileUrl, fallbackMimeType = null) {
+    const normalizedFallback = typeof fallbackMimeType === 'string'
+      ? fallbackMimeType.split(';')[0].trim().toLowerCase()
+      : '';
+
+    if (normalizedFallback && normalizedFallback !== 'application/octet-stream' && normalizedFallback.startsWith('image/')) {
+      return normalizedFallback;
+    }
+
+    const filePath = String(fileUrl || '').split('?')[0].toLowerCase();
+    const extMatch = filePath.match(/\.([a-z0-9]+)$/);
+    const ext = extMatch ? extMatch[1] : '';
+
+    if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+    if (ext === 'png') return 'image/png';
+    if (ext === 'webp') return 'image/webp';
+    if (ext === 'gif') return 'image/gif';
+    if (ext === 'bmp') return 'image/bmp';
+    if (ext === 'heic' || ext === 'heif') return 'image/heic';
+
+    return normalizedFallback || 'image/jpeg';
+  }
+
   function getMediaPayloadFromMessage(ctx) {
     const message = ctx.message || {};
     if (message.photo && Array.isArray(message.photo) && message.photo.length) {
-      return { type: 'photo', fileId: message.photo[message.photo.length - 1].file_id };
+      return { type: 'photo', fileId: message.photo[message.photo.length - 1].file_id, mimeType: 'image/jpeg' };
     }
     if (message.video && message.video.file_id) {
       return { type: 'video', fileId: message.video.file_id };
@@ -2745,7 +2768,13 @@ function createBot() {
       return { type: 'animation', fileId: message.animation.file_id };
     }
     if (message.document && message.document.file_id) {
-      return { type: 'document', fileId: message.document.file_id };
+      const mimeType = typeof message.document.mime_type === 'string'
+        ? message.document.mime_type
+        : 'application/octet-stream';
+      if (mimeType.startsWith('image/')) {
+        return { type: 'document', fileId: message.document.file_id, mimeType };
+      }
+      return null;
     }
     if (message.audio && message.audio.file_id) {
       return { type: 'audio', fileId: message.audio.file_id };
@@ -2757,12 +2786,12 @@ function createBot() {
       return { type: 'video_note', fileId: message.video_note.file_id };
     }
     if (message.sticker && message.sticker.file_id) {
-      return { type: 'sticker', fileId: message.sticker.file_id };
+      return { type: 'sticker', fileId: message.sticker.file_id, mimeType: 'image/webp' };
     }
     return null;
   }
 
-  async function getFileBase64DataUrl(fileUrl) {
+  async function getFileBase64DataUrl(fileUrl, fallbackMimeType = null) {
     if (!fileUrl) {
       return null;
     }
@@ -2774,15 +2803,10 @@ function createBot() {
       }
       const arrayBuffer = await response.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
-      let mimeType = response.headers.get('content-type') || '';
-      if (!mimeType) {
-        const ext = fileUrl.split('.').pop().toLowerCase();
-        if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
-        else if (ext === 'png') mimeType = 'image/png';
-        else if (ext === 'webp') mimeType = 'image/webp';
-        else if (ext === 'gif') mimeType = 'image/gif';
-        else mimeType = 'application/octet-stream';
-      }
+      const rawMimeType = response.headers.get('content-type') || '';
+      const mimeType = rawMimeType && rawMimeType !== 'application/octet-stream'
+        ? rawMimeType.split(';')[0].trim().toLowerCase()
+        : inferMediaMimeType(fileUrl, fallbackMimeType);
       const base64 = buffer.toString('base64');
       return `data:${mimeType};base64,${base64}`;
     } catch (error) {
@@ -2793,7 +2817,7 @@ function createBot() {
 
   async function analyzeMediaWithAi(ctx, message) {
     const payload = getMediaPayloadFromMessage(ctx);
-    if (!payload || !payload.fileId) {
+    if (!payload || !payload.fileId || !payload.mimeType || !payload.mimeType.startsWith('image/')) {
       return false;
     }
 
@@ -2814,7 +2838,7 @@ function createBot() {
       return false;
     }
 
-    const dataUrl = await getFileBase64DataUrl(fileUrl);
+    const dataUrl = await getFileBase64DataUrl(fileUrl, payload.mimeType);
     if (!dataUrl) {
       return false;
     }
