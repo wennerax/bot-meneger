@@ -2806,7 +2806,8 @@ function createBot() {
       return { type: 'video_note', fileId: message.video_note.file_id };
     }
     if (message.sticker && message.sticker.file_id) {
-      return { type: 'sticker', fileId: message.sticker.file_id, mimeType: 'image/webp' };
+      const mimeType = message.sticker.is_animated ? 'image/gif' : 'image/webp';
+      return { type: 'sticker', fileId: message.sticker.file_id, mimeType };
     }
     return null;
   }
@@ -2883,10 +2884,11 @@ function createBot() {
       return false;
     }
 
+    const mediaTypeLabel = payload.type === 'sticker' ? 'стикер' : payload.type === 'animation' ? 'GIF/анимация' : payload.type === 'document' ? 'документ с изображением' : 'медиа-файл';
     const prompt = [
       {
         type: 'text',
-        text: 'Оцени приведённый медиа-файл и ответь только одним словом: «да» или «нет». Если файл содержит порнографическое, откровенно сексуальное или взрослое (18+) содержание, ответь «да». Если это безопасный контент без обнажённых половых частей, ответь «нет».',
+        text: `Оцени этот ${mediaTypeLabel} и ответь только одним словом: «да» или «нет». Если ${mediaTypeLabel} содержит порнографию, откровенно сексуальное, наготу, интимные сцены, сексуальные позы или взрослое (18+) содержание, ответь «да». Если это безопасный контент без обнажённых половых частей, ответь «нет».`,
       },
       {
         type: 'image_url',
@@ -2921,12 +2923,13 @@ function createBot() {
         .trim();
 
       const firstWord = cleaned.split(' ')[0] || '';
-      const positive = ['да', 'yes', 'true', 'adult', 'порно', 'porn', 'эротик', 'откровенн', 'нагота', 'голая', 'сексуал'].includes(firstWord)
-        || /(?:^|[^\p{L}\p{N}])(да|yes|true|adult|порно|porn|эротик|откровенн|нагота|голая|сексуал)(?:$|[^\p{L}\p{N}])/u.test(cleaned);
+      const positive = ['да', 'yes', 'true', 'adult', 'порно', 'porn', 'эротик', 'откровенн', 'нагота', 'голая', 'сексуал', 'nude', 'nudity', 'sexual', 'sexy'].includes(firstWord)
+        || /(?:^|[^\p{L}\p{N}])(да|yes|true|adult|порно|porn|эротик|откровенн|нагота|голая|сексуал|nude|nudity|sexual|sexy)(?:$|[^\p{L}\p{N}])/u.test(cleaned)
+        || /(?:^|[^\p{L}\p{N}])(?:содержит|есть|обнаж|сексу)(?:$|[^\p{L}\p{N}])/u.test(cleaned);
       const negative = ['нет', 'no', 'false', 'safe', 'безопасно', 'безопасный'].includes(firstWord)
         || /(?:^|[^\p{L}\p{N}])(нет|no|false|safe|безопасно|безопасный)(?:$|[^\p{L}\p{N}])/u.test(cleaned)
         || /(?:^|[^\p{L}\p{N}])не\s+содержит(?:$|[^\p{L}\p{N}])/u.test(cleaned)
-        || /(?:^|[^\p{L}\p{N}])не\s+содержит\s+(взросл|порно)(?:$|[^\p{L}\p{N}])/u.test(cleaned);
+        || /(?:^|[^\p{L}\p{N}])не\s+содержит\s+(взросл|порно|обнаж|сексу)(?:$|[^\p{L}\p{N}])/u.test(cleaned);
 
       if (!positive && !negative) {
         console.warn('AI media analysis returned unclear response:', normalized, 'for media:', fileUrl);
