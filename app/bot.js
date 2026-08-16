@@ -373,6 +373,7 @@ function buildMenuKeyboard(chatId) {
         { text: 'Чат', callback_data: 'menu:chat' },
       ],
       [
+        { text: 'Упоминание', callback_data: 'menu:mention' },
         { text: 'Управление Участниками', callback_data: 'menu:members' },
       ],
     ],
@@ -2486,6 +2487,35 @@ function createBot() {
 
   function getMenuKeyboard(chatId) {
     return buildMenuKeyboard(chatId);
+  }
+
+  function showMentionNotificationMenu(ctx, chatId) {
+    const service = activeModerationService || defaultModerationService;
+    const enabled = service.isMentionNotificationsEnabled(chatId);
+    const text = [
+      '🔔 Уведомление об упоминании',
+      '',
+      'Когда пользователь упоминает кого-то из уже активных участников, бот может отправить уведомление с упоминанием о ком и в каком чате это произошло.',
+      '',
+      'Уведомления будут отправляться через @bredozyan_cm_bot',
+      '',
+      `Статус: ${enabled ? 'Включено ✅' : 'Отключено ❌'}`,
+    ].join('\n');
+
+    const keyboard = {
+      inline_keyboard: [
+        [
+          { text: enabled ? 'Отключить' : 'Включить', callback_data: `menu:mention_toggle:${enabled ? 'off' : 'on'}:${chatId}` },
+        ],
+        [{ text: 'Назад', callback_data: 'menu:overview' }],
+      ],
+    };
+
+    if (ctx.callbackQuery) {
+      return ctx.editMessageText(text, { reply_markup: keyboard });
+    }
+
+    return ctx.reply(text, { reply_markup: keyboard });
   }
 
   function showMembersManagementMenu(ctx, chatId) {
@@ -5233,6 +5263,22 @@ function createBot() {
       return;
     }
 
+    if (action === 'mention') {
+      await showMentionNotificationMenu(ctx, chatId);
+      return;
+    }
+
+    if (action.startsWith('mention_toggle:')) {
+      const [, , enabledText = 'off', targetChatId = String(chatId)] = String(action).split(':');
+      const targetId = Number(targetChatId) || chatId;
+      const service = activeModerationService || defaultModerationService;
+      const nextEnabled = String(enabledText).toLowerCase() === 'on';
+      service.setMentionNotificationsEnabled(targetId, nextEnabled);
+      await safeAnswerCbQuery(ctx, nextEnabled ? '✅ Уведомления включены' : '❌ Уведомления отключены');
+      await showMentionNotificationMenu(ctx, targetId);
+      return;
+    }
+
     if (action.startsWith('chat_access:')) {
       const [, , mode = ''] = String(action).split(':');
       const service = activeModerationService || defaultModerationService;
@@ -5759,7 +5805,60 @@ function createBot() {
     }
 
     if (isGroupChat(ctx)) {
+      const service = activeModerationService || defaultModerationService;
       const chatId = ctx.chat.id;
+
+      if (service.isMentionNotificationsEnabled(chatId)) {
+        try {
+          const mentionTargets = new Set();
+          const mentionPattern = /@([A-Za-z0-9_]{3,32})/g;
+          const mentionedUsernames = [...text.matchAll(mentionPattern)].map((match) => match[1].toLowerCase());
+
+          for (const username of mentionedUsernames) {
+            const resolved = database.resolveUsername(chatId, username);
+            if (resolved && Number.isFinite(Number(resolved.userId))) {
+              mentionTargets.add(Number(resolved.userId));
+            }
+          }
+
+          if (message.entities) {
+            for (const entity of message.entities) {
+              if (entity.type === 'text_mention' && entity.user?.id) {
+                mentionTargets.add(Number(entity.user.id));
+              }
+            }
+          }
+
+          for (const targetUserId of mentionTargets) {
+            if (targetUserId === Number(ctx.from.id)) {
+              continue;
+            }
+
+            const profile = database.getUserProfile(chatId, targetUserId);
+            if (!profile || Number(profile.messageCount || 0) <= 0) {
+              continue;
+            }
+
+            const targetMember = await ctx.telegram.getChatMember(chatId, targetUserId).catch(() => null);
+            if (!targetMember || !targetMember.user) {
+              continue;
+            }
+
+            const mentionerText = getMentionText(ctx.from || { id: ctx.from.id, username: ctx.from.username });
+            const chatTitle = ctx.chat.title || 'группа';
+            const notificationText = `📣 ${mentionerText} упомянул(а) вас в чате «${chatTitle}»\n\n${ctx.chat.username ? `@${ctx.chat.username}` : ''}`.trim();
+
+            try {
+              await ctx.telegram.sendMessage(targetUserId, notificationText);
+            } catch (error) {
+              // ignore if user blocked the bot or has no access to DMs
+            }
+          }
+        } catch (error) {
+          // ignore mention notification errors
+        }
+      }
+
       let isOwner = Number(ctx.chat.owner_id) === Number(ctx.from.id);
       let isAdmin = false;
       try {

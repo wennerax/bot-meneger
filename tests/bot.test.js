@@ -124,6 +124,14 @@ test('buildMenuKeyboard includes a Chat action for legacy /menu', () => {
   assert.ok(keyboard.inline_keyboard.some((row) => row.some((button) => button.callback_data === 'menu:chat')));
 });
 
+test('buildMenuKeyboard includes a mention notification action', () => {
+  const keyboard = buildMenuKeyboard(42);
+  const labels = keyboard.inline_keyboard.flat().map((button) => button.text);
+
+  assert.ok(labels.includes('Упоминание'));
+  assert.ok(keyboard.inline_keyboard.some((row) => row.some((button) => button.callback_data === 'menu:mention')));
+});
+
 test('buildSettingsWarnsKeyboard includes amnesty with confirmation flow', () => {
   const keyboard = buildSettingsWarnsKeyboard(42);
 

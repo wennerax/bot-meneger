@@ -235,6 +235,9 @@ class ModerationService {
       captchaMode: chat.captchaMode || 'emoji',
       mediaAiEnabled: Boolean(chat.mediaAiEnabled),
       captchaTimeoutMinutes: Number.isFinite(Number(chat.captchaTimeoutMinutes)) ? Number(chat.captchaTimeoutMinutes) : 3,
+      mentionNotifications: {
+        enabled: chat.mentionNotifications?.enabled !== undefined ? Boolean(chat.mentionNotifications.enabled) : true,
+      },
       adminNotify: {
         mode: (chat.adminNotify && typeof chat.adminNotify.mode === 'string') ? chat.adminNotify.mode : 'none',
         notifyOwner: Boolean(chat.adminNotify?.notifyOwner),
@@ -902,6 +905,16 @@ class ModerationService {
   getMenuButtons(chatId) {
     const buttons = this._getChat(chatId).menu.buttons || [];
     return buttons.map((row) => row.map((item) => ({ ...item })));
+  }
+
+  isMentionNotificationsEnabled(chatId) {
+    return Boolean(this._getChat(chatId).mentionNotifications?.enabled !== false);
+  }
+
+  setMentionNotificationsEnabled(chatId, enabled) {
+    this._getChat(chatId).mentionNotifications.enabled = Boolean(enabled);
+    this._save();
+    return true;
   }
 
   getAdminNotifyMode(chatId) {
