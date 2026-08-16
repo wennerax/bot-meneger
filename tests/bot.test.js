@@ -81,7 +81,7 @@ test('buildSettingsMainKeyboard returns a grouped layout with section buttons', 
   assert.deepEqual(keyboard[3].map((button) => button.text), ['⚙️ Команды', '🤖 Медиа ИИ']);
   assert.deepEqual(keyboard[4].map((button) => button.text), ['💬 Первый комментарий', '🚨 @admin']);
   assert.deepEqual(keyboard[5].map((button) => button.text), [premiumEmojis.getCustomEmojiFallback('series_premium') + ' Серия', '😶‍🌫️ Скрытые пользователи']);
-  assert.deepEqual(keyboard[6].map((button) => button.text), ['💬 Чат']);
+  assert.deepEqual(keyboard[6].map((button) => button.text), ['💬 Чат', '🔔 Упоминание']);
   assert.deepEqual(keyboard[7].map((button) => button.text), ['👥 Управление участниками']);
   assert.equal(keyboard[0][0].callback_data, 'settings:section:captcha:42');
   assert.equal(keyboard[0][1].callback_data, 'settings:section:links:42');
@@ -96,6 +96,7 @@ test('buildSettingsMainKeyboard returns a grouped layout with section buttons', 
   assert.equal(keyboard[5][0].callback_data, 'settings:section:streaks:42');
   assert.equal(keyboard[5][1].callback_data, 'settings:section:anonymous:42');
   assert.equal(keyboard[6][0].callback_data, 'settings:section:chat:42');
+  assert.equal(keyboard[6][1].callback_data, 'settings:section:mention:42');
   assert.equal(keyboard[7][0].callback_data, 'settings:section:members:42');
 });
 

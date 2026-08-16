@@ -350,6 +350,7 @@ function buildSettingsMainKeyboard(chatId) {
     ],
     [
       { text: '💬 Чат', callback_data: `settings:section:chat:${chatId}` },
+      { text: '🔔 Упоминание', callback_data: `settings:section:mention:${chatId}` },
     ],
     [
       { text: '👥 Управление участниками', callback_data: `settings:section:members:${chatId}` },
@@ -4627,6 +4628,8 @@ function createBot() {
         await showSettingsAnonymousMenu(ctx, chatId);
       } else if (parsed.section === 'chat') {
         await showSettingsChatMenu(ctx, chatId);
+      } else if (parsed.section === 'mention') {
+        await showMentionNotificationMenu(ctx, chatId);
       } else if (parsed.section === 'members') {
         await showMembersManagementMenu(ctx, chatId);
       } else if (parsed.section === 'commands') {
