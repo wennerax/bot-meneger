@@ -2869,7 +2869,7 @@ function createBot() {
         }
         const arrayBuffer = await response.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
-        const rawMimeType = response.headers.get('content-type') || '';
+            const rawMimeType = response.headers.get('content-type') || '';
         const detectedMimeType = detectImageMimeTypeFromBuffer(buffer);
         const inferredMimeType = inferMediaMimeType(fileUrl, fallbackMimeType);
 
@@ -2882,6 +2882,10 @@ function createBot() {
           : (detectedMimeType || inferredMimeType);
 
         if (!mimeType || !mimeType.startsWith('image/') || !supportedImageMimeTypes.has(mimeType)) {
+          return null;
+        }
+
+        if (fallbackMimeType === 'image/webp' && (!detectedMimeType || detectedMimeType !== 'image/webp')) {
           return null;
         }
 
@@ -2991,8 +2995,16 @@ function createBot() {
       }
       return positive && !negative;
     } catch (error) {
-      console.warn('AI media analysis failed:', error?.message || error);
-      if (shouldFailClosedForMedia(payload, error?.message || '', '')) {
+      const messageText = String(error?.message || error || '');
+      const isUnsupportedStickerPayload = (payload.type === 'sticker' || payload.type === 'animation')
+        && /invalid image|not represent a valid image|unsupported image|image data you provided/i.test(messageText);
+
+      if (isUnsupportedStickerPayload) {
+        return false;
+      }
+
+      console.warn('AI media analysis failed:', messageText);
+      if (shouldFailClosedForMedia(payload, messageText, '')) {
         return true;
       }
       // If the failure is due to billing (402 / Insufficient Balance), disable Media AI for this chat
