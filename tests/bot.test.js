@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage } = require('../app/bot');
+const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage, shouldFailClosedForMedia } = require('../app/bot');
 const { buildAiRequestPayload, normalizeMultimodalInputForResponses } = require('../app/ai');
 const premiumEmojis = require('../app/premium_emojis');
 
@@ -175,6 +175,12 @@ test('isChannelPostInGroupMessage ignores messages sent on behalf of a channel b
   assert.equal(isChannelPostInGroupMessage({ sender_chat: { type: 'channel' }, from: { id: 123 } }), false);
   assert.equal(isChannelPostInGroupMessage({ sender_chat: { type: 'channel' } }), true);
   assert.equal(isChannelPostInGroupMessage({ forward_from_chat: { type: 'channel' } }), true);
+});
+
+test('shouldFailClosedForMedia blocks sticker media when AI cannot validate it', () => {
+  assert.equal(shouldFailClosedForMedia({ type: 'sticker' }, 'The image data you provided does not represent a valid image.', ''), true);
+  assert.equal(shouldFailClosedForMedia({ type: 'sticker' }, '', 'непонятно'), true);
+  assert.equal(shouldFailClosedForMedia({ type: 'photo' }, 'The image data you provided does not represent a valid image.', ''), false);
 });
 
 test('buildSettingsFirstMessageKeyboard exposes text, buttons and media controls', () => {

@@ -1732,6 +1732,30 @@ function buildBotAdminListMessage(primaryAdminLabel, auxiliaryAdminLabels = []) 
 
 const ai = require('./ai');
 
+function shouldFailClosedForMedia(payload, errorMessage = '', normalizedAnswer = '') {
+  if (!payload || !payload.type) {
+    return false;
+  }
+
+  const isStickerOrAnim = payload.type === 'sticker' || payload.type === 'animation';
+  if (!isStickerOrAnim) {
+    return false;
+  }
+
+  const text = String(errorMessage || normalizedAnswer || '').trim();
+  if (!text) {
+    return true;
+  }
+
+  const safePatterns = /(?:^|\b)(нет|no|false|safe|безопасно|безопасный|not adult|no adult|не содержит|не содержит взросл|не содержит порно|не содержит обнаж)(?:$|\b)/i;
+  if (safePatterns.test(text)) {
+    return false;
+  }
+
+  return /invalid image|not represent a valid image|unsupported image|unclear response|image data you provided|непонятно|unclear|ambiguous|unknown|not clear|не уверен|can't determine/i.test(text)
+    || /\b(да|yes|true|adult|порно|porn|эротик|нагота|голая|сексуал|nude|nudity|sexual|sexy)\b/i.test(text);
+}
+
 function createBot() {
   const config = loadConfig();
   const bot = new Telegraf(config.botToken || '');
@@ -2881,7 +2905,7 @@ function createBot() {
 
     const dataUrl = await getFileBase64DataUrl(fileUrl, payload.mimeType);
     if (!dataUrl) {
-      return false;
+      return shouldFailClosedForMedia(payload, 'invalid image payload', '');
     }
 
     const mediaTypeLabel = payload.type === 'sticker' ? 'стикер' : payload.type === 'animation' ? 'GIF/анимация' : payload.type === 'document' ? 'документ с изображением' : 'медиа-файл';
@@ -2933,10 +2957,16 @@ function createBot() {
 
       if (!positive && !negative) {
         console.warn('AI media analysis returned unclear response:', normalized, 'for media:', fileUrl);
+        if (shouldFailClosedForMedia(payload, '', normalized)) {
+          return true;
+        }
       }
       return positive && !negative;
     } catch (error) {
       console.warn('AI media analysis failed:', error?.message || error);
+      if (shouldFailClosedForMedia(payload, error?.message || '', '')) {
+        return true;
+      }
       // If the failure is due to billing (402 / Insufficient Balance), disable Media AI for this chat
       try {
         const bodyText = error?.body || error?.message || '';
@@ -6431,6 +6461,7 @@ module.exports = {
   buildSettingsAnonymousKeyboard,
   isAnonymousSenderMessage,
   isChannelPostInGroupMessage,
+  shouldFailClosedForMedia,
   parseSettingsAction,
   detectForbiddenWord,
   isLinkMessage,
