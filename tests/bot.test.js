@@ -177,9 +177,9 @@ test('isChannelPostInGroupMessage ignores messages sent on behalf of a channel b
   assert.equal(isChannelPostInGroupMessage({ forward_from_chat: { type: 'channel' } }), true);
 });
 
-test('shouldFailClosedForMedia only blocks explicit adult sticker content, not harmless cat stickers', () => {
-  assert.equal(shouldFailClosedForMedia({ type: 'sticker' }, 'The image data you provided does not represent a valid image.', ''), false);
-  assert.equal(shouldFailClosedForMedia({ type: 'sticker' }, '', 'непонятно'), false);
+test('shouldFailClosedForMedia blocks invalid or adult sticker content but leaves photos alone', () => {
+  assert.equal(shouldFailClosedForMedia({ type: 'sticker' }, 'The image data you provided does not represent a valid image.', ''), true);
+  assert.equal(shouldFailClosedForMedia({ type: 'sticker' }, '', 'непонятно'), true);
   assert.equal(shouldFailClosedForMedia({ type: 'sticker' }, '', 'да, это порно'), true);
   assert.equal(shouldFailClosedForMedia({ type: 'photo' }, 'The image data you provided does not represent a valid image.', ''), false);
 });

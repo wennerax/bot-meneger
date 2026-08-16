@@ -1744,12 +1744,17 @@ function shouldFailClosedForMedia(payload, errorMessage = '', normalizedAnswer =
 
   const text = String(errorMessage || normalizedAnswer || '').trim();
   if (!text) {
-    return false;
+    return true;
   }
 
   const safePatterns = /(?:^|[^\p{L}\p{N}])(?:нет|no|false|safe|безопасно|безопасный|not adult|no adult|не содержит|не содержит взросл|не содержит порно|не содержит обнаж)(?:$|[^\p{L}\p{N}])/iu;
   if (safePatterns.test(text)) {
     return false;
+  }
+
+  const invalidImagePatterns = /invalid image|not represent a valid image|unsupported image|image data you provided|невалидн|not a valid image|unsupported media|can't determine|непонятно|unclear|ambiguous|unknown|not clear|не уверен/i;
+  if (invalidImagePatterns.test(text)) {
+    return true;
   }
 
   const explicitAdultPatterns = /(?:^|[^\p{L}\p{N}])(?:да|yes|true|adult|18\+|porn|порно|эротик|эротика|нагота|голая|сексуал|nude|nudity|sexual|sexy|explicit|обнаж|интим|intimate|xx|nsfw)(?:$|[^\p{L}\p{N}])/iu;
