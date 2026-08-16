@@ -2536,7 +2536,7 @@ function createBot() {
         [
           { text: enabled ? 'Отключить' : 'Включить', callback_data: `menu:mention_toggle:${enabled ? 'off' : 'on'}:${chatId}` },
         ],
-        [{ text: 'Назад', callback_data: 'menu:overview' }],
+        [{ text: 'Назад', callback_data: 'menu:mention_back' }],
       ],
     };
 
@@ -2845,6 +2845,8 @@ function createBot() {
       return null;
     }
 
+    const supportedImageMimeTypes = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+
     try {
       const controller = new AbortController();
       const timeoutMs = 15000;
@@ -2863,13 +2865,25 @@ function createBot() {
         const arrayBuffer = await response.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
         const rawMimeType = response.headers.get('content-type') || '';
-        const detectedMimeType = detectImageMimeTypeFromBuffer(buffer) || inferMediaMimeType(fileUrl, fallbackMimeType);
-        const mimeType = rawMimeType && rawMimeType !== 'application/octet-stream' && rawMimeType.startsWith('image/')
-          ? rawMimeType.split(';')[0].trim().toLowerCase()
-          : detectedMimeType;
-        if (!mimeType || !mimeType.startsWith('image/')) {
+        const detectedMimeType = detectImageMimeTypeFromBuffer(buffer);
+        const inferredMimeType = inferMediaMimeType(fileUrl, fallbackMimeType);
+
+        if (!buffer.length || (!detectedMimeType && (!inferredMimeType || !supportedImageMimeTypes.has(inferredMimeType)))) {
           return null;
         }
+
+        const mimeType = rawMimeType && rawMimeType !== 'application/octet-stream' && rawMimeType.startsWith('image/')
+          ? rawMimeType.split(';')[0].trim().toLowerCase()
+          : (detectedMimeType || inferredMimeType);
+
+        if (!mimeType || !mimeType.startsWith('image/') || !supportedImageMimeTypes.has(mimeType)) {
+          return null;
+        }
+
+        if (detectedMimeType && detectedMimeType !== mimeType && mimeType !== 'image/webp' && mimeType !== 'image/gif') {
+          return null;
+        }
+
         const base64 = buffer.toString('base64');
         return `data:${mimeType};base64,${base64}`;
       } finally {
@@ -2887,6 +2901,11 @@ function createBot() {
   async function analyzeMediaWithAi(ctx, message) {
     const payload = getMediaPayloadFromMessage(ctx);
     if (!payload || !payload.fileId || !payload.mimeType || !payload.mimeType.startsWith('image/')) {
+      return false;
+    }
+
+    const supportedImageMimeTypes = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+    if (!supportedImageMimeTypes.has(payload.mimeType)) {
       return false;
     }
 
@@ -5346,6 +5365,11 @@ function createBot() {
 
     if (!isBotAdmin(ctx)) {
       await ctx.reply('Эта команда доступна только администраторам.');
+      return;
+    }
+
+    if (action === 'mention_back') {
+      await ctx.editMessageText(formatMenuOverview(chatId), { reply_markup: getMenuKeyboard(chatId) });
       return;
     }
 
