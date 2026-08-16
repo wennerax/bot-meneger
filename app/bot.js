@@ -6033,7 +6033,7 @@ function createBot() {
             try {
               await replyWithAutoDelete(
                 ctx,
-                `🚫 Медиа-контент запрещён. Пользователь ${ctx.from.first_name || ctx.from.username || ctx.from.id} был предупреждён.`,
+                `🚫 Медиа-контент запрещён. Медиа удалено.`,
                 {},
                 2000,
               );
