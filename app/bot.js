@@ -6025,26 +6025,21 @@ function createBot() {
           const isAdult = await analyzeMediaWithAi(ctx, message);
           if (isAdult) {
             try {
-              const targetMember = await ctx.telegram.getChatMember(ctx.chat.id, ctx.from.id).catch(() => null);
-              if (targetMember && ['creator', 'administrator'].includes(targetMember.status)) {
-                console.warn('Skipping adult-media ban for protected group member:', ctx.from.id, targetMember.status);
-                return;
-              }
-            } catch (err) {
-              console.warn('Failed to inspect chat member before adult-media ban:', err?.message || err);
-            }
-
-            try {
               await deleteMessageSafely(ctx, message.message_id);
             } catch (err) {
               // ignore
             }
+
             try {
-              await ctx.telegram.banChatMember(ctx.chat.id, ctx.from.id);
+              await replyWithAutoDelete(
+                ctx,
+                `🚫 Медиа-контент запрещён. Пользователь ${ctx.from.first_name || ctx.from.username || ctx.from.id} был предупреждён.`,
+                {},
+                2000,
+              );
             } catch (err) {
-              console.warn('Failed to ban user for adult media:', err?.message || err);
+              console.warn('Failed to notify about blocked adult media:', err?.message || err);
             }
-            await ctx.reply(`🚫 Медиа-контент запрещён. Пользователь ${ctx.from.first_name || ctx.from.username || ctx.from.id} был заблокирован.`);
             return;
           }
         }
