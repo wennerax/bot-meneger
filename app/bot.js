@@ -2811,7 +2811,7 @@ function createBot() {
     return buildMenuKeyboard(chatId);
   }
 
-  function showMentionNotificationMenu(ctx, chatId) {
+  function showMentionNotificationMenu(ctx, chatId, source = 'menu') {
     const service = activeModerationService || defaultModerationService;
     const enabled = service.isMentionNotificationsEnabled(chatId);
     const text = [
@@ -2824,12 +2824,14 @@ function createBot() {
       `Статус: ${enabled ? 'Включено ✅' : 'Отключено ❌'}`,
     ].join('\n');
 
+    const backCallback = source === 'settings' ? `settings:main:${chatId}` : 'menu:overview';
+
     const keyboard = {
       inline_keyboard: [
         [
-          { text: enabled ? 'Отключить' : 'Включить', callback_data: `menu:mention_toggle:${enabled ? 'off' : 'on'}:${chatId}` },
+          { text: enabled ? 'Отключить' : 'Включить', callback_data: `menu:mention_toggle:${enabled ? 'off' : 'on'}:${chatId}:${source}` },
         ],
-        [{ text: 'Назад', callback_data: 'menu:overview' }],
+        [{ text: 'Назад', callback_data: backCallback }],
       ],
     };
 
@@ -5106,7 +5108,7 @@ function createBot() {
       } else if (parsed.section === 'chat') {
         await showSettingsChatMenu(ctx, chatId);
       } else if (parsed.section === 'mention') {
-        await showMentionNotificationMenu(ctx, chatId);
+        await showMentionNotificationMenu(ctx, chatId, 'settings');
       } else if (parsed.section === 'members') {
         await showMembersManagementMenu(ctx, chatId);
       } else if (parsed.section === 'commands') {
@@ -5824,13 +5826,16 @@ function createBot() {
     }
 
     if (action.startsWith('mention_toggle:')) {
-      const [, , enabledText = 'off', targetChatId = String(chatId)] = String(action).split(':');
+      const parts = String(action).split(':');
+      const enabledText = parts[1] || 'off';
+      const targetChatId = parts[2] || String(chatId);
+      const source = parts[3] || 'menu';
       const targetId = Number(targetChatId) || chatId;
       const service = activeModerationService || defaultModerationService;
       const nextEnabled = String(enabledText).toLowerCase() === 'on';
       service.setMentionNotificationsEnabled(targetId, nextEnabled);
       await safeAnswerCbQuery(ctx, nextEnabled ? '✅ Уведомления включены' : '❌ Уведомления отключены');
-      await showMentionNotificationMenu(ctx, targetId);
+      await showMentionNotificationMenu(ctx, targetId, source);
       return;
     }
 
