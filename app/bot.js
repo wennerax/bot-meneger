@@ -477,9 +477,29 @@ function buildSettingsAntiKeyboard(chatId) {
 function buildSettingsForwardsKeyboard(chatId) {
   return {
     inline_keyboard: [
-      [{ text: '➕ Добавить исключение', callback_data: `settings:add_forward:${chatId}` }],
-      [{ text: '❌ Удалить исключение', callback_data: `settings:remove_forward:${chatId}` }],
+      [
+        { text: '🔗 Каналы', callback_data: `settings:forwards_category:${chatId}:channels` },
+        { text: '👥 Группы', callback_data: `settings:forwards_category:${chatId}:groups` },
+      ],
+      [
+        { text: '👤 Пользователи', callback_data: `settings:forwards_category:${chatId}:users` },
+        { text: '🤖 Боты', callback_data: `settings:forwards_category:${chatId}:bots` },
+      ],
+      [
+        { text: '➕ Добавить', callback_data: `settings:add_forward:${chatId}` },
+        { text: '❌ Удалить', callback_data: `settings:remove_forward:${chatId}` },
+      ],
       [{ text: 'Назад', callback_data: `settings:section:anti:${chatId}` }],
+    ],
+  };
+}
+
+function buildSettingsForwardsCategoryKeyboard(chatId, category) {
+  return {
+    inline_keyboard: [
+      [{ text: '➕ Добавить в категорию', callback_data: `settings:add_forward_category:${chatId}:${category}` }],
+      [{ text: '❌ Удалить из категории', callback_data: `settings:remove_forward_category:${chatId}:${category}` }],
+      [{ text: 'Назад', callback_data: `settings:forwards_menu:${chatId}` }],
     ],
   };
 }
@@ -1105,6 +1125,40 @@ async function showSettingsForwardsMenu(ctx, chatId) {
   ].join('\n');
 
   await ctx.editMessageText(text, { reply_markup: buildSettingsForwardsKeyboard(chatId) });
+}
+
+async function showSettingsForwardsCategoryMenu(ctx, chatId, category) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  const moderationService = activeModerationService || defaultModerationService;
+  const forwards = moderationService.getAllowedForwards(chatId);
+  
+  const categoryLabels = {
+    channels: '🔗 Каналы',
+    groups: '👥 Группы',
+    users: '👤 Пользователи',
+    bots: '🤖 Боты',
+  };
+
+  const categoryDescriptions = {
+    channels: 'Разрешённые каналы для пересылок',
+    groups: 'Разрешённые группы для пересылок',
+    users: 'Разрешённые пользователи для пересылок',
+    bots: 'Разрешённые боты для пересылок',
+  };
+
+  const text = [
+    categoryLabels[category] || 'Категория',
+    '',
+    categoryDescriptions[category] || '',
+    `Всего разрешённых источников: ${forwards.length}`,
+    forwards.length ? `• ${forwards.join('\n• ')}` : 'Список исключений пуст.',
+  ].join('\n');
+
+  await ctx.editMessageText(text, { reply_markup: buildSettingsForwardsCategoryKeyboard(chatId, category) });
 }
 
 async function showSettingsAntiMenu(ctx, chatId) {
@@ -3196,7 +3250,11 @@ function createBot() {
       }
       if (moderationService.addAllowedForward(groupId, value)) {
         await ctx.reply(`✅ Исключение добавлено: ${value}`);
-        await showSettingsForwardsMenu(ctx, groupId);
+        if (pending.category) {
+          await showSettingsForwardsCategoryMenu(ctx, groupId, pending.category);
+        } else {
+          await showSettingsForwardsMenu(ctx, groupId);
+        }
       } else {
         await ctx.reply('⚠️ Это значение уже добавлено или некорректно.');
       }
@@ -3212,7 +3270,11 @@ function createBot() {
       }
       if (moderationService.removeAllowedForward(groupId, value)) {
         await ctx.reply(`✅ Исключение удалено: ${value}`);
-        await showSettingsForwardsMenu(ctx, groupId);
+        if (pending.category) {
+          await showSettingsForwardsCategoryMenu(ctx, groupId, pending.category);
+        } else {
+          await showSettingsForwardsMenu(ctx, groupId);
+        }
       } else {
         await ctx.reply('⚠️ Такого исключения нет в списке.');
       }
@@ -4999,15 +5061,37 @@ function createBot() {
       return;
     }
 
+    if (parsed.target === 'forwards_category') {
+      const category = parsed.value || 'channels';
+      await showSettingsForwardsCategoryMenu(ctx, chatId, category);
+      return;
+    }
+
     if (parsed.target === 'add_forward') {
       setPendingSettingsAction(ctx, { action: 'settings_forward_add', groupId: chatId });
       await ctx.reply(parseSettingsPrompt('settings_forward_add'));
       return;
     }
 
+    if (parsed.target === 'add_forward_category') {
+      const category = parsed.value || 'channels';
+      const categoryNames = { channels: 'канал', groups: 'группу', users: 'пользователя', bots: 'бота' };
+      setPendingSettingsAction(ctx, { action: 'settings_forward_add', groupId: chatId, category });
+      await ctx.reply(`Отправьте @username, t.me/username или ID ${categoryNames[category]} для добавления в исключения.`);
+      return;
+    }
+
     if (parsed.target === 'remove_forward') {
       setPendingSettingsAction(ctx, { action: 'settings_forward_remove', groupId: chatId });
       await ctx.reply(parseSettingsPrompt('settings_forward_remove'));
+      return;
+    }
+
+    if (parsed.target === 'remove_forward_category') {
+      const category = parsed.value || 'channels';
+      const categoryNames = { channels: 'канала', groups: 'группы', users: 'пользователя', bots: 'бота' };
+      setPendingSettingsAction(ctx, { action: 'settings_forward_remove', groupId: chatId, category });
+      await ctx.reply(`Отправьте @username, t.me/username или ID ${categoryNames[category]} для удаления из исключений.`);
       return;
     }
 
