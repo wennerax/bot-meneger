@@ -2426,24 +2426,46 @@ function createBot() {
         const agreementText = moderationService.getAgreementText(state.chatId) || 'Прочитайте правила и подтвердите согласие.';
         const media = moderationService.getAgreementMedia(state.chatId);
 
+        let mainMessage = null;
         const agreementMessageIds = [];
+
+        // Send media with caption (if available)
         if (media && media.fileId) {
           try {
-            const mediaPayload = { chat_id: state.chatId, media: JSON.stringify({ type: media.type, media: media.fileId }) };
-            const sentMedia = await ctx.telegram.sendMediaGroup(state.chatId, [mediaPayload]);
-            if (Array.isArray(sentMedia)) {
-              agreementMessageIds.push(...sentMedia.map((item) => item?.message_id).filter((id) => id));
+            if (media.type === 'photo') {
+              mainMessage = await ctx.telegram.sendPhoto(state.chatId, media.fileId,
+                { caption: agreementText, disable_notification: true });
+            } else if (media.type === 'video') {
+              mainMessage = await ctx.telegram.sendVideo(state.chatId, media.fileId,
+                { caption: agreementText, disable_notification: true });
+            } else if (media.type === 'animation') {
+              mainMessage = await ctx.telegram.sendAnimation(state.chatId, media.fileId,
+                { caption: agreementText, disable_notification: true });
+            } else if (media.type === 'document') {
+              mainMessage = await ctx.telegram.sendDocument(state.chatId, media.fileId,
+                { caption: agreementText, disable_notification: true });
+            } else if (media.type === 'audio') {
+              mainMessage = await ctx.telegram.sendAudio(state.chatId, media.fileId,
+                { caption: agreementText, disable_notification: true });
+            } else if (media.type === 'voice') {
+              mainMessage = await ctx.telegram.sendVoice(state.chatId, media.fileId,
+                { caption: agreementText, disable_notification: true });
             }
           } catch (error) {
             // ignore unsupported media and keep agreement text
           }
         }
 
-        const agreementTextMessage = await ctx.telegram.sendMessage(state.chatId, agreementText, { disable_notification: true });
-        if (agreementTextMessage?.message_id) {
-          agreementMessageIds.push(agreementTextMessage.message_id);
+        // Send text message if no media or media send failed
+        if (!mainMessage) {
+          mainMessage = await ctx.telegram.sendMessage(state.chatId, agreementText, { disable_notification: true });
         }
 
+        if (mainMessage?.message_id) {
+          agreementMessageIds.push(mainMessage.message_id);
+        }
+
+        // Send poll as a reply to the agreement message
         const agreementPoll = await ctx.telegram.sendPoll(state.chatId,
           'Вы ознакомились с правилами и соглашаетесь с ними?',
           ['Согласен с правилами', 'Не согласен'],
@@ -2453,6 +2475,7 @@ function createBot() {
             is_anonymous: false,
             open_period: 300,
             disable_notification: true,
+            reply_to_message_id: mainMessage?.message_id,
           }
         );
 
