@@ -508,6 +508,7 @@ function buildSettingsForwardsCategoryKeyboard(chatId, category) {
 function buildSettingsForwardsPunishmentKeyboard(chatId, category) {
   return {
     inline_keyboard: [
+      [{ text: '🔴 Выкл', callback_data: `settings:set_forward_punishment:${chatId}:${category}:off` }],
       [{ text: '⚠️ Предупреждение', callback_data: `settings:set_forward_punishment:${chatId}:${category}:warn` }],
       [{ text: '🔇 Мут', callback_data: `settings:set_forward_punishment:${chatId}:${category}:mute` }],
       [{ text: '🚫 Кик', callback_data: `settings:set_forward_punishment:${chatId}:${category}:kick` }],
@@ -1200,6 +1201,7 @@ async function showSettingsForwardsSettingsMenu(ctx, chatId, category) {
   };
 
   const punishmentLabels = {
+    off: '🔴 Выкл (только удалить)',
     warn: '⚠️ Предупреждение',
     mute: '🔇 Мут',
     kick: '🚫 Кик',
@@ -1241,6 +1243,7 @@ async function showSettingsForwardsPunishmentMenu(ctx, chatId, category) {
   };
 
   const punishmentLabels = {
+    off: '🔴 Выкл (только удалить)',
     warn: '⚠️ Предупреждение',
     mute: '🔇 Мут',
     kick: '🚫 Кик',
