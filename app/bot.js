@@ -405,6 +405,9 @@ function buildMenuKeyboard(chatId) {
         { text: 'Упоминание', callback_data: 'menu:mention' },
         { text: 'Управление Участниками', callback_data: 'menu:members' },
       ],
+      [
+        { text: '🤖 От Бота', callback_data: 'menu:bot_message' },
+      ],
     ],
   };
 }
@@ -3821,10 +3824,25 @@ function createBot() {
       return true;
     }
 
+    if (pending.action === 'bot_message' && ctx.message.text) {
+      const groupId = pending.groupId || ctx.chat.id;
+      try {
+        await ctx.telegram.sendMessage(groupId, ctx.message.text, {
+          entities: ctx.message.entities || [],
+          parse_mode: undefined,
+        });
+        await ctx.reply('✅ Сообщение отправлено в группу от имени бота.');
+      } catch (error) {
+        await ctx.reply(`⚠️ Ошибка при отправке сообщения: ${error?.message || error}`);
+      }
+      clearPendingMenuAction(ctx);
+      return true;
+    }
+
     return false;
   }
 
-  async function menuCommand(ctx) {
+  function menuCommand(ctx) {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
       ctx.reply('Эта команда доступна только администраторам.');
@@ -3832,12 +3850,48 @@ function createBot() {
     }
 
     const chatId = Number(ctx.chat?.id || 0);
-    if (!chatId || !(await canManageGroupSettings(ctx, chatId))) {
-      await ctx.reply('У вас нет прав менять настройки этой группы.');
+    if (!chatId) {
+      ctx.reply('⚠️ Не удалось определить группу.');
       return;
     }
 
-    await ctx.reply(formatMenuOverview(chatId), { reply_markup: getMenuKeyboard(chatId) });
+    ctx.reply(formatMenuOverview(chatId), { reply_markup: getMenuKeyboard(chatId) });
+  }
+
+  async function botCommand(ctx) {
+    ensureGroup(ctx);
+    if (!isBotAdmin(ctx)) {
+      ctx.reply('Эта команда доступна только администраторам.');
+      return;
+    }
+
+    const chatId = Number(ctx.chat?.id || 0);
+    if (!chatId) {
+      await ctx.reply('⚠️ Не удалось определить группу.');
+      return;
+    }
+
+    const args = ctx.message.text.replace(/^\/bot(?:@[\w_]+)?\s*/i, '').trim();
+    if (!args) {
+      await ctx.reply('📝 Используйте: /bot <сообщение>\n\nПример: /bot Привет, участники! 👋');
+      return;
+    }
+
+    try {
+      await ctx.telegram.sendMessage(chatId, args, {
+        entities: ctx.message.entities?.filter(e => {
+          const startOffset = e.offset - 5; // "/bot " is 5 characters
+          return startOffset >= 0;
+        }).map(e => ({
+          ...e,
+          offset: e.offset - 5,
+        })) || [],
+        parse_mode: undefined,
+      });
+      await ctx.reply('✅ Сообщение отправлено в группу от имени бота.');
+    } catch (error) {
+      await ctx.reply(`⚠️ Ошибка при отправке сообщения: ${error?.message || error}`);
+    }
   }
 
   function getHelpPages() {
@@ -5080,6 +5134,7 @@ function createBot() {
 
   bot.command(['start', 'начало'], startCommand);
   bot.command(['help', 'помощь'], helpCommand);
+  bot.command(['bot', 'бот'], botCommand);
 
   bot.action(/^help:(\d+)$/, async (ctx) => {
     const pageIndex = Number(ctx.match[1]);
@@ -5966,6 +6021,12 @@ function createBot() {
     if (action === 'media') {
       setPendingMenuAction(ctx, { action: 'media' });
       await ctx.reply(getMenuActionInstructions('media'));
+      return;
+    }
+
+    if (action === 'bot_message') {
+      setPendingMenuAction(ctx, { action: 'bot_message', groupId: chatId });
+      await ctx.reply('📝 Напишите сообщение, которое бот отправит в эту группу. Можно использовать любые ссылки, эмодзи, символы и форматирование.');
       return;
     }
 
@@ -7007,7 +7068,7 @@ function createBot() {
       }
     }
 
-    if (ctx.chat && isGroupChat(ctx) && getPendingMenuAction(ctx)) {
+    if (ctx.chat && getPendingMenuAction(ctx)) {
       const handled = await processPendingMenuAction(ctx);
       if (handled) {
         return;
