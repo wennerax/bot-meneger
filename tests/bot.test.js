@@ -263,13 +263,13 @@ test('parseSettingsAction extracts chat access mode changes', () => {
 test('parseSettingsAction extracts the selected group and action type', () => {
   const parsed = parseSettingsAction('select:42');
 
-  assert.deepEqual(parsed, { type: 'select', target: 'select', chatId: 42, section: '', value: '42' });
+  assert.deepEqual(parsed, { type: 'select', target: 'select', chatId: 42, section: '', value: '42', extra: '' });
 });
 
 test('parseSettingsAction supports negative Telegram group IDs', () => {
   const parsed = parseSettingsAction('first_buttons:-1001234567890');
 
-  assert.deepEqual(parsed, { type: 'first_buttons', target: 'first_buttons', chatId: -1001234567890, section: '', value: '' });
+  assert.deepEqual(parsed, { type: 'first_buttons', target: 'first_buttons', chatId: -1001234567890, section: '', value: '', extra: '' });
 });
 
 test('isGroupMemberWithProfileChangePermission accepts creators and admins with change-info rights', () => {

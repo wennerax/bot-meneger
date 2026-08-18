@@ -499,7 +499,29 @@ function buildSettingsForwardsCategoryKeyboard(chatId, category) {
     inline_keyboard: [
       [{ text: '➕ Добавить в категорию', callback_data: `settings:add_forward_category:${chatId}:${category}` }],
       [{ text: '❌ Удалить из категории', callback_data: `settings:remove_forward_category:${chatId}:${category}` }],
+      [{ text: '⚙️ Настройки', callback_data: `settings:forwards_settings:${chatId}:${category}` }],
       [{ text: 'Назад', callback_data: `settings:forwards_menu:${chatId}` }],
+    ],
+  };
+}
+
+function buildSettingsForwardsPunishmentKeyboard(chatId, category) {
+  return {
+    inline_keyboard: [
+      [{ text: '⚠️ Предупреждение', callback_data: `settings:set_forward_punishment:${chatId}:${category}:warn` }],
+      [{ text: '🔇 Мут', callback_data: `settings:set_forward_punishment:${chatId}:${category}:mute` }],
+      [{ text: '🚫 Кик', callback_data: `settings:set_forward_punishment:${chatId}:${category}:kick` }],
+      [{ text: '🚫🚫 Бан', callback_data: `settings:set_forward_punishment:${chatId}:${category}:ban` }],
+      [{ text: 'Назад', callback_data: `settings:forwards_settings:${chatId}:${category}` }],
+    ],
+  };
+}
+
+function buildSettingsForwardsDeleteMessageKeyboard(chatId, category, currentValue) {
+  return {
+    inline_keyboard: [
+      [{ text: currentValue ? '✅ Да (удалять)' : '❌ Нет (не удалять)', callback_data: `settings:set_forward_delete:${chatId}:${category}:${!currentValue}` }],
+      [{ text: 'Назад', callback_data: `settings:forwards_settings:${chatId}:${category}` }],
     ],
   };
 }
@@ -1161,6 +1183,104 @@ async function showSettingsForwardsCategoryMenu(ctx, chatId, category) {
   await ctx.editMessageText(text, { reply_markup: buildSettingsForwardsCategoryKeyboard(chatId, category) });
 }
 
+async function showSettingsForwardsSettingsMenu(ctx, chatId, category) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  const moderationService = activeModerationService || defaultModerationService;
+  const settings = moderationService.getForwardsSettings(chatId, category);
+  
+  const categoryLabels = {
+    channels: '🔗 Каналы',
+    groups: '👥 Группы',
+    users: '👤 Пользователи',
+    bots: '🤖 Боты',
+  };
+
+  const punishmentLabels = {
+    warn: '⚠️ Предупреждение',
+    mute: '🔇 Мут',
+    kick: '🚫 Кик',
+    ban: '🚫🚫 Бан',
+  };
+
+  const text = [
+    `⚙️ Настройки ${categoryLabels[category] || 'категории'}`,
+    '',
+    `Наказание: ${punishmentLabels[settings.punishmentMode] || settings.punishmentMode}`,
+    `Удалять сообщения: ${settings.deleteMessage ? '✅ Да' : '❌ Нет'}`,
+  ].join('\n');
+
+  const keyboard = {
+    inline_keyboard: [
+      [{ text: '⚠️ Наказание', callback_data: `settings:forwards_punishment:${chatId}:${category}` }],
+      [{ text: settings.deleteMessage ? '✅ Удалять сообщения' : '❌ Не удалять сообщения', callback_data: `settings:forwards_delete:${chatId}:${category}` }],
+      [{ text: 'Назад', callback_data: `settings:forwards_category:${chatId}:${category}` }],
+    ],
+  };
+
+  await ctx.editMessageText(text, { reply_markup: keyboard });
+}
+
+async function showSettingsForwardsPunishmentMenu(ctx, chatId, category) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  const moderationService = activeModerationService || defaultModerationService;
+  const settings = moderationService.getForwardsSettings(chatId, category);
+  
+  const categoryLabels = {
+    channels: '🔗 Каналы',
+    groups: '👥 Группы',
+    users: '👤 Пользователи',
+    bots: '🤖 Боты',
+  };
+
+  const punishmentLabels = {
+    warn: '⚠️ Предупреждение',
+    mute: '🔇 Мут',
+    kick: '🚫 Кик',
+    ban: '🚫🚫 Бан',
+  };
+
+  const text = [
+    `Выберите наказание для ${categoryLabels[category] || 'категории'}:`,
+    '',
+    `Текущее: ${punishmentLabels[settings.punishmentMode] || settings.punishmentMode}`,
+  ].join('\n');
+
+  await ctx.editMessageText(text, { reply_markup: buildSettingsForwardsPunishmentKeyboard(chatId, category) });
+}
+
+async function showSettingsForwardsDeleteMessageMenu(ctx, chatId, category) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  const moderationService = activeModerationService || defaultModerationService;
+  const settings = moderationService.getForwardsSettings(chatId, category);
+  
+  const categoryLabels = {
+    channels: '🔗 Каналы',
+    groups: '👥 Группы',
+    users: '👤 Пользователи',
+    bots: '🤖 Боты',
+  };
+
+  const text = [
+    `Удалять пересылки от ${categoryLabels[category] || 'категории'}?`,
+    '',
+    `Текущее: ${settings.deleteMessage ? '✅ Да' : '❌ Нет'}`,
+  ].join('\n');
+
+  await ctx.editMessageText(text, { reply_markup: buildSettingsForwardsDeleteMessageKeyboard(chatId, category, settings.deleteMessage) });
+}
+
 async function showSettingsAntiMenu(ctx, chatId) {
   if (!(await canManageGroupSettings(ctx, chatId))) {
     await ctx.reply('У вас нет прав менять настройки этой группы.');
@@ -1457,6 +1577,7 @@ function parseSettingsAction(action) {
 
   let parsedChatId = 0;
   let value = '';
+  let extra = '';
   const args = normalizedParts.slice(1);
   const chatIdIndex = args.findIndex((part) => /^-?\d+$/.test(part));
 
@@ -1486,7 +1607,8 @@ function parseSettingsAction(action) {
     parsedChatId = Number(normalizedParts[1]) || 0;
     value = '';
   } else if (nonNumericRemaining.length > 0) {
-    value = String(nonNumericRemaining[nonNumericRemaining.length - 1] || '');
+    value = String(nonNumericRemaining[0] || '');
+    extra = String(nonNumericRemaining[1] || '');
   } else if (remainingArgs.length > 0) {
     value = String(remainingArgs[remainingArgs.length - 1] || '');
   }
@@ -1497,6 +1619,7 @@ function parseSettingsAction(action) {
     chatId: parsedChatId,
     section: actionType === 'section' ? normalizedParts[1] || '' : '',
     value,
+    extra,
   };
 }
 
@@ -5092,6 +5215,42 @@ function createBot() {
       const categoryNames = { channels: 'канала', groups: 'группы', users: 'пользователя', bots: 'бота' };
       setPendingSettingsAction(ctx, { action: 'settings_forward_remove', groupId: chatId, category });
       await ctx.reply(`Отправьте @username, t.me/username или ID ${categoryNames[category]} для удаления из исключений.`);
+      return;
+    }
+
+    if (parsed.target === 'forwards_settings') {
+      const category = parsed.value || 'channels';
+      await showSettingsForwardsSettingsMenu(ctx, chatId, category);
+      return;
+    }
+
+    if (parsed.target === 'forwards_punishment') {
+      const category = parsed.value || 'channels';
+      await showSettingsForwardsPunishmentMenu(ctx, chatId, category);
+      return;
+    }
+
+    if (parsed.target === 'set_forward_punishment') {
+      const category = parsed.value || 'channels';
+      const punishment = parsed.extra || 'warn';
+      const service = activeModerationService || defaultModerationService;
+      service.setForwardsPunishment(chatId, category, punishment);
+      await showSettingsForwardsSettingsMenu(ctx, chatId, category);
+      return;
+    }
+
+    if (parsed.target === 'forwards_delete') {
+      const category = parsed.value || 'channels';
+      await showSettingsForwardsDeleteMessageMenu(ctx, chatId, category);
+      return;
+    }
+
+    if (parsed.target === 'set_forward_delete') {
+      const category = parsed.value || 'channels';
+      const deleteMessage = parsed.extra === 'true';
+      const service = activeModerationService || defaultModerationService;
+      service.setForwardsDeleteMessage(chatId, category, deleteMessage);
+      await showSettingsForwardsSettingsMenu(ctx, chatId, category);
       return;
     }
 

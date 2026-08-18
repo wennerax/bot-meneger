@@ -201,6 +201,23 @@ class ModerationService {
         const forwardList = chat.allowedForwards.map((item) => String(item).trim()).filter(Boolean);
         return [...new Set(forwardList)];
       })(),
+      forwardsSettings: (() => {
+        const defaultSettings = { punishmentMode: 'warn', deleteMessage: true };
+        if (!chat.forwardsSettings || typeof chat.forwardsSettings !== 'object') {
+          return {
+            channels: { ...defaultSettings },
+            groups: { ...defaultSettings },
+            users: { ...defaultSettings },
+            bots: { ...defaultSettings },
+          };
+        }
+        return {
+          channels: Object.assign({ ...defaultSettings }, chat.forwardsSettings.channels),
+          groups: Object.assign({ ...defaultSettings }, chat.forwardsSettings.groups),
+          users: Object.assign({ ...defaultSettings }, chat.forwardsSettings.users),
+          bots: Object.assign({ ...defaultSettings }, chat.forwardsSettings.bots),
+        };
+      })(),
       menu: {
         enabled: chat.menu && typeof chat.menu.enabled === 'boolean' ? chat.menu.enabled : true,
         text: normalizeTextPayload((chat.menu && typeof chat.menu.text !== 'undefined')
@@ -861,6 +878,31 @@ class ModerationService {
       return false;
     }
     chat.allowedForwards = [];
+    this._save();
+    return true;
+  }
+
+  getForwardsSettings(chatId, category) {
+    const chat = this._getChat(chatId);
+    return chat.forwardsSettings[category] || { punishmentMode: 'warn', deleteMessage: true };
+  }
+
+  setForwardsPunishment(chatId, category, punishmentMode) {
+    const chat = this._getChat(chatId);
+    if (!chat.forwardsSettings[category]) {
+      chat.forwardsSettings[category] = { punishmentMode: 'warn', deleteMessage: true };
+    }
+    chat.forwardsSettings[category].punishmentMode = punishmentMode;
+    this._save();
+    return true;
+  }
+
+  setForwardsDeleteMessage(chatId, category, deleteMessage) {
+    const chat = this._getChat(chatId);
+    if (!chat.forwardsSettings[category]) {
+      chat.forwardsSettings[category] = { punishmentMode: 'warn', deleteMessage: true };
+    }
+    chat.forwardsSettings[category].deleteMessage = Boolean(deleteMessage);
     this._save();
     return true;
   }
