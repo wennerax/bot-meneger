@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildBulkModerationSummaryMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage, shouldFailClosedForMedia } = require('../app/bot');
+const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildBulkModerationSummaryMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage, shouldFailClosedForMedia, cleanupAgreementMessages, handleAgreementDecision } = require('../app/bot');
 const { buildAiRequestPayload, normalizeMultimodalInputForResponses } = require('../app/ai');
 const premiumEmojis = require('../app/premium_emojis');
 
@@ -256,6 +256,41 @@ test('buildSettingsRulesMenuText includes the current rules text', () => {
   assert.match(text, /Настройки правил группы/);
   assert.match(text, /Текущие правила:/);
   assert.match(text, /Соблюдайте уважение в чате/);
+});
+
+test('cleanupAgreementMessages removes agreement text and poll without banning on refusal', async () => {
+  const deleted = [];
+  let kicked = false;
+  let restricted = false;
+  const telegram = {
+    deleteMessage: async (chatId, messageId) => {
+      deleted.push({ chatId, messageId });
+    },
+    kickChatMember: async () => {
+      kicked = true;
+    },
+    restrictChatMember: async () => {
+      restricted = true;
+    },
+    sendMessage: async (chatId, text) => ({ message_id: 900, chat: { id: chatId }, text }),
+  };
+
+  const state = {
+    chatId: 123,
+    userId: 456,
+    displayName: 'Алиса',
+    pollMessageId: 777,
+    agreementMessageIds: [111, 222],
+  };
+
+  await handleAgreementDecision(telegram, state, false);
+
+  assert.equal(kicked, false);
+  assert.equal(restricted, true);
+  assert.equal(deleted.some((item) => item.messageId === 111), true);
+  assert.equal(deleted.some((item) => item.messageId === 222), true);
+  assert.equal(deleted.some((item) => item.messageId === 777), true);
+  assert.equal(deleted.some((item) => item.messageId === 900), false);
 });
 
 test('parseSettingsAction extracts chat access mode changes', () => {

@@ -117,6 +117,72 @@ function getGroupDisplayName(chatId, fallback = null) {
   return groupRecord?.title || fallback || String(id);
 }
 
+function buildMutePermissions(enabled = true) {
+  return {
+    can_send_messages: enabled,
+    can_send_media_messages: enabled,
+    can_send_polls: enabled,
+    can_send_other_messages: enabled,
+    can_add_web_page_previews: enabled,
+    can_change_info: false,
+    can_invite_users: false,
+    can_pin_messages: false,
+    can_manage_topics: false,
+  };
+}
+
+async function cleanupAgreementMessages(telegram, chatId, messageIds = []) {
+  if (!telegram || !chatId || !Array.isArray(messageIds)) {
+    return;
+  }
+
+  const uniqueIds = [...new Set(messageIds.filter((messageId) => Number.isFinite(Number(messageId)) && Number(messageId) > 0))];
+  for (const messageId of uniqueIds) {
+    try {
+      await telegram.deleteMessage(chatId, Number(messageId));
+    } catch (deleteError) {
+      // ignore deletion errors for already-removed agreement messages
+    }
+  }
+}
+
+async function handleAgreementDecision(telegram, state, accepted) {
+  if (!state || !telegram) {
+    return;
+  }
+
+  const messageIds = Array.isArray(state.agreementMessageIds) ? [...state.agreementMessageIds] : [];
+  if (state.pollMessageId) {
+    messageIds.push(state.pollMessageId);
+  }
+
+  await cleanupAgreementMessages(telegram, state.chatId, messageIds);
+
+  if (accepted) {
+    await telegram.restrictChatMember(state.chatId, state.userId, buildMutePermissions(true));
+    const acceptedMessage = await telegram.sendMessage(state.chatId, `Пользователь ${state.displayName} подтвердил соглашение и получил доступ к чату.`);
+    scheduleDeleteMessage(telegram, state.chatId, acceptedMessage?.message_id);
+    return;
+  }
+
+  await telegram.restrictChatMember(state.chatId, state.userId, buildMutePermissions(false));
+  const rejectedMessage = await telegram.sendMessage(state.chatId, `Пользователь ${state.displayName} не согласился с правилами. Доступ к чату не выдан.`);
+  scheduleDeleteMessage(telegram, state.chatId, rejectedMessage?.message_id);
+}
+
+function scheduleDeleteMessage(telegram, chatId, messageId, delay = 5000) {
+  if (!telegram || !chatId || !messageId) {
+    return;
+  }
+  setTimeout(async () => {
+    try {
+      await telegram.deleteMessage(chatId, messageId);
+    } catch (deleteError) {
+      // ignore deletion errors
+    }
+  }, delay);
+}
+
 function canSelfClearPunishmentHistory(ctx, targetUserId, actionName) {
   if (String(actionName || '').toLowerCase() !== 'clear_history') {
     return false;
@@ -2252,17 +2318,43 @@ function createBot() {
     });
   }
 
-  function scheduleDeleteMessage(telegram, chatId, messageId, delay = 5000) {
-    if (!chatId || !messageId) {
+  async function cleanupAgreementMessages(telegram, chatId, messageIds = []) {
+    if (!telegram || !chatId || !Array.isArray(messageIds)) {
       return;
     }
-    setTimeout(async () => {
+
+    const uniqueIds = [...new Set(messageIds.filter((messageId) => Number.isFinite(Number(messageId)) && Number(messageId) > 0))];
+    for (const messageId of uniqueIds) {
       try {
-        await telegram.deleteMessage(chatId, messageId);
+        await telegram.deleteMessage(chatId, Number(messageId));
       } catch (deleteError) {
-        // ignore deletion errors
+        // ignore deletion errors for already-removed agreement messages
       }
-    }, delay);
+    }
+  }
+
+  async function handleAgreementDecision(telegram, state, accepted) {
+    if (!state || !telegram) {
+      return;
+    }
+
+    const messageIds = Array.isArray(state.agreementMessageIds) ? state.agreementMessageIds : [];
+    if (state.pollMessageId) {
+      messageIds.push(state.pollMessageId);
+    }
+
+    await cleanupAgreementMessages(telegram, state.chatId, messageIds);
+
+    if (accepted) {
+      await telegram.restrictChatMember(state.chatId, state.userId, buildMutePermissions(true));
+      const acceptedMessage = await telegram.sendMessage(state.chatId, `Пользователь ${state.displayName} подтвердил соглашение и получил доступ к чату.`);
+      scheduleDeleteMessage(telegram, state.chatId, acceptedMessage?.message_id);
+      return;
+    }
+
+    await telegram.restrictChatMember(state.chatId, state.userId, buildMutePermissions(false));
+    const rejectedMessage = await telegram.sendMessage(state.chatId, `Пользователь ${state.displayName} не согласился с правилами. Доступ к чату не выдан.`);
+    scheduleDeleteMessage(telegram, state.chatId, rejectedMessage?.message_id);
   }
 
   function scheduleDeleteForContext(ctx, messageId, delay = 5000) {
@@ -2334,16 +2426,23 @@ function createBot() {
         const agreementText = moderationService.getAgreementText(state.chatId) || 'Прочитайте правила и подтвердите согласие.';
         const media = moderationService.getAgreementMedia(state.chatId);
 
+        const agreementMessageIds = [];
         if (media && media.fileId) {
           try {
             const mediaPayload = { chat_id: state.chatId, media: JSON.stringify({ type: media.type, media: media.fileId }) };
-            await ctx.telegram.sendMediaGroup(state.chatId, [mediaPayload]);
+            const sentMedia = await ctx.telegram.sendMediaGroup(state.chatId, [mediaPayload]);
+            if (Array.isArray(sentMedia)) {
+              agreementMessageIds.push(...sentMedia.map((item) => item?.message_id).filter((id) => id));
+            }
           } catch (error) {
             // ignore unsupported media and keep agreement text
           }
         }
 
-        await ctx.telegram.sendMessage(state.chatId, agreementText, { disable_notification: true });
+        const agreementTextMessage = await ctx.telegram.sendMessage(state.chatId, agreementText, { disable_notification: true });
+        if (agreementTextMessage?.message_id) {
+          agreementMessageIds.push(agreementTextMessage.message_id);
+        }
 
         const agreementPoll = await ctx.telegram.sendPoll(state.chatId,
           'Вы ознакомились с правилами и соглашаетесь с ними?',
@@ -2362,6 +2461,7 @@ function createBot() {
           userId: state.userId,
           displayName: state.displayName,
           pollMessageId: agreementPoll?.message_id,
+          agreementMessageIds,
           createdAt: Date.now(),
         });
 
@@ -6579,21 +6679,11 @@ function createBot() {
       agreementStates.delete(pollAnswer.poll_id);
 
       if (selectedOption === 0) {
-        await ctx.telegram.restrictChatMember(agreementState.chatId, agreementState.userId, buildMutePermissions(true));
-        const acceptedMessage = await ctx.telegram.sendMessage(agreementState.chatId, `Пользователь ${agreementState.displayName} подтвердил соглашение и получил доступ к чату.`);
-        scheduleDeleteMessage(ctx.telegram, agreementState.chatId, acceptedMessage?.message_id);
-        scheduleDeleteMessage(ctx.telegram, agreementState.chatId, agreementState.pollMessageId);
+        await handleAgreementDecision(ctx.telegram, agreementState, true);
         return;
       }
 
-      try {
-        await ctx.telegram.kickChatMember(agreementState.chatId, agreementState.userId);
-      } catch (error) {
-        // ignore
-      }
-      const rejectedMessage = await ctx.telegram.sendMessage(agreementState.chatId, `Пользователь ${agreementState.displayName} не согласился с правилами и исключён из группы.`);
-      scheduleDeleteMessage(ctx.telegram, agreementState.chatId, rejectedMessage?.message_id);
-      scheduleDeleteMessage(ctx.telegram, agreementState.chatId, agreementState.pollMessageId);
+      await handleAgreementDecision(ctx.telegram, agreementState, false);
       return;
     }
 
@@ -7358,6 +7448,8 @@ module.exports = {
   getGroupDisplayName,
   detectForwardedMessageCategory,
   startBot,
+  cleanupAgreementMessages,
+  handleAgreementDecision,
 };
 
 2
