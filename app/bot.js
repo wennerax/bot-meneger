@@ -2541,7 +2541,7 @@ function createBot() {
         [
           { text: enabled ? 'Отключить' : 'Включить', callback_data: `menu:mention_toggle:${enabled ? 'off' : 'on'}:${chatId}` },
         ],
-        [{ text: 'Назад', callback_data: 'menu:mention_back' }],
+        [{ text: 'Назад', callback_data: 'menu:overview' }],
       ],
     };
 
@@ -5382,11 +5382,6 @@ function createBot() {
 
     if (!isBotAdmin(ctx)) {
       await ctx.reply('Эта команда доступна только администраторам.');
-      return;
-    }
-
-    if (action === 'mention_back') {
-      await ctx.editMessageText(formatMenuOverview(chatId), { reply_markup: getMenuKeyboard(chatId) });
       return;
     }
 

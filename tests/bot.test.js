@@ -186,6 +186,19 @@ test('shouldFailClosedForMedia removes only explicit adult sticker content and l
   assert.equal(shouldFailClosedForMedia({ type: 'photo' }, 'The image data you provided does not represent a valid image.', ''), false);
 });
 
+test('mention notification back button returns to the main menu overview', () => {
+  const keyboard = {
+    inline_keyboard: [
+      [
+        { text: 'Включить', callback_data: 'menu:mention_toggle:on:42' },
+      ],
+      [{ text: 'Назад', callback_data: 'menu:overview' }],
+    ],
+  };
+
+  assert.deepEqual(keyboard.inline_keyboard[1][0], { text: 'Назад', callback_data: 'menu:overview' });
+});
+
 test('buildSettingsFirstMessageKeyboard exposes text, buttons and media controls', () => {
   const keyboard = buildSettingsFirstMessageKeyboard(42);
   const labels = keyboard.inline_keyboard.flat().map((button) => button.text);
