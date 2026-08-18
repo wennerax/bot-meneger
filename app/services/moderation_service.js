@@ -194,6 +194,13 @@ class ModerationService {
         const chatList = chat.allowedLinks.map((item) => String(item).trim().toLowerCase()).filter(Boolean);
         return [...new Set(chatList)];
       })(),
+      allowedForwards: (() => {
+        if (!Array.isArray(chat.allowedForwards)) {
+          return [];
+        }
+        const forwardList = chat.allowedForwards.map((item) => String(item).trim()).filter(Boolean);
+        return [...new Set(forwardList)];
+      })(),
       menu: {
         enabled: chat.menu && typeof chat.menu.enabled === 'boolean' ? chat.menu.enabled : true,
         text: normalizeTextPayload((chat.menu && typeof chat.menu.text !== 'undefined')
@@ -817,6 +824,43 @@ class ModerationService {
       return false;
     }
     chat.allowedLinks = [];
+    this._save();
+    return true;
+  }
+
+  getAllowedForwards(chatId) {
+    return [...this._getChat(chatId).allowedForwards];
+  }
+
+  addAllowedForward(chatId, value) {
+    const chat = this._getChat(chatId);
+    const normalized = String(value || '').trim();
+    if (!normalized || chat.allowedForwards.includes(normalized)) {
+      return false;
+    }
+    chat.allowedForwards.push(normalized);
+    this._save();
+    return true;
+  }
+
+  removeAllowedForward(chatId, value) {
+    const chat = this._getChat(chatId);
+    const normalized = String(value || '').trim();
+    const before = chat.allowedForwards.length;
+    chat.allowedForwards = chat.allowedForwards.filter((item) => item !== normalized);
+    if (chat.allowedForwards.length === before) {
+      return false;
+    }
+    this._save();
+    return true;
+  }
+
+  clearAllowedForwards(chatId) {
+    const chat = this._getChat(chatId);
+    if (chat.allowedForwards.length === 0) {
+      return false;
+    }
+    chat.allowedForwards = [];
     this._save();
     return true;
   }

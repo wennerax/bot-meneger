@@ -466,7 +466,20 @@ function buildSettingsAntiKeyboard(chatId) {
       [
         { text: linksEnabled ? 'Выключить антиссылки' : 'Включить антиссылки', callback_data: `settings:toggle_links:${chatId}:${linksEnabled ? 'off' : 'on'}` },
       ],
+      [
+        { text: '📨 Пересылки', callback_data: `settings:forwards_menu:${chatId}` },
+      ],
       [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
+    ],
+  };
+}
+
+function buildSettingsForwardsKeyboard(chatId) {
+  return {
+    inline_keyboard: [
+      [{ text: '➕ Добавить исключение', callback_data: `settings:add_forward:${chatId}` }],
+      [{ text: '❌ Удалить исключение', callback_data: `settings:remove_forward:${chatId}` }],
+      [{ text: 'Назад', callback_data: `settings:section:anti:${chatId}` }],
     ],
   };
 }
@@ -1073,6 +1086,27 @@ async function showSettingsLinksMenu(ctx, chatId) {
   await ctx.editMessageText(text, { reply_markup: buildSettingsLinksKeyboard(chatId) });
 }
 
+async function showSettingsForwardsMenu(ctx, chatId) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  const moderationService = activeModerationService || defaultModerationService;
+  const forwards = moderationService.getAllowedForwards(chatId);
+  const text = [
+    '📨 Настройки пересылок',
+    '',
+    'Управление исключениями для пересылок в группу.',
+    'Здесь вы можете разрешить пересылки от конкретных пользователей, каналов или групп.',
+    '',
+    `✅ Разрешённые источники пересылок: ${forwards.length}`,
+    forwards.length ? `• ${forwards.join('\n• ')}` : 'Список исключений пуст.',
+  ].join('\n');
+
+  await ctx.editMessageText(text, { reply_markup: buildSettingsForwardsKeyboard(chatId) });
+}
+
 async function showSettingsAntiMenu(ctx, chatId) {
   if (!(await canManageGroupSettings(ctx, chatId))) {
     await ctx.reply('У вас нет прав менять настройки этой группы.');
@@ -1459,6 +1493,12 @@ function parseSettingsPrompt(action) {
   }
   if (action === 'settings_link_remove') {
     return 'Отправьте ссылку или домен для удаления из списка разрешённых.';
+  }
+  if (action === 'settings_forward_add') {
+    return 'Отправьте @username, t.me/username или ID пользователя/канала/группы для добавления в исключения пересылок.';
+  }
+  if (action === 'settings_forward_remove') {
+    return 'Отправьте @username, t.me/username или ID пользователя/канала/группы для удаления из исключений пересылок.';
   }
   if (action === 'settings_anonymous_channel_add') {
     return 'Отправьте @username, t.me/username или ID канала для добавления в исключения.';
@@ -3143,6 +3183,38 @@ function createBot() {
         await ctx.reply(`✅ Ссылка/домен удалён: ${value}`);
       } else {
         await ctx.reply('⚠️ Такого значения нет в списке.');
+      }
+      clearPendingSettingsAction(ctx);
+      return true;
+    }
+
+    if (pending.action === 'settings_forward_add' && ctx.message.text) {
+      const value = String(ctx.message.text).trim();
+      if (!value) {
+        await ctx.reply('⚠️ Пустое значение не сохранено.');
+        return true;
+      }
+      if (moderationService.addAllowedForward(groupId, value)) {
+        await ctx.reply(`✅ Исключение добавлено: ${value}`);
+        await showSettingsForwardsMenu(ctx, groupId);
+      } else {
+        await ctx.reply('⚠️ Это значение уже добавлено или некорректно.');
+      }
+      clearPendingSettingsAction(ctx);
+      return true;
+    }
+
+    if (pending.action === 'settings_forward_remove' && ctx.message.text) {
+      const value = String(ctx.message.text).trim();
+      if (!value) {
+        await ctx.reply('⚠️ Пустое значение не удалено.');
+        return true;
+      }
+      if (moderationService.removeAllowedForward(groupId, value)) {
+        await ctx.reply(`✅ Исключение удалено: ${value}`);
+        await showSettingsForwardsMenu(ctx, groupId);
+      } else {
+        await ctx.reply('⚠️ Такого исключения нет в списке.');
       }
       clearPendingSettingsAction(ctx);
       return true;
@@ -4919,6 +4991,23 @@ function createBot() {
     if (parsed.target === 'remove_link') {
       setPendingSettingsAction(ctx, { action: 'settings_link_remove', groupId: chatId });
       await ctx.reply(parseSettingsPrompt('settings_link_remove'));
+      return;
+    }
+
+    if (parsed.target === 'forwards_menu') {
+      await showSettingsForwardsMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'add_forward') {
+      setPendingSettingsAction(ctx, { action: 'settings_forward_add', groupId: chatId });
+      await ctx.reply(parseSettingsPrompt('settings_forward_add'));
+      return;
+    }
+
+    if (parsed.target === 'remove_forward') {
+      setPendingSettingsAction(ctx, { action: 'settings_forward_remove', groupId: chatId });
+      await ctx.reply(parseSettingsPrompt('settings_forward_remove'));
       return;
     }
 
