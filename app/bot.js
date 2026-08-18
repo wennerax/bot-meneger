@@ -1147,7 +1147,15 @@ async function showSettingsForwardsMenu(ctx, chatId) {
     forwards.length ? `• ${forwards.join('\n• ')}` : 'Список исключений пуст.',
   ].join('\n');
 
-  await ctx.editMessageText(text, { reply_markup: buildSettingsForwardsKeyboard(chatId) });
+  try {
+    await ctx.editMessageText(text, { reply_markup: buildSettingsForwardsKeyboard(chatId) });
+  } catch (error) {
+    if (error.description && error.description.includes('message is not modified')) {
+      await safeAnswerCbQuery(ctx, '🔜 Меню уже открыто');
+    } else {
+      throw error;
+    }
+  }
 }
 
 async function showSettingsForwardsCategoryMenu(ctx, chatId, category) {
@@ -1181,7 +1189,15 @@ async function showSettingsForwardsCategoryMenu(ctx, chatId, category) {
     forwards.length ? `• ${forwards.join('\n• ')}` : 'Список исключений пуст.',
   ].join('\n');
 
-  await ctx.editMessageText(text, { reply_markup: buildSettingsForwardsCategoryKeyboard(chatId, category) });
+  try {
+    await ctx.editMessageText(text, { reply_markup: buildSettingsForwardsCategoryKeyboard(chatId, category) });
+  } catch (error) {
+    if (error.description && error.description.includes('message is not modified')) {
+      await safeAnswerCbQuery(ctx, '🔜 Меню уже открыто');
+    } else {
+      throw error;
+    }
+  }
 }
 
 async function showSettingsForwardsSettingsMenu(ctx, chatId, category) {
@@ -1223,7 +1239,15 @@ async function showSettingsForwardsSettingsMenu(ctx, chatId, category) {
     ],
   };
 
-  await ctx.editMessageText(text, { reply_markup: keyboard });
+  try {
+    await ctx.editMessageText(text, { reply_markup: keyboard });
+  } catch (error) {
+    if (error.description && error.description.includes('message is not modified')) {
+      await safeAnswerCbQuery(ctx, '🔜 Меню уже открыто');
+    } else {
+      throw error;
+    }
+  }
 }
 
 async function showSettingsForwardsPunishmentMenu(ctx, chatId, category) {
@@ -1256,7 +1280,15 @@ async function showSettingsForwardsPunishmentMenu(ctx, chatId, category) {
     `Текущее: ${punishmentLabels[settings.punishmentMode] || settings.punishmentMode}`,
   ].join('\n');
 
-  await ctx.editMessageText(text, { reply_markup: buildSettingsForwardsPunishmentKeyboard(chatId, category) });
+  try {
+    await ctx.editMessageText(text, { reply_markup: buildSettingsForwardsPunishmentKeyboard(chatId, category) });
+  } catch (error) {
+    if (error.description && error.description.includes('message is not modified')) {
+      await safeAnswerCbQuery(ctx, '🔜 Меню уже открыто');
+    } else {
+      throw error;
+    }
+  }
 }
 
 async function showSettingsForwardsDeleteMessageMenu(ctx, chatId, category) {
@@ -1281,7 +1313,15 @@ async function showSettingsForwardsDeleteMessageMenu(ctx, chatId, category) {
     `Текущее: ${settings.deleteMessage ? '✅ Да' : '❌ Нет'}`,
   ].join('\n');
 
-  await ctx.editMessageText(text, { reply_markup: buildSettingsForwardsDeleteMessageKeyboard(chatId, category, settings.deleteMessage) });
+  try {
+    await ctx.editMessageText(text, { reply_markup: buildSettingsForwardsDeleteMessageKeyboard(chatId, category, settings.deleteMessage) });
+  } catch (error) {
+    if (error.description && error.description.includes('message is not modified')) {
+      await safeAnswerCbQuery(ctx, '🔜 Меню уже открыто');
+    } else {
+      throw error;
+    }
+  }
 }
 
 async function showSettingsAntiMenu(ctx, chatId) {
