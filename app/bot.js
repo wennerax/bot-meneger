@@ -76,6 +76,34 @@ function isAnonymousSenderMessage(message = {}) {
   return hasSenderChat || hasAuthorSignature;
 }
 
+function detectForwardedMessageCategory(message = {}) {
+  if (!message || typeof message !== 'object') {
+    return null;
+  }
+
+  // Проверяем, есть ли пересланное сообщение с источником (чатом)
+  if (message.forward_from_chat) {
+    const chatType = String(message.forward_from_chat.type || '').toLowerCase();
+    if (chatType === 'channel') {
+      return 'channels';
+    }
+    if (chatType === 'group' || chatType === 'supergroup') {
+      return 'groups';
+    }
+  }
+
+  // Проверяем, есть ли пересланное сообщение от пользователя
+  if (message.forward_from) {
+    const user = message.forward_from;
+    if (user.is_bot === true) {
+      return 'bots';
+    }
+    return 'users';
+  }
+
+  return null;
+}
+
 function getGroupDisplayName(chatId, fallback = null) {
   const id = Number(chatId);
   if (!Number.isFinite(id)) {
@@ -6464,6 +6492,102 @@ function createBot() {
       }
     }
 
+    // Handle forwarded messages
+    if (isGroupChat(ctx)) {
+      const forwardCategory = detectForwardedMessageCategory(message);
+      if (forwardCategory) {
+        const service = activeModerationService || defaultModerationService;
+        const settings = service.getForwardsSettings(ctx.chat.id, forwardCategory);
+
+        // Skip if punishment mode is off
+        if (settings.punishmentMode !== 'off') {
+          const reason = `Пересланное сообщение от ${forwardCategory === 'channels' ? 'канала' : forwardCategory === 'groups' ? 'группы' : forwardCategory === 'bots' ? 'бота' : 'пользователя'}`;
+
+          // Delete message if deletion is enabled
+          if (settings.deleteMessage) {
+            try {
+              await deleteMessageSafely(ctx, message.message_id);
+            } catch (error) {
+              console.warn('Failed to delete forwarded message:', error?.message || error);
+            }
+          }
+
+          // Apply punishment based on mode
+          if (settings.punishmentMode === 'warn') {
+            moderationService.addWarning(ctx.chat.id, ctx.from.id);
+            database.addPunishment(ctx.chat.id, ctx.from.id, 'warn', reason, null);
+            const warningCount = moderationService.getWarnings(ctx.chat.id, ctx.from.id);
+            const warnLimit = moderationService.getWarnLimit(ctx.chat.id);
+            const userLabel = getMentionText(ctx.from || { id: ctx.from.id });
+            
+            if (warningCount >= warnLimit) {
+              // Auto-ban after reaching limit
+              const blockDuration = moderationService.getWarnBlockDuration(ctx.chat.id);
+              const untilDate = Math.floor(Date.now() / 1000) + Math.round(blockDuration * 3600);
+              try {
+                await ctx.telegram.banChatMember(ctx.chat.id, ctx.from.id, untilDate);
+              } catch (error) {
+                const sentMsg = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} ${userLabel}: Получил ${warnLimit}-е предупреждение и должен быть забанен, но бот не может выполнить бан.`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
+                scheduleDeleteForContext(ctx, sentMsg?.message_id, 5000);
+                return;
+              }
+              database.addPunishment(ctx.chat.id, ctx.from.id, 'ban', `Автобан после ${warnLimit} предупреждений. Последнее: ${reason}`, untilDate);
+              database.addActivePunishment(ctx.chat.id, ctx.from.id, 'ban', `Автобан после ${warnLimit} предупреждений. Последнее: ${reason}`, untilDate);
+              schedulePunishmentExpiry({
+                chatId: ctx.chat.id,
+                userId: ctx.from.id,
+                action: 'ban',
+                untilAt: untilDate,
+              });
+              const sentMsg1 = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} ${userLabel}: Получил ${warnLimit}-е предупреждение и забанен на ${blockDuration}ч.`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
+              scheduleDeleteForContext(ctx, sentMsg1?.message_id, 5000);
+            } else {
+              const sentMsg2 = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} ${userLabel}: Предупреждение ${warningCount}/${warnLimit}. Причина: ${reason}`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
+              scheduleDeleteForContext(ctx, sentMsg2?.message_id, 5000);
+            }
+          } else if (settings.punishmentMode === 'mute') {
+            await applyAutomaticMute(ctx, ctx.from.id, 24, reason);
+          } else if (settings.punishmentMode === 'kick') {
+            try {
+              await ctx.telegram.unbanChatMember(ctx.chat.id, ctx.from.id);
+              await ctx.telegram.kickChatMember(ctx.chat.id, ctx.from.id);
+            } catch (error) {
+              const userLabel = getMentionText(ctx.from || { id: ctx.from.id });
+              const sentMsg = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} ${userLabel}: Должен быть кикнут, но бот не может выполнить действие.`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
+              scheduleDeleteForContext(ctx, sentMsg?.message_id, 5000);
+              return;
+            }
+            database.addPunishment(ctx.chat.id, ctx.from.id, 'kick', reason, null);
+            const userLabel = getMentionText(ctx.from || { id: ctx.from.id });
+            const sentMsg = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} ${userLabel}: Кикнут. Причина: ${reason}`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
+            scheduleDeleteForContext(ctx, sentMsg?.message_id, 5000);
+          } else if (settings.punishmentMode === 'ban') {
+            const untilDate = Math.floor(Date.now() / 1000) + 86400 * 365; // Ban for a year by default
+            try {
+              await ctx.telegram.banChatMember(ctx.chat.id, ctx.from.id, untilDate);
+            } catch (error) {
+              const userLabel = getMentionText(ctx.from || { id: ctx.from.id });
+              const sentMsg = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} ${userLabel}: Должен быть забанен, но бот не может выполнить действие.`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
+              scheduleDeleteForContext(ctx, sentMsg?.message_id, 5000);
+              return;
+            }
+            database.addPunishment(ctx.chat.id, ctx.from.id, 'ban', reason, untilDate);
+            database.addActivePunishment(ctx.chat.id, ctx.from.id, 'ban', reason, untilDate);
+            schedulePunishmentExpiry({
+              chatId: ctx.chat.id,
+              userId: ctx.from.id,
+              action: 'ban',
+              untilAt: untilDate,
+            });
+            const userLabel = getMentionText(ctx.from || { id: ctx.from.id });
+            const sentMsg = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} ${userLabel}: Забанен. Причина: ${reason}`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
+            scheduleDeleteForContext(ctx, sentMsg?.message_id, 5000);
+          }
+          return;
+        }
+      }
+    }
+
     if (isGroupChat(ctx) && isMediaMessage(ctx)) {
       const service = activeModerationService || defaultModerationService;
       if (service.isMediaAiEnabled(ctx.chat.id)) {
@@ -6885,6 +7009,7 @@ module.exports = {
   isGroupMemberWithProfileChangePermission,
   isGroupMemberWithManageRights,
   getGroupDisplayName,
+  detectForwardedMessageCategory,
   startBot,
 };
 
