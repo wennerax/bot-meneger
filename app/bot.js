@@ -473,6 +473,7 @@ function buildMenuKeyboard(chatId) {
       ],
       [
         { text: '🤖 От Бота', callback_data: 'menu:bot_message' },
+        { text: '🎛️ Бот Соо', callback_data: `settings:main:${chatId}` },
       ],
     ],
   };
@@ -4109,9 +4110,14 @@ function createBot() {
           entities: ctx.message.entities || [],
           parse_mode: undefined,
         });
-        await ctx.reply('✅ Сообщение отправлено в группу от имени бота.');
       } catch (error) {
         await ctx.reply(`⚠️ Ошибка при отправке сообщения: ${error?.message || error}`);
+      }
+      // Delete the command message
+      try {
+        await ctx.deleteMessage();
+      } catch (error) {
+        // Ignore if message cannot be deleted
       }
       clearPendingMenuAction(ctx);
       return true;
@@ -4166,9 +4172,15 @@ function createBot() {
         })) || [],
         parse_mode: undefined,
       });
-      await ctx.reply('✅ Сообщение отправлено в группу от имени бота.');
     } catch (error) {
       await ctx.reply(`⚠️ Ошибка при отправке сообщения: ${error?.message || error}`);
+      return;
+    }
+    // Delete the command message
+    try {
+      await ctx.deleteMessage();
+    } catch (error) {
+      // Ignore if message cannot be deleted
     }
   }
 
