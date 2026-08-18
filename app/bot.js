@@ -1817,6 +1817,20 @@ function buildModerationAlertMessage(userLabel, durationHours, reason) {
   return `⚠️ Пользователь ${userLabel} замучен на ${durationLabel} по причине: ${reason}.`;
 }
 
+function buildBulkModerationSummaryMessage(userLabel, reasons = []) {
+  const uniqueReasons = Array.from(new Set((Array.isArray(reasons) ? reasons : [reasons])
+    .map((reason) => String(reason || '').trim())
+    .filter(Boolean)));
+
+  if (uniqueReasons.length === 0) {
+    return `⚠️ Автопроверка: пользователь ${userLabel} удалил сообщения.`;
+  }
+
+  const reasonText = uniqueReasons.slice(0, 3).join(', ');
+  const suffix = uniqueReasons.length > 3 ? `, и ещё ${uniqueReasons.length - 3}` : '';
+  return `⚠️ Автопроверка: пользователь ${userLabel} удалил сообщения по причине: ${reasonText}${suffix}.`;
+}
+
 function buildCaptchaChallenge(mode = 'emoji', displayName = 'пользователь') {
   const normalizedMode = String(mode || 'emoji').trim().toLowerCase();
   if (normalizedMode === 'math') {
@@ -2220,6 +2234,46 @@ function createBot() {
     const sentMessage = await ctx.reply(text, extra);
     scheduleDeleteForContext(ctx, sentMessage?.message_id, delay);
     return sentMessage;
+  }
+
+  const bulkModerationReports = new Map();
+
+  function queueBulkModerationSummary(ctx, userId, reason) {
+    if (!isGroupChat(ctx) || !Number.isFinite(Number(userId))) {
+      return;
+    }
+
+    const normalizedReason = String(reason || '').trim();
+    if (!normalizedReason) {
+      return;
+    }
+
+    const chatId = Number(ctx.chat.id);
+    const key = `${chatId}:${Number(userId)}`;
+    const current = bulkModerationReports.get(key) || { reasons: new Set(), timer: null };
+    current.reasons.add(normalizedReason);
+    bulkModerationReports.set(key, current);
+
+    if (current.timer) {
+      return;
+    }
+
+    current.timer = setTimeout(async () => {
+      const pending = bulkModerationReports.get(key);
+      bulkModerationReports.delete(key);
+      if (!pending || pending.reasons.size === 0) {
+        return;
+      }
+
+      const userLabel = getMentionText(ctx.from || { id: userId }) || `Пользователь ${userId}`;
+      const messageText = buildBulkModerationSummaryMessage(userLabel, Array.from(pending.reasons));
+      try {
+        const sentMessage = await ctx.reply(messageText);
+        scheduleDeleteForContext(ctx, sentMessage?.message_id, 3000);
+      } catch (error) {
+        // ignore summary errors for transient moderation events
+      }
+    }, 1500);
   }
 
   async function completeCaptcha(ctx, pollId, passed) {
@@ -6488,6 +6542,7 @@ function createBot() {
       if (service.isHideAnonymousEnabled(ctx.chat.id)) {
         if (service.shouldDeleteAnonymousMessages(ctx.chat.id)) {
           try {
+            queueBulkModerationSummary(ctx, ctx.from.id, 'Скрытый отправитель');
             await deleteMessageSafely(ctx, message.message_id);
           } catch (error) {
             console.warn('Failed to delete anonymous message:', error?.message || error);
@@ -6516,6 +6571,7 @@ function createBot() {
         // Delete message if deletion is enabled (regardless of punishment mode)
         if (settings.deleteMessage) {
           try {
+            queueBulkModerationSummary(ctx, ctx.from.id, `Пересланное сообщение из ${forwardCategory === 'channels' ? 'канала' : forwardCategory === 'groups' ? 'группы' : forwardCategory === 'bots' ? 'бота' : 'пользователя'}`);
             await deleteMessageSafely(ctx, message.message_id);
             console.log(`[Forward] Deleted ${forwardCategory} forward in chat ${ctx.chat.id} from user ${ctx.from.id}`);
           } catch (error) {
@@ -6877,6 +6933,7 @@ function createBot() {
     }
 
     if (isGroupChat(ctx) && moderationService.isFloodProtectionEnabled(ctx.chat.id) && hasRepeatedCharacterFlood(text)) {
+      queueBulkModerationSummary(ctx, ctx.from.id, 'Антифлуд');
       await deleteMessageSafely(ctx, ctx.message.message_id);
       await applyAutomaticMute(ctx, ctx.from.id, 1, 'Антифлуд');
       return;
@@ -6887,6 +6944,7 @@ function createBot() {
       if (shouldPunish) {
         const recentMessages = spamActivity.get(ctx.chat.id)?.get(ctx.from.id)?.messages || [];
         if (recentMessages.length) {
+          queueBulkModerationSummary(ctx, ctx.from.id, 'Спам');
           await Promise.all(recentMessages.map((item) => deleteMessageSafely(ctx, item.messageId)));
         }
         await applyAutomaticMute(ctx, ctx.from.id, 24, 'Спам');
@@ -6897,6 +6955,7 @@ function createBot() {
     // Check for banned words
     const forbiddenWord = isGroupChat(ctx) && moderationService.findBanWord(ctx.chat.id, text);
     if (forbiddenWord) {
+      queueBulkModerationSummary(ctx, ctx.from.id, `Запрещённое слово: ${forbiddenWord}`);
       await applyBanwordPunishment(ctx, ctx.from.id, forbiddenWord);
       return;
     }
@@ -6909,6 +6968,7 @@ function createBot() {
         links: getLinkCandidates(text),
         allowed: getLinkCandidates(text).map((link) => moderationService.isAllowedLink(ctx.chat.id, link)),
       });
+      queueBulkModerationSummary(ctx, ctx.from.id, 'Ссылка');
       await deleteMessageSafely(ctx, ctx.message.message_id);
       await applyAutomaticMute(ctx, ctx.from.id, 24 * 7, 'Ссылка');
       return;
@@ -6993,6 +7053,7 @@ module.exports = {
   parsePunishmentDetails,
   buildPunishmentNotification,
   buildModerationAlertMessage,
+  buildBulkModerationSummaryMessage,
   buildFunReply,
   parsePageNumber,
   buildPunishmentListMessage,
