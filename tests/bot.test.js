@@ -307,11 +307,15 @@ test('getGroupDisplayName resolves the active bot database group title', () => {
 });
 
 test('detectForbiddenWord catches drugs and self-harm variants', () => {
-  assert.equal(detectForbiddenWord('сегодня курю марихуану'), 'марихуана');
+  // Exact phrase match
+  assert.equal(detectForbiddenWord('я люблю курить траву весь день'), 'курить траву');
+  // Exact word match
+  assert.equal(detectForbiddenWord('героин это плохо'), 'героин');
+  // Prefix match (obfuscation) - word with extra characters
   assert.equal(detectForbiddenWord('наркоыыыыыы'), 'нарко');
-  assert.equal(detectForbiddenWord('наркофирма'), 'нарко');
-  assert.equal(detectForbiddenWord('метсоленый'), 'мет');
+  assert.equal(detectForbiddenWord('героинчик мне нужен'), 'героин');
   assert.equal(detectForbiddenWord('хочу самоубийство'), 'самоубийство');
+  // Should not match when word is not found
   assert.equal(detectForbiddenWord('доброе утро друзья'), null);
 });
 

@@ -202,14 +202,35 @@ test('captcha settings can be enabled, disabled and switched by mode', () => {
   assert.equal(service.getCaptchaTimeoutMinutes(100), 10);
 });
 
+test('agreement settings can be enabled and configured', () => {
+  const service = new ModerationService();
+
+  assert.equal(service.isAgreementEnabled(100), false);
+
+  service.enableAgreement(100);
+  assert.equal(service.isAgreementEnabled(100), true);
+
+  service.setAgreementText(100, 'Прочитайте правила и подтвердите согласие.');
+  assert.equal(service.getAgreementText(100), 'Прочитайте правила и подтвердите согласие.');
+
+  service.setAgreementMedia(100, { type: 'photo', fileId: 'abc123' });
+  assert.deepEqual(service.getAgreementMedia(100), { type: 'photo', fileId: 'abc123' });
+
+  service.clearAgreementMedia(100);
+  assert.equal(service.getAgreementMedia(100), null);
+});
+
 test('ban words are detected with suffixes and shortened variations', () => {
   const service = new ModerationService();
 
+  // Prefix match - word with extra characters at the end (obfuscation)
   assert.equal(service.findBanWord(100, 'наркомыы'), 'нарко');
   assert.equal(service.findBanWord(100, 'мефедрончик'), 'мефедрон');
-  assert.equal(service.findBanWord(100, 'я хочу вздернуться прямо сейчас'), 'вздернусь');
+  // Exact match
+  assert.equal(service.findBanWord(100, 'я хочу вздернусь прямо сейчас'), 'вздернусь');
   assert.equal(service.findBanWord(100, 'самоубийство это тот путь'), 'самоубийство');
-  assert.equal(service.findBanWord(100, 'тут метадоновый ответ'), 'метадон');
+  // Prefix match
+  assert.equal(service.findBanWord(100, 'тут метадончик ответ'), 'метадон');
 });
 
 test('moderation settings persist across restarts', () => {

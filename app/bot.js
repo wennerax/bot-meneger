@@ -1081,7 +1081,22 @@ function buildSettingsCaptchaKeyboard(chatId) {
       [{ text: enabled ? 'Отключить капчу' : 'Включить капчу', callback_data: `settings:toggle_captcha:${chatId}:${enabled ? 'off' : 'on'}` }],
       [{ text: 'Режимы', callback_data: `settings:captcha_modes:${chatId}` }],
       [{ text: `Время: ${timeout} мин`, callback_data: `settings:captcha_timeout:${chatId}` }],
+      [{ text: '📜 Соглашение', callback_data: `settings:agreement:${chatId}` }],
       [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
+    ],
+  };
+}
+
+function buildSettingsAgreementKeyboard(chatId) {
+  const moderationService = activeModerationService || defaultModerationService;
+  const enabled = moderationService.isAgreementEnabled(chatId);
+  return {
+    inline_keyboard: [
+      [{ text: enabled ? 'Отключить соглашение' : 'Включить соглашение', callback_data: `settings:toggle_agreement:${chatId}:${enabled ? 'off' : 'on'}` }],
+      [{ text: 'Редактировать текст', callback_data: `settings:agreement_edit:${chatId}` }],
+      [{ text: 'Добавить медиа', callback_data: `settings:agreement_media:${chatId}` }],
+      [{ text: 'Удалить медиа', callback_data: `settings:agreement_remove_media:${chatId}` }],
+      [{ text: 'Назад', callback_data: `settings:section:captcha:${chatId}` }],
     ],
   };
 }
@@ -1124,8 +1139,8 @@ async function showSettingsCaptchaMenu(ctx, chatId) {
   const moderationService = activeModerationService || defaultModerationService;
   const enabled = moderationService.isCaptchaEnabled(chatId);
   const mode = moderationService.getCaptchaMode(chatId);
-const timeout = moderationService.getCaptchaTimeoutMinutes(chatId);
-    const text = [
+  const timeout = moderationService.getCaptchaTimeoutMinutes(chatId);
+  const text = [
     '🧠 Капча',
     '',
     'При активации капчи, когда пользователь входит в группу он не сможет отправлять сообщения, пока не подтвердит, что он не робот.',
@@ -1138,6 +1153,29 @@ const timeout = moderationService.getCaptchaTimeoutMinutes(chatId);
   ].join('\n');
 
   await ctx.editMessageText(text, { reply_markup: buildSettingsCaptchaKeyboard(chatId) });
+}
+
+async function showSettingsAgreementMenu(ctx, chatId) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  const moderationService = activeModerationService || defaultModerationService;
+  const enabled = moderationService.isAgreementEnabled(chatId);
+  const agreementText = moderationService.getAgreementText(chatId) || 'Правила ещё не заданы.';
+  const media = moderationService.getAgreementMedia(chatId);
+  const text = [
+    '📜 Пользовательское соглашение',
+    '',
+    `Статус: ${enabled ? 'включено' : 'выключено'}`,
+    `Медиа: ${media ? media.type : 'не добавлено'}`,
+    '',
+    'Текст соглашения:',
+    agreementText.slice(0, 900) || 'Пусто',
+  ].join('\n');
+
+  await ctx.editMessageText(text, { reply_markup: buildSettingsAgreementKeyboard(chatId) });
 }
 
 async function showSettingsLinksMenu(ctx, chatId) {
@@ -2086,6 +2124,7 @@ function createBot() {
   const spamActivity = new Map();
   const messageHistory = new Map();
   const captchaStates = new Map();
+  const agreementStates = new Map();
   const pendingMenuActions = new Map();
   const pendingSettingsActions = new Map();
 
@@ -2288,6 +2327,49 @@ function createBot() {
     captchaStates.delete(pollId);
 
     if (passed) {
+      const moderationService = activeModerationService || defaultModerationService;
+      const agreementEnabled = moderationService.isAgreementEnabled(state.chatId);
+
+      if (agreementEnabled) {
+        const agreementText = moderationService.getAgreementText(state.chatId) || 'Прочитайте правила и подтвердите согласие.';
+        const media = moderationService.getAgreementMedia(state.chatId);
+
+        if (media && media.fileId) {
+          try {
+            const mediaPayload = { chat_id: state.chatId, media: JSON.stringify({ type: media.type, media: media.fileId }) };
+            await ctx.telegram.sendMediaGroup(state.chatId, [mediaPayload]);
+          } catch (error) {
+            // ignore unsupported media and keep agreement text
+          }
+        }
+
+        await ctx.telegram.sendMessage(state.chatId, agreementText, { disable_notification: true });
+
+        const agreementPoll = await ctx.telegram.sendPoll(state.chatId,
+          'Вы ознакомились с правилами и соглашаетесь с ними?',
+          ['Согласен с правилами', 'Не согласен'],
+          {
+            type: 'quiz',
+            correct_option_id: 0,
+            is_anonymous: false,
+            open_period: 300,
+            disable_notification: true,
+          }
+        );
+
+        agreementStates.set(agreementPoll?.poll?.id, {
+          chatId: state.chatId,
+          userId: state.userId,
+          displayName: state.displayName,
+          pollMessageId: agreementPoll?.message_id,
+          createdAt: Date.now(),
+        });
+
+        scheduleDeleteMessage(ctx.telegram, state.chatId, state.pollMessageId);
+        scheduleDeleteMessage(ctx.telegram, state.chatId, state.instructionMessageId);
+        return;
+      }
+
       await ctx.telegram.restrictChatMember(state.chatId, state.userId, buildMutePermissions(true));
       const sentGroupMessage = await ctx.telegram.sendMessage(state.chatId, `Пользователь ${state.displayName} прошёл капчу и получил доступ к чату.`);
       scheduleDeleteMessage(ctx.telegram, state.chatId, sentGroupMessage?.message_id);
@@ -2297,10 +2379,9 @@ function createBot() {
     }
 
     try {
-      await ctx.telegram.banChatMember(state.chatId, state.userId);
-      await ctx.telegram.unbanChatMember(state.chatId, state.userId, { only_if_banned: true });
+      await ctx.telegram.kickChatMember(state.chatId, state.userId);
     } catch (error) {
-      // ignore if the member cannot be removed or unbanned
+      // ignore if the user cannot be removed
     }
 
     const failedGroupMessage = await ctx.telegram.sendMessage(state.chatId, `Пользователь ${state.displayName} не прошёл капчу и исключён из группы.`);
@@ -3543,20 +3624,46 @@ function createBot() {
     }
 
     if (pending.action === 'settings_banword_add' && ctx.message.text) {
-      const value = String(ctx.message.text).trim().toLowerCase();
-      if (!value) {
+      const rawInput = String(ctx.message.text).trim();
+      if (!rawInput) {
         await ctx.reply('⚠️ Пустое слово не добавлено.');
         return true;
       }
-      if (moderationService.addBanWord(groupId, value)) {
-        await ctx.reply(`✅ Запрещённое слово добавлено: ${value}`);
-      } else {
-        await ctx.reply('⚠️ Это слово уже есть в списке.');
+      
+      // Support multi-line input: split by newlines and add each word
+      const wordsToAdd = rawInput
+        .split(/[\n\r]+/)
+        .map(line => line.trim().toLowerCase())
+        .filter(word => word.length > 0);
+      
+      if (wordsToAdd.length === 0) {
+        await ctx.reply('⚠️ Пустые слова не добавлены.');
+        return true;
       }
+      
+      const service = activeModerationService || defaultModerationService;
+      const added = [];
+      const existed = [];
+      
+      for (const word of wordsToAdd) {
+        if (service.addBanWord(groupId, word)) {
+          added.push(word);
+        } else {
+          existed.push(word);
+        }
+      }
+      
+      const response = [];
+      if (added.length > 0) {
+        response.push(`✅ Добавлено ${added.length} слов:\n• ${added.join('\n• ')}`);
+      }
+      if (existed.length > 0) {
+        response.push(`⚠️ Уже в списке (${existed.length} слов):\n• ${existed.join('\n• ')}`);
+      }
+      await ctx.reply(response.join('\n\n'));
       clearPendingSettingsAction(ctx);
       
       // Show updated word list
-      const service = activeModerationService || defaultModerationService;
       const words = service.getBanWords(groupId);
       const listText = [
         '📋 Список запрещенных слов',
@@ -3568,20 +3675,46 @@ function createBot() {
     }
 
     if (pending.action === 'settings_banword_remove' && ctx.message.text) {
-      const value = String(ctx.message.text).trim().toLowerCase();
-      if (!value) {
+      const rawInput = String(ctx.message.text).trim();
+      if (!rawInput) {
         await ctx.reply('⚠️ Пустое слово не удалено.');
         return true;
       }
-      if (moderationService.removeBanWord(groupId, value)) {
-        await ctx.reply(`✅ Запрещённое слово удалено: ${value}`);
-      } else {
-        await ctx.reply('⚠️ Такого слова нет в списке.');
+      
+      // Support multi-line input: split by newlines and remove each word
+      const wordsToRemove = rawInput
+        .split(/[\n\r]+/)
+        .map(line => line.trim().toLowerCase())
+        .filter(word => word.length > 0);
+      
+      if (wordsToRemove.length === 0) {
+        await ctx.reply('⚠️ Пустые слова не удалены.');
+        return true;
       }
+      
+      const service = activeModerationService || defaultModerationService;
+      const removed = [];
+      const notFound = [];
+      
+      for (const word of wordsToRemove) {
+        if (service.removeBanWord(groupId, word)) {
+          removed.push(word);
+        } else {
+          notFound.push(word);
+        }
+      }
+      
+      const response = [];
+      if (removed.length > 0) {
+        response.push(`✅ Удалено ${removed.length} слов:\n• ${removed.join('\n• ')}`);
+      }
+      if (notFound.length > 0) {
+        response.push(`⚠️ Не найдено (${notFound.length} слов):\n• ${notFound.join('\n• ')}`);
+      }
+      await ctx.reply(response.join('\n\n'));
       clearPendingSettingsAction(ctx);
       
       // Show updated word list
-      const service = activeModerationService || defaultModerationService;
       const words = service.getBanWords(groupId);
       const listText = [
         '📋 Список запрещенных слов',
@@ -3595,6 +3728,25 @@ function createBot() {
     if (pending.action === 'settings_message_text' && ctx.message.text) {
       moderationService.setMenuText(groupId, buildTextPayloadFromMessage(ctx));
       await ctx.reply('✅ Текст первого сообщения обновлён.');
+      clearPendingSettingsAction(ctx);
+      return true;
+    }
+
+    if (pending.action === 'settings_agreement_text' && ctx.message.text) {
+      moderationService.setAgreementText(groupId, buildTextPayloadFromMessage(ctx));
+      await ctx.reply('✅ Текст пользовательского соглашения обновлён.');
+      clearPendingSettingsAction(ctx);
+      return true;
+    }
+
+    if (pending.action === 'settings_agreement_media') {
+      const payload = getMediaPayloadFromMessage(ctx);
+      if (!payload) {
+        await ctx.reply('⚠️ Я не нашёл медиа. Отправьте фото, видео, документ, голос или стикер.');
+        return true;
+      }
+      moderationService.setAgreementMedia(groupId, payload);
+      await ctx.reply(`✅ Медиа для соглашения сохранено как ${payload.type}.`);
       clearPendingSettingsAction(ctx);
       return true;
     }
@@ -5295,6 +5447,40 @@ function createBot() {
       return;
     }
 
+    if (parsed.target === 'agreement') {
+      await showSettingsAgreementMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'toggle_agreement') {
+      if (parsed.value === 'on') {
+        moderationService.enableAgreement(chatId);
+      } else {
+        moderationService.disableAgreement(chatId);
+      }
+      await showSettingsAgreementMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'agreement_edit') {
+      setPendingSettingsAction(ctx, { action: 'settings_agreement_text', groupId: chatId });
+      await ctx.reply('Отправьте новый текст пользовательского соглашения. Можно вставить ссылку или описание правил.');
+      return;
+    }
+
+    if (parsed.target === 'agreement_media') {
+      setPendingSettingsAction(ctx, { action: 'settings_agreement_media', groupId: chatId });
+      await ctx.reply('Отправьте медиа для пользовательского соглашения.');
+      return;
+    }
+
+    if (parsed.target === 'agreement_remove_media') {
+      moderationService.clearAgreementMedia(chatId);
+      await ctx.reply('✅ Медиа для соглашения удалено.');
+      await showSettingsAgreementMenu(ctx, chatId);
+      return;
+    }
+
     if (parsed.target === 'captcha_modes') {
       await ctx.editMessageText('Выберите режим капчи:', { reply_markup: buildCaptchaModesKeyboard(chatId) });
       return;
@@ -6379,6 +6565,35 @@ function createBot() {
   bot.on('poll_answer', async (ctx) => {
     const pollAnswer = ctx.update.poll_answer;
     if (!pollAnswer || !pollAnswer.poll_id || !pollAnswer.user) {
+      return;
+    }
+
+    const agreementState = agreementStates.get(pollAnswer.poll_id);
+    if (agreementState) {
+      const userId = Number(pollAnswer.user.id);
+      if (!Number.isFinite(userId) || userId !== agreementState.userId || pollAnswer.user.is_bot) {
+        return;
+      }
+
+      const selectedOption = (pollAnswer.option_ids || [])[0];
+      agreementStates.delete(pollAnswer.poll_id);
+
+      if (selectedOption === 0) {
+        await ctx.telegram.restrictChatMember(agreementState.chatId, agreementState.userId, buildMutePermissions(true));
+        const acceptedMessage = await ctx.telegram.sendMessage(agreementState.chatId, `Пользователь ${agreementState.displayName} подтвердил соглашение и получил доступ к чату.`);
+        scheduleDeleteMessage(ctx.telegram, agreementState.chatId, acceptedMessage?.message_id);
+        scheduleDeleteMessage(ctx.telegram, agreementState.chatId, agreementState.pollMessageId);
+        return;
+      }
+
+      try {
+        await ctx.telegram.kickChatMember(agreementState.chatId, agreementState.userId);
+      } catch (error) {
+        // ignore
+      }
+      const rejectedMessage = await ctx.telegram.sendMessage(agreementState.chatId, `Пользователь ${agreementState.displayName} не согласился с правилами и исключён из группы.`);
+      scheduleDeleteMessage(ctx.telegram, agreementState.chatId, rejectedMessage?.message_id);
+      scheduleDeleteMessage(ctx.telegram, agreementState.chatId, agreementState.pollMessageId);
       return;
     }
 

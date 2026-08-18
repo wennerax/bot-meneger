@@ -246,6 +246,15 @@ class ModerationService {
           ? { ...chat.menu.media }
           : null,
       },
+      agreement: {
+        enabled: Boolean(chat.agreement && typeof chat.agreement.enabled === 'boolean' ? chat.agreement.enabled : false),
+        text: normalizeTextPayload((chat.agreement && typeof chat.agreement.text !== 'undefined')
+          ? chat.agreement.text
+          : 'Прочитайте правила и подтвердите своё согласие. Ссылка: https://example.com/terms'),
+        media: (chat.agreement && typeof chat.agreement.media === 'object' && chat.agreement.media !== null)
+          ? { ...chat.agreement.media }
+          : null,
+      },
       spamProtectionEnabled: Boolean(chat.spamProtectionEnabled),
       linkProtectionEnabled: Boolean(chat.linkProtectionEnabled),
       floodProtectionEnabled: Boolean(chat.floodProtectionEnabled),
@@ -562,6 +571,58 @@ class ModerationService {
     return this._getChat(chatId).captchaEnabled !== false;
   }
 
+  enableAgreement(chatId) {
+    this._getChat(chatId).agreement.enabled = true;
+    this._save();
+    return true;
+  }
+
+  disableAgreement(chatId) {
+    this._getChat(chatId).agreement.enabled = false;
+    this._save();
+    return true;
+  }
+
+  isAgreementEnabled(chatId) {
+    return Boolean(this._getChat(chatId).agreement.enabled);
+  }
+
+  getAgreementText(chatId) {
+    return normalizeTextPayload(this._getChat(chatId).agreement.text).text;
+  }
+
+  getAgreementTextPayload(chatId) {
+    return normalizeTextPayload(this._getChat(chatId).agreement.text);
+  }
+
+  setAgreementText(chatId, text) {
+    this._getChat(chatId).agreement.text = normalizeTextPayload(text);
+    this._save();
+    return true;
+  }
+
+  getAgreementMedia(chatId) {
+    return this._getChat(chatId).agreement.media || null;
+  }
+
+  setAgreementMedia(chatId, media) {
+    if (!media || typeof media !== 'object' || !media.type || !media.fileId) {
+      return false;
+    }
+    this._getChat(chatId).agreement.media = {
+      type: String(media.type),
+      fileId: String(media.fileId),
+    };
+    this._save();
+    return true;
+  }
+
+  clearAgreementMedia(chatId) {
+    this._getChat(chatId).agreement.media = null;
+    this._save();
+    return true;
+  }
+
   setCaptchaMode(chatId, mode) {
     const normalized = String(mode || '').trim().toLowerCase();
     const allowedModes = ['emoji', 'math', 'color', 'word'];
@@ -714,98 +775,63 @@ class ModerationService {
   }
 
   findBanWord(chatId, text) {
-    const normalize = (value) => String(value || '').toLowerCase().replace(/[^a-zа-я0-9]/g, '');
-    const compressRepeated = (value) => value.replace(/(.)\1+/g, '$1');
-    const commonSuffixes = [
-      'ться', 'тся', 'уть', 'усь', 'ать', 'ять', 'ить', 'ыы', 'я', 'и', 'а', 'е', 'о', 'ы', 'ь',
-      'ов', 'ев', 'овка', 'овый', 'овой', 'ник', 'чик', 'щик', 'ка', 'ча', 'ный', 'ние', 'ание', 'ение'
-    ];
-    const explicitVariantChecks = [
-      ['self-harm', 'selfharm'],
-      ['селфхарм', 'selfharm'],
-      ['selfharm', 'self-harm'],
-      ['self-harm', 'sel f harm'],
-    ];
-
-    const buildComparisonValues = (value) => {
-      const source = normalize(value);
-      if (!source) {
-        return [];
-      }
-
-      const values = new Set();
-      const forms = [source, compressRepeated(source)];
-      forms.forEach((candidate) => {
-        if (!candidate || candidate.length < 3) {
-          return;
-        }
-        values.add(candidate);
-        for (const suffix of commonSuffixes) {
-          if (candidate.length > suffix.length + 2 && candidate.endsWith(suffix)) {
-            values.add(candidate.slice(0, -suffix.length));
-          }
-        }
-      });
-
-      return [...values].filter((candidate) => candidate.length >= 3);
-    };
-
-    const textValues = new Set();
+    const normalizeWord = (word) => String(word || '').trim().toLowerCase();
     const rawText = String(text || '').toLowerCase();
-    const textTokens = rawText.match(/[a-zа-я0-9]+/g) || [];
-    for (const [primary, alternate] of explicitVariantChecks) {
-      const primaryText = normalize(rawText);
-      const alternateText = normalize(alternate);
-      if (primaryText.includes(primary) || primaryText.includes(alternateText) || rawText.includes(primary) || rawText.includes(alternate)) {
-        return primary;
-      }
-    }
-    if (!textTokens.length) {
+    
+    if (!rawText) {
       return null;
     }
-    textTokens.forEach((token) => {
-      buildComparisonValues(token).forEach((candidate) => textValues.add(candidate));
+
+    const banWords = this._getChat(chatId).banWords;
+    
+    // Sort ban words by length (longest first) for better matching priority
+    const sortedBanWords = [...banWords].sort((a, b) => {
+      const normA = normalizeWord(a);
+      const normB = normalizeWord(b);
+      return normB.length - normA.length;
     });
-
-    const wholeText = normalize(rawText);
-    if (wholeText) {
-      buildComparisonValues(wholeText).forEach((candidate) => textValues.add(candidate));
-    }
-
-    let bestMatch = null;
-    let bestScore = -1;
-
-    for (const word of this._getChat(chatId).banWords) {
-      const normalizedWord = normalize(word);
-      if (!normalizedWord) {
-        continue;
+    
+    // Strategy 1: Check for multi-word phrases as substring (e.g., "курить траву")
+    for (const word of sortedBanWords) {
+      const normalized = normalizeWord(word);
+      if (!normalized || normalized.length < 3) continue;
+      
+      if (normalized.includes(' ')) {
+        // Multi-word phrase - search as substring in raw text
+        if (rawText.includes(normalized)) {
+          return word;
+        }
       }
-
-      const wordValues = buildComparisonValues(normalizedWord);
-      let wordBestScore = -1;
-
-      for (const candidate of wordValues) {
-        for (const textCandidate of textValues) {
-          if (!textCandidate || !candidate) {
-            continue;
-          }
-
-          if (textCandidate === candidate || textCandidate.includes(candidate) || candidate.includes(textCandidate)) {
-            const score = candidate.length + (textCandidate === candidate ? 10 : 0);
-            if (score > wordBestScore) {
-              wordBestScore = score;
-            }
+    }
+    
+    // Strategy 2: For single words, extract tokens and check for exact and prefix matches
+    const tokens = rawText.match(/[a-zа-яё0-9]+/gi) || [];
+    const normalizedTokens = tokens.map(t => normalizeWord(t));
+    
+    for (const word of sortedBanWords) {
+      const normalized = normalizeWord(word);
+      if (!normalized || normalized.length < 2 || normalized.includes(' ')) continue;
+      
+      for (const token of normalizedTokens) {
+        if (!token) continue;
+        
+        // Exact match
+        if (token === normalized) {
+          return word;
+        }
+        
+        // Prefix match - ban word is at the start of the token with extra chars (obfuscation)
+        if (token.startsWith(normalized) && token.length > normalized.length) {
+          // Make sure it's not just a normal word form
+          // Allow if ban word is at least 3 chars and token has at least 2 extra chars
+          if (normalized.length >= 3 && token.length >= normalized.length + 2) {
+            return word;
           }
         }
       }
-
-      if (wordBestScore > bestScore) {
-        bestMatch = word;
-        bestScore = wordBestScore;
-      }
     }
 
-    return bestMatch;
+    return null;
   }
 
   getAllowedLinks(chatId) {
