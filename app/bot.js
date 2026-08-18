@@ -1865,10 +1865,10 @@ function parseSettingsPrompt(action) {
     return 'Отправьте новые правила для группы.';
   }
   if (action === 'settings_banword_add') {
-    return 'Отправьте запрещённое слово для добавления.';
+    return 'Отправьте слово или несколько слов для добавления.\nПоддерживаются форматы:\n• Через запятую: нарко, соль, травка\n• Через перевод строки: нарко\nсоль\nтравка';
   }
   if (action === 'settings_banword_remove') {
-    return 'Отправьте запрещённое слово для удаления.';
+    return 'Отправьте слово или несколько слов для удаления.\nПоддерживаются форматы:\n• Через запятую: нарко, соль, травка\n• Через перевод строки: нарко\nсоль\nтравка';
   }
   return '';
 }
@@ -3753,9 +3753,9 @@ function createBot() {
         return true;
       }
       
-      // Support multi-line input: split by newlines and add each word
+      // Support multi-line and comma-separated input
       const wordsToAdd = rawInput
-        .split(/[\n\r]+/)
+        .split(/[\n\r,;]+/)  // Split by newlines, carriage returns, commas, or semicolons
         .map(line => line.trim().toLowerCase())
         .filter(word => word.length > 0);
       
@@ -3804,9 +3804,9 @@ function createBot() {
         return true;
       }
       
-      // Support multi-line input: split by newlines and remove each word
+      // Support multi-line and comma-separated input
       const wordsToRemove = rawInput
-        .split(/[\n\r]+/)
+        .split(/[\n\r,;]+/)  // Split by newlines, carriage returns, commas, or semicolons
         .map(line => line.trim().toLowerCase())
         .filter(word => word.length > 0);
       
