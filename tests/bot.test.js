@@ -319,6 +319,7 @@ test('isGroupMemberWithProfileChangePermission accepts creators and admins with 
   assert.equal(isGroupMemberWithProfileChangePermission({ status: 'administrator', can_change_info: true }), true);
   assert.equal(isGroupMemberWithProfileChangePermission({ status: 'administrator', can_change_info: false, can_delete_messages: true }), false);
   assert.equal(isGroupMemberWithProfileChangePermission({ status: 'administrator', can_change_info: false }), false);
+  assert.equal(isGroupMemberWithProfileChangePermission({ status: 'administrator' }), true);
   assert.equal(isGroupMemberWithProfileChangePermission({ status: 'member', can_change_info: true }), false);
 });
 

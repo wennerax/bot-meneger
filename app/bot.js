@@ -215,7 +215,15 @@ function isGroupMemberWithProfileChangePermission(member) {
     return true;
   }
 
-  return status === 'administrator' && Boolean(member.can_change_info);
+  if (status !== 'administrator') {
+    return false;
+  }
+
+  if (member.can_change_info === undefined || member.can_change_info === null) {
+    return true;
+  }
+
+  return Boolean(member.can_change_info);
 }
 
 function isGroupMemberWithManageRights(member) {
@@ -228,7 +236,17 @@ function isGroupMemberWithManageRights(member) {
     return true;
   }
 
-  return status === 'administrator' && Boolean(member.can_delete_messages || member.can_restrict_members || member.can_invite_users || member.can_manage_topics || member.can_pin_messages || member.can_manage_chat || member.can_manage_video_chats || member.can_promote_members || member.can_manage_events || member.can_change_info);
+  if (status !== 'administrator') {
+    return false;
+  }
+
+  const hasAnyManagePermission = Boolean(member.can_delete_messages || member.can_restrict_members || member.can_invite_users || member.can_manage_topics || member.can_pin_messages || member.can_manage_chat || member.can_manage_video_chats || member.can_promote_members || member.can_manage_events || member.can_change_info);
+
+  if (hasAnyManagePermission) {
+    return true;
+  }
+
+  return true;
 }
 
 async function canManageGroupSettings(ctx, targetChatId) {
