@@ -473,7 +473,7 @@ function buildMenuKeyboard(chatId) {
       ],
       [
         { text: '🤖 От Бота', callback_data: 'menu:bot_message' },
-        { text: '🎛️ Бот Соо', callback_data: `settings:main:${chatId}` },
+        { text: '🤖 Бот Соо', callback_data: `settings:main:${chatId}` },
       ],
     ],
   };
