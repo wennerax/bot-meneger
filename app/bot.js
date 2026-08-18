@@ -2425,6 +2425,9 @@ function createBot() {
       if (agreementEnabled) {
         const agreementText = moderationService.getAgreementText(state.chatId) || 'Прочитайте правила и подтвердите согласие.';
         const media = moderationService.getAgreementMedia(state.chatId);
+        
+        // Combine agreement text with poll question and separator
+        const combinedText = `${agreementText}\n\n➖➖➖➖➖➖➖➖\nВы ознакомились с правилами и соглашаетесь с ними?`;
 
         let mainMessage = null;
         const agreementMessageIds = [];
@@ -2434,22 +2437,22 @@ function createBot() {
           try {
             if (media.type === 'photo') {
               mainMessage = await ctx.telegram.sendPhoto(state.chatId, media.fileId,
-                { caption: agreementText, disable_notification: true });
+                { caption: combinedText, disable_notification: true });
             } else if (media.type === 'video') {
               mainMessage = await ctx.telegram.sendVideo(state.chatId, media.fileId,
-                { caption: agreementText, disable_notification: true });
+                { caption: combinedText, disable_notification: true });
             } else if (media.type === 'animation') {
               mainMessage = await ctx.telegram.sendAnimation(state.chatId, media.fileId,
-                { caption: agreementText, disable_notification: true });
+                { caption: combinedText, disable_notification: true });
             } else if (media.type === 'document') {
               mainMessage = await ctx.telegram.sendDocument(state.chatId, media.fileId,
-                { caption: agreementText, disable_notification: true });
+                { caption: combinedText, disable_notification: true });
             } else if (media.type === 'audio') {
               mainMessage = await ctx.telegram.sendAudio(state.chatId, media.fileId,
-                { caption: agreementText, disable_notification: true });
+                { caption: combinedText, disable_notification: true });
             } else if (media.type === 'voice') {
               mainMessage = await ctx.telegram.sendVoice(state.chatId, media.fileId,
-                { caption: agreementText, disable_notification: true });
+                { caption: combinedText, disable_notification: true });
             }
           } catch (error) {
             // ignore unsupported media and keep agreement text
@@ -2458,7 +2461,7 @@ function createBot() {
 
         // Send text message if no media or media send failed
         if (!mainMessage) {
-          mainMessage = await ctx.telegram.sendMessage(state.chatId, agreementText, { disable_notification: true });
+          mainMessage = await ctx.telegram.sendMessage(state.chatId, combinedText, { disable_notification: true });
         }
 
         if (mainMessage?.message_id) {
