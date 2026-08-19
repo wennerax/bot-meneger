@@ -2467,10 +2467,9 @@ function createBot() {
           const linkLabel = rulesUrl;
           pollQuestion = `Пользовательское соглашение:\n${linkLabel}\n\nВы ознакомились с правилами и соглашаетесь с ними?`;
           pollOptions.question_entities = [{
-            type: 'text_link',
+            type: 'url',
             offset: pollQuestion.indexOf(linkLabel),
             length: linkLabel.length,
-            url: rulesUrl,
           }];
         } else {
           // Telegram polls have no separate text body, so the rules are the poll question.
