@@ -4206,13 +4206,6 @@ function createBot() {
       } catch (error) {
         await ctx.reply(`⚠️ Ошибка при отправке сообщения: ${error?.message || error}`);
       }
-      // Delete the command message
-      try {
-        await ctx.deleteMessage();
-      } catch (error) {
-        // Ignore if message cannot be deleted
-      }
-      clearPendingMenuAction(ctx);
       return true;
     }
 
@@ -5664,6 +5657,16 @@ function createBot() {
     }
   });
 
+  bot.action('menu:bot_message_close', async (ctx) => {
+    await safeAnswerCbQuery(ctx);
+    clearPendingMenuAction(ctx);
+    try {
+      await ctx.deleteMessage();
+    } catch (error) {
+      // Ignore stale or already deleted prompt messages.
+    }
+  });
+
   bot.action(/^settings:(.+)$/, async (ctx) => {
     const action = ctx.match[1];
     const callbackData = ctx.callbackQuery?.data || `settings:${action}`;
@@ -6588,7 +6591,15 @@ function createBot() {
 
     if (botMessageMatch) {
       setPendingMenuAction(ctx, { action: 'bot_message', groupId: botMessageChatId });
-      await ctx.reply('📝 Напишите сообщение, которое бот отправит в эту группу. Можно использовать любые ссылки, эмодзи, символы и форматирование.');
+      const promptMessage = await ctx.reply(
+        '📝 Напишите сообщение, которое бот отправит в эту группу. Можно использовать любые ссылки, эмодзи, символы и форматирование.',
+        { reply_markup: { inline_keyboard: [[{ text: 'Закрыть', callback_data: 'menu:bot_message_close' }]] } }
+      );
+      setPendingMenuAction(ctx, {
+        action: 'bot_message',
+        groupId: botMessageChatId,
+        promptMessageId: promptMessage?.message_id,
+      });
       return;
     }
 
