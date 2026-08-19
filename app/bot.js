@@ -356,6 +356,16 @@ function buildAdminReportKeyboard(report) {
   };
 }
 
+function isPollAnswerForTarget(pollAnswer, targetUserId) {
+  if (!pollAnswer?.user || pollAnswer.user.is_bot) {
+    return false;
+  }
+
+  const answerUserId = Number(pollAnswer.user.id);
+  const expectedUserId = Number(targetUserId);
+  return Number.isFinite(answerUserId) && Number.isFinite(expectedUserId) && answerUserId === expectedUserId;
+}
+
 function createAdminReportId() {
   return `r${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -6980,8 +6990,7 @@ function createBot() {
 
     const agreementState = agreementStates.get(pollAnswer.poll_id);
     if (agreementState) {
-      const userId = Number(pollAnswer.user.id);
-      if (!Number.isFinite(userId) || userId !== agreementState.userId || pollAnswer.user.is_bot) {
+      if (!isPollAnswerForTarget(pollAnswer, agreementState.userId)) {
         return;
       }
 
@@ -7002,8 +7011,7 @@ function createBot() {
       return;
     }
 
-    const userId = Number(pollAnswer.user.id);
-    if (!Number.isFinite(userId) || userId !== state.userId || pollAnswer.user.is_bot) {
+    if (!isPollAnswerForTarget(pollAnswer, state.userId)) {
       return;
     }
 
@@ -7772,6 +7780,7 @@ module.exports = {
   startBot,
   cleanupAgreementMessages,
   handleAgreementDecision,
+  isPollAnswerForTarget,
 };
 
 2
