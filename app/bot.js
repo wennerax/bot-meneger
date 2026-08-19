@@ -2449,24 +2449,39 @@ function createBot() {
       const agreementEnabled = moderationService.isAgreementEnabled(state.chatId);
 
       if (agreementEnabled) {
-        const agreementText = moderationService.getAgreementText(state.chatId) || 'Прочитайте правила и подтвердите согласие.';
-        
-        // Telegram polls have no separate text body, so the rules are the poll question.
-        const combinedText = `${agreementText}\n\n➖➖➖➖➖➖➖➖\nВы ознакомились с правилами и соглашаетесь с ними?`;
-        const pollQuestion = combinedText.length > 300
-          ? `${combinedText.slice(0, 297)}...`
-          : combinedText;
+        const agreementPayload = moderationService.getAgreementTextPayload(state.chatId);
+        const agreementText = agreementPayload.text || 'Прочитайте правила и подтвердите согласие.';
+        const linkedEntity = agreementPayload.entities.find((entity) => entity.type === 'text_link' && entity.url);
+        const urlMatch = agreementText.match(/https?:\/\/[^\s]+/i);
+        const rulesUrl = linkedEntity?.url || urlMatch?.[0]?.replace(/[),.!?]+$/, '');
+        const pollOptions = {
+          type: 'quiz',
+          correct_option_id: 0,
+          is_anonymous: false,
+          open_period: 300,
+          disable_notification: true,
+        };
+
+        let pollQuestion;
+        if (rulesUrl) {
+          const linkLabel = 'открыть правила';
+          pollQuestion = `Пользовательское соглашение: ${linkLabel}\n\nВы ознакомились с правилами и соглашаетесь с ними?`;
+          pollOptions.question_entities = [{
+            type: 'text_link',
+            offset: pollQuestion.indexOf(linkLabel),
+            length: linkLabel.length,
+            url: rulesUrl,
+          }];
+        } else {
+          // Telegram polls have no separate text body, so the rules are the poll question.
+          const combinedText = `${agreementText}\n\n➖➖➖➖➖➖➖➖\nВы ознакомились с правилами и соглашаетесь с ними?`;
+          pollQuestion = combinedText.length > 300 ? `${combinedText.slice(0, 297)}...` : combinedText;
+        }
 
         const agreementPoll = await ctx.telegram.sendPoll(state.chatId,
           pollQuestion,
           ['Согласен с правилами', 'Не согласен'],
-          {
-            type: 'quiz',
-            correct_option_id: 0,
-            is_anonymous: false,
-            open_period: 300,
-            disable_notification: true,
-          }
+          pollOptions
         );
 
         agreementStates.set(agreementPoll?.poll?.id, {
