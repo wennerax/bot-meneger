@@ -2660,8 +2660,8 @@ function createBot() {
   }
 
   function isKnownCommandText(text) {
-    const slashCommand = /^\/(start|help|id|about|whoami|stats|rules|allowed|links|hug|kiss|slap|poke|coin|dice|fate|compliment|insult|top|admins|banlist|mutelist|setrules|warn|warnings|unwarn|mute|unmute|ban|unban|setgreeting|addadmin|removeadmin|promote|demote|ai)(\s|$)/i;
-    const bangCommand = /^!(начало|помощь|айди|информация|кто\s*я|статистика|правила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|инсульт)(\s|$)/i;
+    const slashCommand = /^\/(start|help|id|about|whoami|stats|rules|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|dice|fate|compliment|insult|top|admins|banlist|mutelist|setrules|warn|warnings|unwarn|mute|unmute|ban|delban|unban|setgreeting|addadmin|removeadmin|promote|demote|clearhistory|miniapp|ai)(\s|$)/i;
+    const bangCommand = /^!(delban|начало|помощь|айди|информация|кто\s*я|статистика|правила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|инсульт|предупреждение|варны|мут|размут|бан|разбан|топ)(\s|$)/i;
     const plusMinusCommand = /^(\+антиспам|\+antispam|\+антифлуд|\+antiflood|\-антиспам|\-antispam|\-антифлуд|\-antiflood|\+ссылки|\+links|\-ссылки|\-links|\+описание|\+description|\+rules|\+правила|\+greeting|\+приветствие)(\s|$)/i;
     return slashCommand.test(text) || bangCommand.test(text) || plusMinusCommand.test(text);
   }
@@ -2701,6 +2701,13 @@ function createBot() {
       вопрос: 'fate',
       комплимент: 'compliment',
       инсульт: 'insult',
+      предупреждение: 'warn',
+      варны: 'warnings',
+      мут: 'mute',
+      размут: 'unmute',
+      бан: 'ban',
+      разбан: 'unban',
+      топ: 'top',
     };
 
     return translationMap[rawCommand] || rawCommand;
@@ -3228,31 +3235,66 @@ function createBot() {
     return '';
   }
   function getCommandsList() {
+    return getCommandSections().flatMap((section) => section.commands);
+  }
+
+  function getCommandSections() {
     return [
-      { cmd: 'rules', label: '/rules' },
-      { cmd: 'help', label: '/help' },
-      { cmd: 'whoami', label: '/whoami' },
-      { cmd: 'coin', label: '/coin' },
-      { cmd: 'dice', label: '/dice' },
-      { cmd: 'start', label: '/start' },
-      { cmd: 'id', label: '/id' },
-      { cmd: 'about', label: '/about' },
-      { cmd: 'stats', label: '/stats' },
-      { cmd: 'top', label: '/top' },
-      { cmd: 'warn', label: '/warn' },
-      { cmd: 'warnings', label: '/warnings' },
-      { cmd: 'unwarn', label: '/unwarn' },
-      { cmd: 'mute', label: '/mute' },
-      { cmd: 'unmute', label: '/unmute' },
-      { cmd: 'ban', label: '/ban' },
-      { cmd: 'unban', label: '/unban' },
-      { cmd: 'banlist', label: '/banlist' },
-      { cmd: 'mutelist', label: '/mutelist' },
-      { cmd: 'admins', label: '/admins' },
-      { cmd: 'addadmin', label: '/addadmin' },
-      { cmd: 'removeadmin', label: '/removeadmin' },
-      { cmd: 'promote', label: '/promote' },
-      { cmd: 'demote', label: '/demote' },
+      {
+        id: 'entertainment',
+        label: '🎲 Развлечения',
+        commands: [
+          { cmd: 'hug', label: '/hug' }, { cmd: 'kiss', label: '/kiss' },
+          { cmd: 'slap', label: '/slap' }, { cmd: 'poke', label: '/poke' },
+          { cmd: 'fuck', label: '/fuck' }, { cmd: 'rape', label: '/rape' },
+          { cmd: 'beat', label: '/beat' }, { cmd: 'kill', label: '/kill' },
+          { cmd: 'bite', label: '/bite' }, { cmd: 'lick', label: '/lick' },
+          { cmd: 'lickup', label: '/lickup' }, { cmd: 'coin', label: '/coin' },
+          { cmd: 'dice', label: '/dice' }, { cmd: 'fate', label: '/fate' },
+          { cmd: 'compliment', label: '/compliment' }, { cmd: 'insult', label: '/insult' },
+          { cmd: 'ai', label: '/ai' },
+        ],
+      },
+      {
+        id: 'moderation',
+        label: '🛡️ Модерация',
+        commands: [
+          { cmd: 'warn', label: '/warn' }, { cmd: 'warnings', label: '/warnings' },
+          { cmd: 'unwarn', label: '/unwarn' }, { cmd: 'mute', label: '/mute' },
+          { cmd: 'unmute', label: '/unmute' }, { cmd: 'ban', label: '/ban' },
+          { cmd: 'delban', label: '/delban' }, { cmd: 'unban', label: '/unban' },
+          { cmd: 'banlist', label: '/banlist' }, { cmd: 'mutelist', label: '/mutelist' },
+          { cmd: 'top', label: '/top' },
+        ],
+      },
+      {
+        id: 'information',
+        label: '📚 Информация',
+        commands: [
+          { cmd: 'start', label: '/start' }, { cmd: 'help', label: '/help' },
+          { cmd: 'id', label: '/id' }, { cmd: 'about', label: '/about' },
+          { cmd: 'whoami', label: '/whoami' }, { cmd: 'stats', label: '/stats' },
+          { cmd: 'rules', label: '/rules' },
+        ],
+      },
+      {
+        id: 'group',
+        label: '⚙️ Группа и ссылки',
+        commands: [
+          { cmd: 'allowed', label: '/allowed' }, { cmd: 'links', label: '/links' },
+          { cmd: 'setrules', label: '/setrules' }, { cmd: 'setgreeting', label: '/setgreeting' },
+          { cmd: 'miniapp', label: '/miniapp' },
+        ],
+      },
+      {
+        id: 'administration',
+        label: '👥 Администрирование',
+        commands: [
+          { cmd: 'admins', label: '/admins' }, { cmd: 'addadmin', label: '/addadmin' },
+          { cmd: 'removeadmin', label: '/removeadmin' }, { cmd: 'promote', label: '/promote' },
+          { cmd: 'demote', label: '/demote' }, { cmd: 'clearhistory', label: '/clearhistory' },
+        ],
+      },
     ];
   }
 
@@ -3270,6 +3312,40 @@ function createBot() {
 
   const COMMANDS_PER_PAGE = 5;
 
+  function getCommandSectionState(chatId, section) {
+    const disabled = (activeModerationService || defaultModerationService).getAllCommandDisabled(chatId);
+    const disabledCount = section.commands.filter(({ cmd }) => Boolean(disabled[cmd])).length;
+    return {
+      disabled,
+      allDisabled: disabledCount === section.commands.length,
+      partiallyDisabled: disabledCount > 0 && disabledCount < section.commands.length,
+    };
+  }
+
+  function buildCommandSectionsKeyboard(chatId, returnFlag = 'menu') {
+    const suffix = returnFlag === 'settings' ? ':settings' : '';
+    const rows = getCommandSections().map((section) => {
+      const state = getCommandSectionState(chatId, section);
+      const status = state.allDisabled ? '❌' : state.partiallyDisabled ? '⚠️' : '✅';
+      return [
+        { text: `${status} ${section.label}`, callback_data: 'menu:none' },
+        { text: state.allDisabled ? 'Включить' : 'Отключить', callback_data: `menu:command_rights:section_toggle:${section.id}:${state.allDisabled ? 'enable' : 'disable'}${suffix}` },
+      ];
+    });
+    rows.push([{ text: '🔧 Команды по отдельности', callback_data: `menu:command_rights:commands:0${suffix}` }]);
+    rows.push([{ text: 'Назад', callback_data: returnFlag === 'settings' ? `settings:main:${chatId}` : 'menu:overview' }]);
+    return { inline_keyboard: rows };
+  }
+
+  function buildCommandSectionsText(chatId) {
+    const lines = ['📚 Управление разделами', '', 'Раздел можно отключить целиком. Для отдельных команд откройте список команд.', ''];
+    getCommandSections().forEach((section) => {
+      const state = getCommandSectionState(chatId, section);
+      lines.push(`${state.allDisabled ? '❌' : state.partiallyDisabled ? '⚠️' : '✅'} ${section.label}`);
+    });
+    return lines.join('\n');
+  }
+
   function buildCommandRightsPageText(chatId, pageIndex = 0) {
     const service = activeModerationService || defaultModerationService;
     const commands = getCommandsList();
@@ -3280,7 +3356,7 @@ function createBot() {
     const header = [
       '🔧 Управление командами',
       '',
-      'В этом меню можно отключать и включать команды бота.',
+      'В этом меню можно отключать разделы или отдельные команды бота.',
       '',
       'Статус: ❌ отключено, ✅ включено',
       '',
@@ -3311,6 +3387,8 @@ function createBot() {
 
     const rows = [];
     const suffix = returnFlag === 'settings' ? ':settings' : '';
+
+    rows.push([{ text: '📚 Управление разделами', callback_data: `menu:command_rights:sections${suffix}` }]);
 
     pageCommands.forEach((item, idx) => {
       const index = start + idx;
@@ -6497,6 +6575,38 @@ function createBot() {
 
     if (action === 'command_rights') {
       await showMenuCommandRightsMenu(ctx, chatId, 0, 'menu:overview', 'menu');
+      return;
+    }
+
+    if (action === 'command_rights:sections' || action === 'command_rights:sections:settings') {
+      const returnFlag = action.endsWith(':settings') ? 'settings' : 'menu';
+      await ctx.editMessageText(buildCommandSectionsText(chatId), { reply_markup: buildCommandSectionsKeyboard(chatId, returnFlag) });
+      return;
+    }
+
+    if (action.startsWith('command_rights:commands:')) {
+      const parts = action.split(':');
+      const pageIndex = Number(parts[3]);
+      const returnFlag = parts.includes('settings') ? 'settings' : 'menu';
+      const returnCallback = returnFlag === 'settings' ? `settings:main:${chatId}` : 'menu:overview';
+      if (Number.isFinite(pageIndex)) {
+        await showMenuCommandRightsMenu(ctx, chatId, pageIndex, returnCallback, returnFlag);
+      }
+      return;
+    }
+
+    if (action.startsWith('command_rights:section_toggle:')) {
+      const parts = action.split(':');
+      const sectionId = parts[3];
+      const mode = parts[4];
+      const returnFlag = parts.includes('settings') ? 'settings' : 'menu';
+      const section = getCommandSections().find((item) => item.id === sectionId);
+      if (!section || !['enable', 'disable'].includes(mode)) {
+        return;
+      }
+      section.commands.forEach(({ cmd }) => moderationService.setCommandDisabled(chatId, cmd, mode === 'disable'));
+      await safeAnswerCbQuery(ctx, mode === 'disable' ? `❌ Раздел ${section.label} отключён.` : `✅ Раздел ${section.label} включён.`);
+      await ctx.editMessageText(buildCommandSectionsText(chatId), { reply_markup: buildCommandSectionsKeyboard(chatId, returnFlag) });
       return;
     }
 
