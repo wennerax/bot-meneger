@@ -1354,15 +1354,25 @@ async function showSettingsForwardsMenu(ctx, chatId) {
     forwards.length ? `• ${forwards.join('\n• ')}` : 'Список исключений пуст.',
   ].join('\n');
 
-  try {
-    await ctx.editMessageText(text, { reply_markup: buildSettingsForwardsKeyboard(chatId) });
-  } catch (error) {
-    if (error.description && error.description.includes('message is not modified')) {
-      await safeAnswerCbQuery(ctx, '🔜 Меню уже открыто');
-    } else {
+  await renderForwardsMenu(ctx, text, { reply_markup: buildSettingsForwardsKeyboard(chatId) });
+}
+
+async function renderForwardsMenu(ctx, text, extra) {
+  if (ctx.callbackQuery) {
+    try {
+      await ctx.editMessageText(text, extra);
+    } catch (error) {
+      const description = error?.response?.description || error?.description || '';
+      if (description.includes('message is not modified')) {
+        await safeAnswerCbQuery(ctx, '🔜 Меню уже открыто');
+        return;
+      }
       throw error;
     }
+    return;
   }
+
+  await ctx.reply(text, extra);
 }
 
 async function showSettingsForwardsCategoryMenu(ctx, chatId, category) {
@@ -1396,15 +1406,7 @@ async function showSettingsForwardsCategoryMenu(ctx, chatId, category) {
     forwards.length ? `• ${forwards.join('\n• ')}` : 'Список исключений пуст.',
   ].join('\n');
 
-  try {
-    await ctx.editMessageText(text, { reply_markup: buildSettingsForwardsCategoryKeyboard(chatId, category) });
-  } catch (error) {
-    if (error.description && error.description.includes('message is not modified')) {
-      await safeAnswerCbQuery(ctx, '🔜 Меню уже открыто');
-    } else {
-      throw error;
-    }
-  }
+  await renderForwardsMenu(ctx, text, { reply_markup: buildSettingsForwardsCategoryKeyboard(chatId, category) });
 }
 
 async function showSettingsForwardsSettingsMenu(ctx, chatId, category) {
