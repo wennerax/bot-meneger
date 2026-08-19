@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildBulkModerationSummaryMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage, shouldFailClosedForMedia, cleanupAgreementMessages, handleAgreementDecision, isPollAnswerForTarget } = require('../app/bot');
+const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildBulkModerationSummaryMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage, shouldFailClosedForMedia, cleanupAgreementMessages, handleAgreementDecision, isPollAnswerForTarget, buildBotMediaSend } = require('../app/bot');
 const { buildAiRequestPayload, normalizeMultimodalInputForResponses } = require('../app/ai');
 const premiumEmojis = require('../app/premium_emojis');
 
@@ -8,6 +8,28 @@ test('parsePunishmentDetails extracts duration and reason', () => {
   const result = parsePunishmentDetails('1d реклама', false);
 
   assert.deepEqual(result, { durationHours: 24, reason: 'реклама' });
+});
+
+test('buildBotMediaSend maps media to Telegram send methods and preserves captions', () => {
+  assert.deepEqual(buildBotMediaSend({ sticker: { file_id: 'sticker-1' } }), {
+    method: 'sendSticker',
+    fileId: 'sticker-1',
+  });
+  assert.deepEqual(buildBotMediaSend({
+    photo: [{ file_id: 'small' }, { file_id: 'large' }],
+    caption: 'Подпись',
+    caption_entities: [{ type: 'bold', offset: 0, length: 7 }],
+  }), {
+    method: 'sendPhoto',
+    fileId: 'large',
+    options: {
+      caption: 'Подпись',
+      caption_entities: [{ type: 'bold', offset: 0, length: 7 }],
+      parse_mode: undefined,
+    },
+  });
+  assert.equal(buildBotMediaSend({ document: { file_id: 'document-1' } }).method, 'sendDocument');
+  assert.equal(buildBotMediaSend({ text: 'обычный текст' }), null);
 });
 
 test('parsePunishmentDetails returns default reason when none provided', () => {

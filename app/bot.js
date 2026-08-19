@@ -346,6 +346,42 @@ function buildTextPayloadFromMessage(ctx) {
   };
 }
 
+function buildBotMediaSend(message = {}) {
+  const captionOptions = message.caption
+    ? {
+      caption: message.caption,
+      caption_entities: Array.isArray(message.caption_entities) ? message.caption_entities : [],
+      parse_mode: undefined,
+    }
+    : undefined;
+
+  if (Array.isArray(message.photo) && message.photo.length) {
+    return { method: 'sendPhoto', fileId: message.photo[message.photo.length - 1].file_id, options: captionOptions };
+  }
+  if (message.video?.file_id) {
+    return { method: 'sendVideo', fileId: message.video.file_id, options: captionOptions };
+  }
+  if (message.animation?.file_id) {
+    return { method: 'sendAnimation', fileId: message.animation.file_id, options: captionOptions };
+  }
+  if (message.document?.file_id) {
+    return { method: 'sendDocument', fileId: message.document.file_id, options: captionOptions };
+  }
+  if (message.audio?.file_id) {
+    return { method: 'sendAudio', fileId: message.audio.file_id, options: captionOptions };
+  }
+  if (message.voice?.file_id) {
+    return { method: 'sendVoice', fileId: message.voice.file_id, options: captionOptions };
+  }
+  if (message.video_note?.file_id) {
+    return { method: 'sendVideoNote', fileId: message.video_note.file_id };
+  }
+  if (message.sticker?.file_id) {
+    return { method: 'sendSticker', fileId: message.sticker.file_id };
+  }
+  return null;
+}
+
 function buildAdminReportKeyboard(report) {
   const url = getMessageLink(report.chatId, report.target.messageId);
   return {
@@ -4196,13 +4232,18 @@ function createBot() {
       return true;
     }
 
-    if (pending.action === 'bot_message' && ctx.message.text) {
+    if (pending.action === 'bot_message' && (ctx.message.text || buildBotMediaSend(ctx.message))) {
       const groupId = pending.groupId || ctx.chat.id;
       try {
-        await ctx.telegram.sendMessage(groupId, ctx.message.text, {
-          entities: ctx.message.entities || [],
-          parse_mode: undefined,
-        });
+        const mediaSend = buildBotMediaSend(ctx.message);
+        if (mediaSend) {
+          await ctx.telegram[mediaSend.method](groupId, mediaSend.fileId, mediaSend.options);
+        } else {
+          await ctx.telegram.sendMessage(groupId, ctx.message.text, {
+            entities: ctx.message.entities || [],
+            parse_mode: undefined,
+          });
+        }
       } catch (error) {
         await ctx.reply(`⚠️ Ошибка при отправке сообщения: ${error?.message || error}`);
       }
@@ -7775,6 +7816,7 @@ module.exports = {
   buildSettingsFirstMessageKeyboard,
   buildSettingsRulesMenuText,
   buildSettingsAnonymousMenuText,
+  buildBotMediaSend,
   buildSettingsAnonymousKeyboard,
   isAnonymousSenderMessage,
   isChannelPostInGroupMessage,
