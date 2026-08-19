@@ -848,6 +848,9 @@ function getHelpPages() {
       '/removeadmin @юз, !снять админа @юз - снять вспомогательного администратора бота',
       '/promote @юз [уровень], !повышение @юз [уровень] - повысить администратора (если уровень не указан, повышает на 1)',
       '/demote @юз [уровень], !разжалование @юз [уровень] - понизить администратора (если уровень не указан, понижает на 1)',
+      '',
+      '🛡️ КОМАНДЫ НАКАЗАНИЙ',
+      '/admincom - список команд наказаний и примеры их использования',
     ].join('\n'),
     [
       '📋 Админ-система бота',
@@ -2662,7 +2665,7 @@ function createBot() {
   }
 
   function isKnownCommandText(text) {
-    const slashCommand = /^\/(start|help|id|about|whoami|stats|rules|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|dice|fate|compliment|insult|top|admins|banlist|mutelist|setrules|warn|delwarn|warnings|unwarn|mute|delmute|unmute|ban|delban|unban|setgreeting|addadmin|removeadmin|promote|demote|clearhistory|miniapp|ai)(\s|$)/i;
+    const slashCommand = /^\/(start|help|id|about|whoami|stats|rules|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|dice|fate|compliment|insult|top|admins|banlist|mutelist|setrules|warn|delwarn|warnings|unwarn|mute|delmute|unmute|ban|delban|unban|setgreeting|addadmin|removeadmin|promote|demote|clearhistory|miniapp|admincom|ai)(\s|$)/i;
     const bangCommand = /^!(delban|delmute|delwarn|начало|помощь|айди|информация|кто\s*я|статистика|правила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|инсульт|предупреждение|варны|мут|размут|бан|разбан|топ)(\s|$)/i;
     const plusMinusCommand = /^(\+антиспам|\+antispam|\+антифлуд|\+antiflood|\-антиспам|\-antispam|\-антифлуд|\-antiflood|\+ссылки|\+links|\-ссылки|\-links|\+описание|\+description|\+rules|\+правила|\+greeting|\+приветствие)(\s|$)/i;
     return slashCommand.test(text) || bangCommand.test(text) || plusMinusCommand.test(text);
@@ -3283,6 +3286,7 @@ function createBot() {
           { cmd: 'admins', label: '/admins' }, { cmd: 'addadmin', label: '/addadmin' },
           { cmd: 'removeadmin', label: '/removeadmin' }, { cmd: 'promote', label: '/promote' },
           { cmd: 'demote', label: '/demote' }, { cmd: 'clearhistory', label: '/clearhistory' },
+          { cmd: 'admincom', label: '/admincom' },
         ],
       },
       {
@@ -4333,6 +4337,9 @@ function createBot() {
           '/removeadmin @юз, !снять админа @юз - снять вспомогательного администратора бота',
           '/promote @юз [уровень], !повышение @юз [уровень] - повысить администратора (если уровень не указан, повышает на 1)',
           '/demote @юз [уровень], !разжалование @юз [уровень] - понизить администратора (если уровень не указан, понижает на 1)',
+          '',
+          '🛡️ КОМАНДЫ НАКАЗАНИЙ',
+          '/admincom - список команд наказаний и примеры их использования',
       ].join('\n'),
       [
         '📋 Система уровней администраторов',
@@ -4453,6 +4460,40 @@ function createBot() {
 
   function idCommand(ctx) {
     ctx.reply(`Ваш Telegram ID: ${ctx.from.id}\nID чата: ${ctx.chat.id}`);
+  }
+
+  async function adminPunishmentCommandsCommand(ctx) {
+    ensureGroup(ctx);
+    scheduleDeleteForContext(ctx, ctx.message?.message_id);
+    if (!isBotAdmin(ctx)) {
+      await replyWithAutoDelete(ctx, 'Эта команда доступна только модераторам.');
+      return;
+    }
+
+    await replyWithAutoDelete(ctx, [
+      '🛡️ Команды наказаний для модераторов',
+      '',
+      '⚠️ Предупреждения:',
+      '/warn @юз причина — выдать предупреждение.',
+      '/delwarn причина — ответьте на сообщение: выдать предупреждение и удалить его.',
+      '/warnings [@юз] — посмотреть количество предупреждений.',
+      '/unwarn @юз — снять предупреждения.',
+      '',
+      '🔇 Ограничения:',
+      '/mute @юз <время> <причина> — ограничить сообщения.',
+      '/delmute <время> <причина> — ответьте на сообщение: выдать mute и удалить его.',
+      '/unmute @юз — снять ограничение.',
+      '',
+      '⛔ Блокировки:',
+      '/ban @юз <время> <причина> — заблокировать пользователя.',
+      '/delban <время> <причина> — ответьте на сообщение: заблокировать автора и удалить его.',
+      '/unban @юз — разблокировать пользователя.',
+      '',
+      'Если срок и причина не указаны, наказание действует без срока, а причина указывается как «Без причины».',
+      'Для /delwarn, /delmute и /delban обязательно нужно ответить на сообщение пользователя.',
+      '',
+      'Уровни: 1–4 могут банить, 1–5 могут выдавать mute и предупреждения.',
+    ].join('\n'), 15000);
   }
 
   function aboutCommand(ctx) {
@@ -6672,6 +6713,10 @@ function createBot() {
 
   bot.command(['about', 'информация'], (ctx) => {
     ctx.reply(`${config.botName}\nПолноценный бот на Node.js.`);
+  });
+
+  bot.command('admincom', async (ctx) => {
+    await adminPunishmentCommandsCommand(ctx);
   });
 
   bot.command(['whoami', 'кто_я'], (ctx) => {
