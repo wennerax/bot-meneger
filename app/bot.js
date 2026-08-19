@@ -3839,12 +3839,15 @@ function createBot() {
         return true;
       }
       if (moderationService.addAllowedForward(groupId, value)) {
-        await ctx.reply(`✅ Исключение добавлено: ${value}`);
+        const confirmationMessage = await ctx.reply(`✅ Исключение добавлено: ${value}`);
         if (pending.category) {
           await showSettingsForwardsCategoryMenu(ctx, groupId, pending.category);
         } else {
           await showSettingsForwardsMenu(ctx, groupId);
         }
+        scheduleDeleteForContext(ctx, ctx.message.message_id, 2000);
+        scheduleDeleteForContext(ctx, confirmationMessage?.message_id, 2000);
+        scheduleDeleteForContext(ctx, pending.promptMessageId, 2000);
       } else {
         await ctx.reply('⚠️ Это значение уже добавлено или некорректно.');
       }
@@ -5973,7 +5976,8 @@ function createBot() {
 
     if (parsed.target === 'add_forward') {
       setPendingSettingsAction(ctx, { action: 'settings_forward_add', groupId: chatId });
-      await ctx.reply(parseSettingsPrompt('settings_forward_add'));
+      const promptMessage = await ctx.reply(parseSettingsPrompt('settings_forward_add'));
+      setPendingSettingsAction(ctx, { action: 'settings_forward_add', groupId: chatId, promptMessageId: promptMessage?.message_id });
       return;
     }
 
@@ -5981,7 +5985,8 @@ function createBot() {
       const category = parsed.value || 'channels';
       const categoryNames = { channels: 'канал', groups: 'группу', users: 'пользователя', bots: 'бота' };
       setPendingSettingsAction(ctx, { action: 'settings_forward_add', groupId: chatId, category });
-      await ctx.reply(`Отправьте @username, t.me/username или ID ${categoryNames[category]} для добавления в исключения.`);
+      const promptMessage = await ctx.reply(`Отправьте @username, t.me/username или ID ${categoryNames[category]} для добавления в исключения.`);
+      setPendingSettingsAction(ctx, { action: 'settings_forward_add', groupId: chatId, category, promptMessageId: promptMessage?.message_id });
       return;
     }
 
