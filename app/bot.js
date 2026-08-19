@@ -2451,36 +2451,22 @@ function createBot() {
       if (agreementEnabled) {
         const agreementPayload = moderationService.getAgreementTextPayload(state.chatId);
         const agreementText = agreementPayload.text || 'Прочитайте правила и подтвердите согласие.';
-        const linkedEntity = agreementPayload.entities.find((entity) => entity.type === 'text_link' && entity.url);
-        const urlMatch = agreementText.match(/https?:\/\/[^\s]+/i);
-        const rulesUrl = linkedEntity?.url || urlMatch?.[0]?.replace(/[),.!?]+$/, '');
-        const pollOptions = {
-          type: 'quiz',
-          correct_option_id: 0,
-          is_anonymous: false,
-          open_period: 300,
+        const agreementMessage = await ctx.telegram.sendMessage(state.chatId, agreementText, {
+          entities: agreementPayload.entities,
           disable_notification: true,
-        };
-
-        let pollQuestion;
-        if (rulesUrl) {
-          const linkLabel = rulesUrl;
-          pollQuestion = `Пользовательское соглашение:\n${linkLabel}\n\nВы ознакомились с правилами и соглашаетесь с ними?`;
-          pollOptions.question_entities = [{
-            type: 'url',
-            offset: pollQuestion.indexOf(linkLabel),
-            length: linkLabel.length,
-          }];
-        } else {
-          // Telegram polls have no separate text body, so the rules are the poll question.
-          const combinedText = `${agreementText}\n\n➖➖➖➖➖➖➖➖\nВы ознакомились с правилами и соглашаетесь с ними?`;
-          pollQuestion = combinedText.length > 300 ? `${combinedText.slice(0, 297)}...` : combinedText;
-        }
+        });
 
         const agreementPoll = await ctx.telegram.sendPoll(state.chatId,
-          pollQuestion,
+          'Вы ознакомились с правилами и соглашаетесь с ними?',
           ['Согласен с правилами', 'Не согласен'],
-          pollOptions
+          {
+            type: 'quiz',
+            correct_option_id: 0,
+            is_anonymous: false,
+            open_period: 300,
+            disable_notification: true,
+            reply_to_message_id: agreementMessage?.message_id,
+          }
         );
 
         agreementStates.set(agreementPoll?.poll?.id, {
@@ -2488,6 +2474,7 @@ function createBot() {
           userId: state.userId,
           displayName: state.displayName,
           pollMessageId: agreementPoll?.message_id,
+          agreementMessageIds: agreementMessage?.message_id ? [agreementMessage.message_id] : [],
           createdAt: Date.now(),
         });
 
