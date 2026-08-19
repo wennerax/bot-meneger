@@ -2464,8 +2464,8 @@ function createBot() {
 
         let pollQuestion;
         if (rulesUrl) {
-          const linkLabel = 'открыть правила';
-          pollQuestion = `Пользовательское соглашение: ${linkLabel}\n\nВы ознакомились с правилами и соглашаетесь с ними?`;
+          const linkLabel = rulesUrl;
+          pollQuestion = `Пользовательское соглашение:\n${linkLabel}\n\nВы ознакомились с правилами и соглашаетесь с ними?`;
           pollOptions.question_entities = [{
             type: 'text_link',
             offset: pollQuestion.indexOf(linkLabel),
