@@ -2566,6 +2566,25 @@ function createBot() {
     return database.isBotAdmin(ctx.chat.id, userId) || config.adminIds.includes(userId);
   }
 
+  async function canUseAdminPunishmentCommands(ctx) {
+    if (isBotAdmin(ctx)) {
+      return true;
+    }
+
+    const userId = Number(ctx.from?.id);
+    const chatId = Number(ctx.chat?.id);
+    if (!Number.isFinite(userId) || !Number.isFinite(chatId) || !isGroupChat(ctx)) {
+      return false;
+    }
+
+    try {
+      const member = await ctx.telegram.getChatMember(chatId, userId);
+      return isGroupOwnerMember(member) || String(member?.status || '').toLowerCase() === 'administrator';
+    } catch (error) {
+      return false;
+    }
+  }
+
   function isGroupChat(ctx) {
     const type = ctx.chat?.type;
     return type === 'group' || type === 'supergroup';
@@ -4425,7 +4444,7 @@ function createBot() {
   async function adminPunishmentCommandsCommand(ctx) {
     ensureGroup(ctx);
     scheduleDeleteForContext(ctx, ctx.message?.message_id);
-    if (!isBotAdmin(ctx)) {
+    if (!await canUseAdminPunishmentCommands(ctx)) {
       await replyWithAutoDelete(ctx, 'Эта команда доступна только модераторам.');
       return;
     }
@@ -5623,7 +5642,7 @@ function createBot() {
 
   bot.action('admincom:close', async (ctx) => {
     await safeAnswerCbQuery(ctx);
-    if (!isBotAdmin(ctx)) {
+    if (!await canUseAdminPunishmentCommands(ctx)) {
       await ctx.reply('Закрыть памятку может только администратор.');
       return;
     }
