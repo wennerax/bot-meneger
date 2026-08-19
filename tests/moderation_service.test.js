@@ -174,6 +174,23 @@ test('clearAllowedLinks removes all allowed links from chat', () => {
   assert.equal(service.clearAllowedLinks(100), false);
 });
 
+test('allowed forwards match Telegram source ids, usernames and links', () => {
+  const service = new ModerationService();
+
+  service.addAllowedForward(100, 'https://t.me/bredish');
+  service.addAllowedForward(100, '-100123456789');
+
+  assert.equal(service.isAllowedForward(100, {
+    forward_from_chat: { id: -100987654321, type: 'channel', username: 'other_channel' },
+  }), false);
+  assert.equal(service.isAllowedForward(100, {
+    forward_from_chat: { id: -100123456789, type: 'channel', username: 'other_channel' },
+  }), true);
+  assert.equal(service.isAllowedForward(100, {
+    forward_from_chat: { id: -100987654321, type: 'channel', username: 'bredish' },
+  }), true);
+});
+
 test('username-like allowed links are exempted for all matching variations', () => {
   const service = new ModerationService();
   service.addAllowedLink(100, 'vk_musix_bot');

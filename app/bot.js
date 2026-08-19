@@ -7310,6 +7310,10 @@ function createBot() {
       const forwardCategory = detectForwardedMessageCategory(message);
       if (forwardCategory) {
         const service = activeModerationService || defaultModerationService;
+        if (service.isAllowedForward(ctx.chat.id, message)) {
+          console.log(`[Forward] Allowed source in chat ${ctx.chat.id}; keeping forwarded message`);
+          return;
+        }
         const settings = service.getForwardsSettings(ctx.chat.id, forwardCategory);
 
         console.log(`[Forward Debug] Detected forward in chat ${ctx.chat.id}:`, {

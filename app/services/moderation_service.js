@@ -51,6 +51,25 @@ function normalizeAllowedUrl(value) {
     .replace(/#.*$/, '');
 }
 
+function normalizeForwardSourceValue(value) {
+  return String(value || '').trim().toLowerCase()
+    .replace(/^https?:\/\//i, '')
+    .replace(/^www\./i, '')
+    .replace(/^@/, '')
+    .replace(/\/$/, '');
+}
+
+function getForwardSourceCandidates(source) {
+  if (!source || typeof source !== 'object') {
+    return [];
+  }
+
+  const candidates = [source.id, source.username, source.title]
+    .map(normalizeForwardSourceValue)
+    .filter(Boolean);
+  return [...new Set(candidates)];
+}
+
 function parseAllowedLinkRule(item) {
   const normalized = normalizeAllowedUrl(item);
   if (!normalized) {
@@ -867,6 +886,25 @@ class ModerationService {
 
   getAllowedForwards(chatId) {
     return [...this._getChat(chatId).allowedForwards];
+  }
+
+  isAllowedForward(chatId, message = {}) {
+    const source = message.forward_from_chat || message.forward_from || message.forward_origin?.chat || message.forward_origin?.sender_user;
+    const candidates = getForwardSourceCandidates(source);
+    if (!candidates.length) {
+      return false;
+    }
+
+    return this._getChat(chatId).allowedForwards.some((allowed) => {
+      const normalized = normalizeForwardSourceValue(allowed);
+      if (!normalized) {
+        return false;
+      }
+
+      const telegramPath = normalized.match(/^(?:t\.me|telegram\.me)\/(.+)$/i)?.[1];
+      const allowedCandidates = telegramPath ? [telegramPath] : [normalized];
+      return allowedCandidates.some((candidate) => candidates.includes(candidate));
+    });
   }
 
   addAllowedForward(chatId, value) {
