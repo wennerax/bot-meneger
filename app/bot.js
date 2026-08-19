@@ -832,9 +832,11 @@ function getHelpPages() {
       '/menu + кнопки - настроить кнопки и ряды',
       '/menu + медиа - добавить фото/видео/документ в сообщение',
       '/warn, !предупреждение @юз - выдать предупреждение',
+      '/delwarn, !delwarn <причина> - выдать предупреждение и удалить сообщение (только ответом)',
       '/warnings, !варны [@юз] - показать варны пользователя',
       '/unwarn, !снять предупреждение @юз - снять предупреждения',
       '/mute, !мут @юз <время> <причина> - ограничить сообщения',
+      '/delmute, !delmute <время> <причина> - выдать mute и удалить сообщение (только ответом)',
       '/unmute, !размут - снять ограничение',
       '/ban, !бан <время> <причина> - заблокировать пользователя',
       '/delban, !delban <время> <причина> - заблокировать и удалить сообщение (только ответом)',
@@ -2660,8 +2662,8 @@ function createBot() {
   }
 
   function isKnownCommandText(text) {
-    const slashCommand = /^\/(start|help|id|about|whoami|stats|rules|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|dice|fate|compliment|insult|top|admins|banlist|mutelist|setrules|warn|warnings|unwarn|mute|unmute|ban|delban|unban|setgreeting|addadmin|removeadmin|promote|demote|clearhistory|miniapp|ai)(\s|$)/i;
-    const bangCommand = /^!(delban|начало|помощь|айди|информация|кто\s*я|статистика|правила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|инсульт|предупреждение|варны|мут|размут|бан|разбан|топ)(\s|$)/i;
+    const slashCommand = /^\/(start|help|id|about|whoami|stats|rules|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|dice|fate|compliment|insult|top|admins|banlist|mutelist|setrules|warn|delwarn|warnings|unwarn|mute|delmute|unmute|ban|delban|unban|setgreeting|addadmin|removeadmin|promote|demote|clearhistory|miniapp|ai)(\s|$)/i;
+    const bangCommand = /^!(delban|delmute|delwarn|начало|помощь|айди|информация|кто\s*я|статистика|правила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|инсульт|предупреждение|варны|мут|размут|бан|разбан|топ)(\s|$)/i;
     const plusMinusCommand = /^(\+антиспам|\+antispam|\+антифлуд|\+antiflood|\-антиспам|\-antispam|\-антифлуд|\-antiflood|\+ссылки|\+links|\-ссылки|\-links|\+описание|\+description|\+rules|\+правила|\+greeting|\+приветствие)(\s|$)/i;
     return slashCommand.test(text) || bangCommand.test(text) || plusMinusCommand.test(text);
   }
@@ -3266,7 +3268,9 @@ function createBot() {
           { cmd: 'setgreeting', label: '/setgreeting' }, { cmd: 'antispam', label: '+антиспам' },
           { cmd: 'antiflood', label: '+антифлуд' }, { cmd: 'antilinks', label: '+ссылки' },
           { cmd: 'warn', label: '/warn' }, { cmd: 'warnings', label: '/warnings' },
+          { cmd: 'delwarn', label: '/delwarn' },
           { cmd: 'unwarn', label: '/unwarn' }, { cmd: 'mute', label: '/mute' },
+          { cmd: 'delmute', label: '/delmute' },
           { cmd: 'unmute', label: '/unmute' }, { cmd: 'ban', label: '/ban' },
           { cmd: 'delban', label: '/delban' }, { cmd: 'unban', label: '/unban' },
           { cmd: 'banlist', label: '/banlist' }, { cmd: 'mutelist', label: '/mutelist' },
@@ -4313,9 +4317,11 @@ function createBot() {
         '  • 💬 Первый комментарий - текст, кнопки, медиа',
         '  • 🔥 Серия - включить/выключить систему серий, изменить название',
         '/warn, !предупреждение @юз - выдать предупреждение',
+        '/delwarn, !delwarn <причина> - выдать предупреждение и удалить сообщение (только ответом)',
         '/warnings, !варны [@юз] - показать варны пользователя',
         '/unwarn, !снять предупреждение @юз - снять предупреждения',
         '/mute, !мут @юз <время> <причина> - ограничить сообщения',
+        '/delmute, !delmute <время> <причина> - выдать mute и удалить сообщение (только ответом)',
         '/unmute, !размут - снять ограничение',
         '/ban, !бан <время> <причина> - заблокировать пользователя',
         '/delban, !delban <время> <причина> - заблокировать и удалить сообщение (только ответом)',
@@ -4818,7 +4824,7 @@ function createBot() {
 
   function getBotAdminActionPermissionLevel(actionName) {
     const normalizedAction = String(actionName || '').toLowerCase();
-    if (['warn', 'unwarn', 'mute', 'unmute'].includes(normalizedAction)) {
+    if (['warn', 'unwarn', 'delwarn', 'mute', 'unmute', 'delmute'].includes(normalizedAction)) {
       return 5;
     }
     if (['ban', 'unban', 'delban'].includes(normalizedAction)) {
@@ -4918,11 +4924,16 @@ function createBot() {
     await replyWithAutoDelete(ctx, `История наказаний пользователя ${targetData.target.first_name || targetData.target.username || targetData.target.id} сброшена.`);
   }
 
-  async function warnCommand(ctx, args) {
+  async function warnCommand(ctx, args, deleteTargetMessage = false) {
     ensureGroup(ctx);
     scheduleDeleteForContext(ctx, ctx.message?.message_id);
     if (!isBotAdmin(ctx)) {
       await replyWithAutoDelete(ctx, 'Эта команда доступна только администраторам.');
+      return;
+    }
+
+    if (deleteTargetMessage && !ctx.message?.reply_to_message) {
+      await replyWithAutoDelete(ctx, 'Ответьте этой командой на сообщение пользователя, которому нужно выдать предупреждение и удалить сообщение.');
       return;
     }
 
@@ -4970,6 +4981,10 @@ function createBot() {
       const sentMsg5 = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} Предупреждение для ${userName}: ${warningCount}/${warnLimit}. Причина: ${reasonEscaped}`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
       scheduleDeleteForContext(ctx, sentMsg5?.message_id, 5000);
     }
+
+    if (deleteTargetMessage) {
+      await deleteMessageSafely(ctx, ctx.message.reply_to_message.message_id);
+    }
   }
 
   async function warningsCommand(ctx, args = '') {
@@ -5008,11 +5023,16 @@ function createBot() {
     await replyWithAutoDelete(ctx, `Предупреждения пользователя ${targetData.target.first_name || targetData.target.username || targetData.target.id} сброшены.`);
   }
 
-  async function muteCommand(ctx, args) {
+  async function muteCommand(ctx, args, deleteTargetMessage = false) {
     ensureGroup(ctx);
     scheduleDeleteForContext(ctx, ctx.message?.message_id);
     if (!isBotAdmin(ctx)) {
       await replyWithAutoDelete(ctx, 'Эта команда доступна только администраторам.');
+      return;
+    }
+
+    if (deleteTargetMessage && !ctx.message?.reply_to_message) {
+      await replyWithAutoDelete(ctx, 'Ответьте этой командой на сообщение пользователя, которому нужно выдать mute и удалить сообщение.');
       return;
     }
 
@@ -5050,6 +5070,9 @@ function createBot() {
     const durationLabel = formatDurationLabel(details.durationHours);
     const sentMsg = await premiumEmojis.replyWithCustomEmoji(ctx, `{lock} ${targetLabel} получил mute на ${durationLabel}. Причина: ${details.reason}`, { '{lock}': 'mute_lock' });
     scheduleDeleteForContext(ctx, sentMsg?.message_id, 5000);
+    if (deleteTargetMessage) {
+      await deleteMessageSafely(ctx, ctx.message.reply_to_message.message_id);
+    }
   }
 
   async function unmuteCommand(ctx, args) {
@@ -5463,6 +5486,9 @@ function createBot() {
       case 'предупреждение':
         await warnCommand(ctx, args);
         return true;
+      case 'delwarn':
+        await warnCommand(ctx, args, true);
+        return true;
       case 'варны':
         await warningsCommand(ctx, args);
         return true;
@@ -5474,6 +5500,9 @@ function createBot() {
         return false;
       case 'мут':
         await muteCommand(ctx, args);
+        return true;
+      case 'delmute':
+        await muteCommand(ctx, args, true);
         return true;
       case 'размут':
         await unmuteCommand(ctx, args);
@@ -6954,6 +6983,10 @@ function createBot() {
     await warnCommand(ctx, ctx.message.text.replace(/^\/(?:warn|предупреждение)\s*/i, ''));
   });
 
+  bot.command('delwarn', async (ctx) => {
+    await warnCommand(ctx, ctx.message.text.replace(/^\/delwarn(?:@[\w_]+)?\s*/i, ''), true);
+  });
+
   bot.command(['warnings', 'варны'], async (ctx) => {
     const args = ctx.message.text.replace(/^\/(?:warnings|варны)(?:@[\w_]+)?\s*/i, '');
     await warningsCommand(ctx, args);
@@ -6965,6 +6998,10 @@ function createBot() {
 
   bot.command(['mute', 'мут'], async (ctx) => {
     await muteCommand(ctx, ctx.message.text.replace(/^\/(?:mute|мут)\s*/i, ''));
+  });
+
+  bot.command('delmute', async (ctx) => {
+    await muteCommand(ctx, ctx.message.text.replace(/^\/delmute(?:@[\w_]+)?\s*/i, ''), true);
   });
 
   bot.command(['unmute', 'размут'], async (ctx) => {
