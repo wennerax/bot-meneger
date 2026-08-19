@@ -3326,7 +3326,7 @@ function createBot() {
       const status = state.allDisabled ? '❌' : state.partiallyDisabled ? '⚠️' : '✅';
       return [
         { text: `${status} ${section.label}`, callback_data: 'menu:none' },
-        { text: state.allDisabled ? 'Включить' : 'Отключить', callback_data: `menu:command_rights:section_toggle:${section.id}:${state.allDisabled ? 'enable' : 'disable'}${suffix}` },
+        { text: state.allDisabled ? 'Включить' : 'Отключить', callback_data: `menu:command_rights:st:${section.id}:${state.allDisabled ? 'enable' : 'disable'}${suffix}` },
       ];
     });
     rows.push([{ text: '🔧 Команды по отдельности', callback_data: `menu:command_rights:commands:0${suffix}` }]);
@@ -6592,7 +6592,7 @@ function createBot() {
       return;
     }
 
-    if (action.startsWith('command_rights:section_toggle:')) {
+    if (action.startsWith('command_rights:st:')) {
       const parts = action.split(':');
       const sectionId = parts[3];
       const mode = parts[4];
