@@ -104,7 +104,7 @@ test('buildSettingsMainKeyboard returns a grouped layout with section buttons', 
   assert.equal(keyboard[6][0].callback_data, 'settings:section:chat:42');
   assert.equal(keyboard[6][1].callback_data, 'settings:section:mention:42');
   assert.equal(keyboard[7][0].callback_data, 'settings:section:members:42');
-  assert.equal(keyboard[7][1].callback_data, 'menu:bot_message');
+  assert.equal(keyboard[7][1].callback_data, 'menu:bot_message:42');
 });
 
 test('isGroupOwnerMember treats creator status as group owner', () => {

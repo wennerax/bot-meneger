@@ -466,7 +466,7 @@ function buildSettingsMainKeyboard(chatId) {
     ],
     [
       { text: '👥 Управление участниками', callback_data: `settings:section:members:${chatId}` },
-      { text: '🤖 Бот Соо', callback_data: 'menu:bot_message' },
+      { text: '🤖 Бот Соо', callback_data: `menu:bot_message:${chatId}` },
     ],
   ];
 }
@@ -6237,7 +6237,14 @@ function createBot() {
     }
     await safeAnswerCbQuery(ctx);
 
-    if (!isBotAdmin(ctx)) {
+    const botMessageMatch = String(action).match(/^bot_message(?::(-?\d+))?$/);
+    const botMessageChatId = botMessageMatch ? Number(botMessageMatch[1] || chatId) : 0;
+    if (botMessageMatch) {
+      if (!(await canManageGroupSettings(ctx, botMessageChatId))) {
+        await ctx.reply('У вас нет прав администратора группы с правом менять профиль группы.');
+        return;
+      }
+    } else if (!isBotAdmin(ctx)) {
       await ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
@@ -6367,8 +6374,8 @@ function createBot() {
       return;
     }
 
-    if (action === 'bot_message') {
-      setPendingMenuAction(ctx, { action: 'bot_message', groupId: chatId });
+    if (botMessageMatch) {
+      setPendingMenuAction(ctx, { action: 'bot_message', groupId: botMessageChatId });
       await ctx.reply('📝 Напишите сообщение, которое бот отправит в эту группу. Можно использовать любые ссылки, эмодзи, символы и форматирование.');
       return;
     }
