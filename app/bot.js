@@ -2450,53 +2450,15 @@ function createBot() {
 
       if (agreementEnabled) {
         const agreementText = moderationService.getAgreementText(state.chatId) || 'Прочитайте правила и подтвердите согласие.';
-        const media = moderationService.getAgreementMedia(state.chatId);
         
-        // Combine agreement text with poll question and separator
+        // Telegram polls have no separate text body, so the rules are the poll question.
         const combinedText = `${agreementText}\n\n➖➖➖➖➖➖➖➖\nВы ознакомились с правилами и соглашаетесь с ними?`;
+        const pollQuestion = combinedText.length > 300
+          ? `${combinedText.slice(0, 297)}...`
+          : combinedText;
 
-        let mainMessage = null;
-        const agreementMessageIds = [];
-
-        // Send media with caption (if available)
-        if (media && media.fileId) {
-          try {
-            if (media.type === 'photo') {
-              mainMessage = await ctx.telegram.sendPhoto(state.chatId, media.fileId,
-                { caption: combinedText, disable_notification: true });
-            } else if (media.type === 'video') {
-              mainMessage = await ctx.telegram.sendVideo(state.chatId, media.fileId,
-                { caption: combinedText, disable_notification: true });
-            } else if (media.type === 'animation') {
-              mainMessage = await ctx.telegram.sendAnimation(state.chatId, media.fileId,
-                { caption: combinedText, disable_notification: true });
-            } else if (media.type === 'document') {
-              mainMessage = await ctx.telegram.sendDocument(state.chatId, media.fileId,
-                { caption: combinedText, disable_notification: true });
-            } else if (media.type === 'audio') {
-              mainMessage = await ctx.telegram.sendAudio(state.chatId, media.fileId,
-                { caption: combinedText, disable_notification: true });
-            } else if (media.type === 'voice') {
-              mainMessage = await ctx.telegram.sendVoice(state.chatId, media.fileId,
-                { caption: combinedText, disable_notification: true });
-            }
-          } catch (error) {
-            // ignore unsupported media and keep agreement text
-          }
-        }
-
-        // Send text message if no media or media send failed
-        if (!mainMessage) {
-          mainMessage = await ctx.telegram.sendMessage(state.chatId, combinedText, { disable_notification: true });
-        }
-
-        if (mainMessage?.message_id) {
-          agreementMessageIds.push(mainMessage.message_id);
-        }
-
-        // Send poll as a reply to the agreement message
         const agreementPoll = await ctx.telegram.sendPoll(state.chatId,
-          'Вы ознакомились с правилами и соглашаетесь с ними?',
+          pollQuestion,
           ['Согласен с правилами', 'Не согласен'],
           {
             type: 'quiz',
@@ -2504,7 +2466,6 @@ function createBot() {
             is_anonymous: false,
             open_period: 300,
             disable_notification: true,
-            reply_to_message_id: mainMessage?.message_id,
           }
         );
 
@@ -2513,7 +2474,6 @@ function createBot() {
           userId: state.userId,
           displayName: state.displayName,
           pollMessageId: agreementPoll?.message_id,
-          agreementMessageIds,
           createdAt: Date.now(),
         });
 
@@ -4470,7 +4430,7 @@ function createBot() {
       return;
     }
 
-    await replyWithAutoDelete(ctx, [
+    const sentMessage = await ctx.reply([
       '🛡️ Команды наказаний для модераторов',
       '',
       '⚠️ Предупреждения:',
@@ -4496,7 +4456,14 @@ function createBot() {
       'Для /delwarn, /delmute и /delban обязательно нужно ответить на сообщение пользователя.',
       '',
       'Уровни: 1–4 могут банить, 1–5 могут выдавать mute и предупреждения.',
-    ].join('\n'), 15000);
+    ].join('\n'), {
+      reply_markup: {
+        inline_keyboard: [[{ text: 'Закрыть', callback_data: 'admincom:close' }]],
+      },
+    });
+
+    await deleteMessageSafely(ctx, ctx.message?.message_id);
+    return sentMessage;
   }
 
   function aboutCommand(ctx) {
@@ -5652,6 +5619,19 @@ function createBot() {
     const helpPage = buildHelpPage(pageIndex);
     await safeAnswerCbQuery(ctx);
     await ctx.editMessageText(helpPage.text, { reply_markup: helpPage.reply_markup });
+  });
+
+  bot.action('admincom:close', async (ctx) => {
+    await safeAnswerCbQuery(ctx);
+    if (!isBotAdmin(ctx)) {
+      await ctx.reply('Закрыть памятку может только администратор.');
+      return;
+    }
+    try {
+      await ctx.deleteMessage();
+    } catch (error) {
+      // Ignore stale or already deleted messages.
+    }
   });
 
   bot.action(/^settings:(.+)$/, async (ctx) => {
