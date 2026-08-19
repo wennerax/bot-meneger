@@ -837,6 +837,7 @@ function getHelpPages() {
       '/mute, !мут @юз <время> <причина> - ограничить сообщения',
       '/unmute, !размут - снять ограничение',
       '/ban, !бан <время> <причина> - заблокировать пользователя',
+      '/delban, !delban <время> <причина> - заблокировать и удалить сообщение (только ответом)',
       '/unban, !разбан - разблокировать пользователя',
       '/banlist, !баны [страница] - список активных банов',
       '/mutelist, !муты [страница] - список активных мутов',
@@ -4242,6 +4243,7 @@ function createBot() {
         '/mute, !мут @юз <время> <причина> - ограничить сообщения',
         '/unmute, !размут - снять ограничение',
         '/ban, !бан <время> <причина> - заблокировать пользователя',
+        '/delban, !delban <время> <причина> - заблокировать и удалить сообщение (только ответом)',
         '/unban, !разбан - разблокировать пользователя',
         '/banlist, !баны [страница] - список активных банов',
         '/mutelist, !муты [страница] - список активных мутов',
@@ -4744,7 +4746,7 @@ function createBot() {
     if (['warn', 'unwarn', 'mute', 'unmute'].includes(normalizedAction)) {
       return 5;
     }
-    if (['ban', 'unban'].includes(normalizedAction)) {
+    if (['ban', 'unban', 'delban'].includes(normalizedAction)) {
       return 4;
     }
     if (['clear_history', 'clearpunishmenthistory'].includes(normalizedAction)) {
@@ -5045,6 +5047,55 @@ function createBot() {
     const targetLabel = getMentionText(targetData.target);
     const durationLabel = formatDurationLabel(details.durationHours);
     await replyWithAutoDelete(ctx, `⛔ ${targetLabel} получил ban на ${durationLabel}. Причина: ${details.reason}`);
+  }
+
+  async function delBanCommand(ctx, args) {
+    ensureGroup(ctx);
+    scheduleDeleteForContext(ctx, ctx.message?.message_id);
+    if (!isBotAdmin(ctx)) {
+      await replyWithAutoDelete(ctx, 'Эта команда доступна только администраторам.');
+      return;
+    }
+
+    if (!ctx.message?.reply_to_message) {
+      await replyWithAutoDelete(ctx, 'Ответьте этой командой на сообщение пользователя, которого нужно заблокировать и удалить.');
+      return;
+    }
+
+    const targetData = await resolveCommandTarget(ctx, args, '/delban <время> <причина>');
+    if (!targetData) {
+      return;
+    }
+
+    if (!ensureBotAdminCanPunishTarget(ctx, targetData.target.id, 'delban')) {
+      return;
+    }
+
+    const details = parsePunishmentDetails(targetData.remainingArgs, true);
+    const untilDate = details.durationHours ? Math.floor(Date.now() / 1000) + Math.round(details.durationHours * 3600) : undefined;
+
+    try {
+      await ctx.telegram.banChatMember(ctx.chat.id, targetData.target.id, untilDate);
+    } catch (error) {
+      await replyWithAutoDelete(ctx, 'Не удалось выполнить ban: у бота нет прав администратора или пользователь не может быть заблокирован.');
+      return;
+    }
+
+    database.addPunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, untilDate || null);
+    database.addActivePunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, untilDate || null);
+    if (untilDate) {
+      schedulePunishmentExpiry({
+        chatId: ctx.chat.id,
+        userId: targetData.target.id,
+        action: 'ban',
+        untilAt: untilDate,
+      });
+    }
+
+    await deleteMessageSafely(ctx, ctx.message.reply_to_message.message_id);
+    const targetLabel = getMentionText(targetData.target);
+    const durationLabel = formatDurationLabel(details.durationHours);
+    await replyWithAutoDelete(ctx, `⛔ ${targetLabel} получил ban на ${durationLabel}, сообщение удалено. Причина: ${details.reason}`);
   }
 
   async function unbanCommand(ctx, args) {
@@ -5354,6 +5405,9 @@ function createBot() {
         return true;
       case 'бан':
         await banCommand(ctx, args);
+        return true;
+      case 'delban':
+        await delBanCommand(ctx, args);
         return true;
       case 'разбан':
         await unbanCommand(ctx, args);
@@ -6689,6 +6743,14 @@ function createBot() {
     }
   });
 
+  bot.on('new_chat_title', (ctx) => {
+    if (!ctx.chat || !ctx.message?.new_chat_title) {
+      return;
+    }
+
+    database.ensureGroup(ctx.chat.id, ctx.message.new_chat_title);
+  });
+
   bot.on('chat_member', async (ctx) => {
     const member = ctx.chatMember?.new_chat_member;
     if (!member || !ctx.chat) {
@@ -6804,6 +6866,10 @@ function createBot() {
 
   bot.command(['ban', 'бан'], async (ctx) => {
     await banCommand(ctx, ctx.message.text.replace(/^\/(?:ban|бан)\s*/i, ''));
+  });
+
+  bot.command('delban', async (ctx) => {
+    await delBanCommand(ctx, ctx.message.text.replace(/^\/delban(?:@[\w_]+)?\s*/i, ''));
   });
 
   bot.command(['unban', 'разбан'], async (ctx) => {

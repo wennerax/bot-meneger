@@ -16,6 +16,12 @@ test('parsePunishmentDetails returns default reason when none provided', () => {
   assert.deepEqual(result, { durationHours: 2, reason: 'Без причины' });
 });
 
+test('parsePunishmentDetails makes a reply ban permanent without a reason or duration', () => {
+  const result = parsePunishmentDetails('', true);
+
+  assert.deepEqual(result, { durationHours: null, reason: 'Без причины' });
+});
+
 test('buildPunishmentNotification includes group, reason and duration', () => {
   const message = buildPunishmentNotification('mute', 'Test Group', 'спам', 2);
 

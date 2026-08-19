@@ -17,6 +17,19 @@ test('group owner is added to admin list and persists', () => {
   db.close();
 });
 
+test('group title is updated when Telegram sends a new title', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-meneger-'));
+  const db = new Database(path.join(dir, 'bot.json'));
+
+  db.ensureGroup(101, 'Old title', 42);
+  db.ensureGroup(101, 'New title');
+
+  assert.equal(db.data.groups[101].title, 'New title');
+  assert.equal(db.data.groups[101].ownerId, 42);
+
+  db.close();
+});
+
 test('message top is separate for each group and username resolves inside its group', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-meneger-'));
   const db = new Database(path.join(dir, 'bot.json'));
