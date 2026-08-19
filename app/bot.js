@@ -2668,6 +2668,14 @@ function createBot() {
 
   function parseBotCommandKey(text) {
     const normalized = String(text || '').trim();
+    const plusMinusMatch = normalized.match(/^[+-](антиспам|antispam|антифлуд|antiflood|ссылки|links)\b/i);
+    if (plusMinusMatch) {
+      const command = plusMinusMatch[1].toLowerCase();
+      if (command === 'антиспам' || command === 'antispam') return 'antispam';
+      if (command === 'антифлуд' || command === 'antiflood') return 'antiflood';
+      return 'antilinks';
+    }
+
     const slashMatch = normalized.match(/^\/([^\s]+)/);
     if (slashMatch) {
       const commandWithBot = slashMatch[1].toLowerCase();
@@ -3241,58 +3249,47 @@ function createBot() {
   function getCommandSections() {
     return [
       {
-        id: 'entertainment',
-        label: '🎲 Развлечения',
+        id: 'user',
+        label: '👤 Пользовательские команды',
         commands: [
-          { cmd: 'hug', label: '/hug' }, { cmd: 'kiss', label: '/kiss' },
-          { cmd: 'slap', label: '/slap' }, { cmd: 'poke', label: '/poke' },
-          { cmd: 'fuck', label: '/fuck' }, { cmd: 'rape', label: '/rape' },
-          { cmd: 'beat', label: '/beat' }, { cmd: 'kill', label: '/kill' },
-          { cmd: 'bite', label: '/bite' }, { cmd: 'lick', label: '/lick' },
-          { cmd: 'lickup', label: '/lickup' }, { cmd: 'coin', label: '/coin' },
-          { cmd: 'dice', label: '/dice' }, { cmd: 'fate', label: '/fate' },
-          { cmd: 'compliment', label: '/compliment' }, { cmd: 'insult', label: '/insult' },
-          { cmd: 'ai', label: '/ai' },
+          { cmd: 'start', label: '/start' }, { cmd: 'help', label: '/help' },
+          { cmd: 'id', label: '/id' }, { cmd: 'about', label: '/about' },
+          { cmd: 'whoami', label: '/whoami' }, { cmd: 'stats', label: '/stats' },
+          { cmd: 'top', label: '/top' },
         ],
       },
       {
-        id: 'moderation',
-        label: '🛡️ Модерация',
+        id: 'moderator',
+        label: '👮 Модерские команды',
         commands: [
+          { cmd: 'rules', label: '/rules' }, { cmd: 'setrules', label: '/setrules' },
+          { cmd: 'setgreeting', label: '/setgreeting' }, { cmd: 'antispam', label: '+антиспам' },
+          { cmd: 'antiflood', label: '+антифлуд' }, { cmd: 'antilinks', label: '+ссылки' },
           { cmd: 'warn', label: '/warn' }, { cmd: 'warnings', label: '/warnings' },
           { cmd: 'unwarn', label: '/unwarn' }, { cmd: 'mute', label: '/mute' },
           { cmd: 'unmute', label: '/unmute' }, { cmd: 'ban', label: '/ban' },
           { cmd: 'delban', label: '/delban' }, { cmd: 'unban', label: '/unban' },
           { cmd: 'banlist', label: '/banlist' }, { cmd: 'mutelist', label: '/mutelist' },
-          { cmd: 'top', label: '/top' },
         ],
       },
       {
-        id: 'information',
-        label: '📚 Информация',
-        commands: [
-          { cmd: 'start', label: '/start' }, { cmd: 'help', label: '/help' },
-          { cmd: 'id', label: '/id' }, { cmd: 'about', label: '/about' },
-          { cmd: 'whoami', label: '/whoami' }, { cmd: 'stats', label: '/stats' },
-          { cmd: 'rules', label: '/rules' },
-        ],
-      },
-      {
-        id: 'group',
-        label: '⚙️ Группа и ссылки',
-        commands: [
-          { cmd: 'allowed', label: '/allowed' }, { cmd: 'links', label: '/links' },
-          { cmd: 'setrules', label: '/setrules' }, { cmd: 'setgreeting', label: '/setgreeting' },
-          { cmd: 'miniapp', label: '/miniapp' },
-        ],
-      },
-      {
-        id: 'administration',
-        label: '👥 Администрирование',
+        id: 'admin',
+        label: '👥 Админ-система бота',
         commands: [
           { cmd: 'admins', label: '/admins' }, { cmd: 'addadmin', label: '/addadmin' },
           { cmd: 'removeadmin', label: '/removeadmin' }, { cmd: 'promote', label: '/promote' },
           { cmd: 'demote', label: '/demote' }, { cmd: 'clearhistory', label: '/clearhistory' },
+        ],
+      },
+      {
+        id: 'entertainment',
+        label: '🎉 Развлечения',
+        commands: [
+          { cmd: 'hug', label: '/hug' }, { cmd: 'kiss', label: '/kiss' },
+          { cmd: 'slap', label: '/slap' }, { cmd: 'poke', label: '/poke' },
+          { cmd: 'coin', label: '/coin' }, { cmd: 'dice', label: '/dice' },
+          { cmd: 'fate', label: '/fate' }, { cmd: 'compliment', label: '/compliment' },
+          { cmd: 'insult', label: '/insult' }, { cmd: 'ai', label: '/ai' },
         ],
       },
     ];
