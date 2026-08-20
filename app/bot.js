@@ -2661,7 +2661,12 @@ function createBot() {
     if (!userId) {
       return false;
     }
-    return database.isBotAdmin(ctx.chat.id, userId) || config.adminIds.includes(userId);
+    if (config.adminIds.includes(userId)) {
+      return true;
+    }
+
+    const level = database.getBotAdminLevel(ctx.chat.id, userId);
+    return Number.isInteger(Number(level)) && Number(level) >= 1 && Number(level) <= 5;
   }
 
   async function canUseAdminPunishmentCommands(ctx) {
@@ -5021,7 +5026,7 @@ function createBot() {
 
   async function adminRulesCommand(ctx) {
     ensureGroup(ctx);
-    if (!isBotAdmin(ctx)) {
+    if (!await canUseAdminPunishmentCommands(ctx)) {
       await deleteMessageSafely(ctx, ctx.message?.message_id);
       await ctx.reply('Эта команда доступна только администраторам.');
       return;
@@ -5797,7 +5802,7 @@ function createBot() {
 
   bot.action('admin_rules:close', async (ctx) => {
     await safeAnswerCbQuery(ctx);
-    if (!isBotAdmin(ctx)) {
+    if (!await canUseAdminPunishmentCommands(ctx)) {
       await ctx.reply('Закрыть правила могут только администраторы.');
       return;
     }
