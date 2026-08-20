@@ -1685,7 +1685,7 @@ async function showSettingsAdminRulesMenu(ctx, chatId) {
     '',
     `Статус функции правил АДМ: ${service.isAdminRulesEnabled(chatId) ? 'включена' : 'отключена'}`,
   ].join('\n');
-  await ctx.editMessageText(text, {
+  await safeEditMessageText(ctx, text, {
     reply_markup: buildSettingsAdminRulesKeyboard(chatId),
   });
 }
