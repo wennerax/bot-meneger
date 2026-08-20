@@ -735,6 +735,7 @@ function buildSettingsRulesKeyboard(chatId) {
   const enabled = service.isRulesEnabled(chatId);
   return {
     inline_keyboard: [
+      [{ text: '👥 Правила АДМ', callback_data: `settings:admin_rules:${chatId}` }],
       [{ text: enabled ? 'Отключить правила' : 'Включить правила', callback_data: `settings:rules_toggle:${chatId}` }],
       [{ text: 'Изменить правила', callback_data: `settings:rules_edit:${chatId}` }],
       [{ text: 'Добавить правила', callback_data: `settings:rules_add:${chatId}` }],
@@ -748,6 +749,34 @@ function buildSettingsRulesMenuText(chatId, rulesText = '') {
   const rules = String(rulesText || '').trim();
   return [
     '📜 Настройки правил группы',
+    '',
+    'Текущие правила:',
+    rules || 'Пока не заданы.',
+    '',
+    'Выберите действие:',
+  ].join('\n');
+}
+
+function buildSettingsAdminRulesKeyboard(chatId) {
+  const service = activeModerationService || defaultModerationService;
+  const enabled = service.isAdminRulesEnabled(chatId);
+  return {
+    inline_keyboard: [
+      [{ text: enabled ? 'Отключить правила АДМ' : 'Включить правила АДМ', callback_data: `settings:admin_rules_toggle:${chatId}` }],
+      [{ text: 'Изменить правила АДМ', callback_data: `settings:admin_rules_edit:${chatId}` }],
+      [{ text: 'Добавить правила АДМ', callback_data: `settings:admin_rules_add:${chatId}` }],
+      [{ text: 'Удалить правила АДМ', callback_data: `settings:admin_rules_clear:${chatId}` }],
+      [{ text: 'Назад', callback_data: `settings:section:rules:${chatId}` }],
+    ],
+  };
+}
+
+function buildSettingsAdminRulesMenuText(chatId, rulesText = '') {
+  const rules = String(rulesText || '').trim();
+  return [
+    '👥 Правила для администраторов',
+    '',
+    'Эти правила видят только администраторы через /arule или !аправила.',
     '',
     'Текущие правила:',
     rules || 'Пока не заданы.',
@@ -1644,6 +1673,23 @@ async function showSettingsRulesMenu(ctx, chatId) {
   await ctx.editMessageText(text, { reply_markup: buildSettingsRulesKeyboard(chatId) });
 }
 
+async function showSettingsAdminRulesMenu(ctx, chatId) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  const service = activeModerationService || defaultModerationService;
+  const text = [
+    buildSettingsAdminRulesMenuText(chatId, service.getAdminRules(chatId)),
+    '',
+    `Статус функции правил АДМ: ${service.isAdminRulesEnabled(chatId) ? 'включена' : 'отключена'}`,
+  ].join('\n');
+  await ctx.editMessageText(text, {
+    reply_markup: buildSettingsAdminRulesKeyboard(chatId),
+  });
+}
+
 async function showSettingsBanwordsMenu(ctx, chatId) {
   if (!(await canManageGroupSettings(ctx, chatId))) {
     await ctx.reply('У вас нет прав менять настройки этой группы.');
@@ -1937,6 +1983,9 @@ function parseSettingsPrompt(action) {
   }
   if (action === 'settings_rules_set') {
     return 'Отправьте новые правила для группы.';
+  }
+  if (action === 'settings_admin_rules_set') {
+    return 'Отправьте новые правила для администраторов.';
   }
   if (action === 'settings_banword_add') {
     return 'Отправьте слово или несколько слов для добавления.\nПоддерживаются форматы:\n• Через запятую: нарко, соль, травка\n• Через перевод строки: нарко\nсоль\nтравка';
@@ -2693,8 +2742,8 @@ function createBot() {
   }
 
   function isKnownCommandText(text) {
-    const slashCommand = /^\/(start|help|id|about|whoami|stats|rules|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|dice|fate|compliment|insult|top|admins|banlist|mutelist|setrules|warn|delwarn|warnings|unwarn|mute|delmute|unmute|ban|delban|unban|setgreeting|addadmin|removeadmin|promote|demote|clearhistory|miniapp|admincom|ai)(\s|$)/i;
-    const bangCommand = /^!(delban|delmute|delwarn|начало|помощь|айди|информация|кто\s*я|статистика|правила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|инсульт|предупреждение|варны|мут|размут|бан|разбан|топ)(\s|$)/i;
+    const slashCommand = /^\/(start|help|id|about|whoami|stats|rules|arule|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|dice|fate|compliment|insult|top|admins|banlist|mutelist|setrules|warn|delwarn|warnings|unwarn|mute|delmute|unmute|ban|delban|unban|setgreeting|addadmin|removeadmin|promote|demote|clearhistory|miniapp|admincom|ai)(\s|$)/i;
+    const bangCommand = /^!(delban|delmute|delwarn|начало|помощь|айди|информация|кто\s*я|статистика|правила|аправила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|инсульт|предупреждение|варны|мут|размут|бан|разбан|топ)(\s|$)/i;
     const plusMinusCommand = /^(\+антиспам|\+antispam|\+антифлуд|\+antiflood|\-антиспам|\-antispam|\-антифлуд|\-antiflood|\+ссылки|\+links|\-ссылки|\-links|\+описание|\+description|\+rules|\+правила|\+greeting|\+приветствие)(\s|$)/i;
     return slashCommand.test(text) || bangCommand.test(text) || plusMinusCommand.test(text);
   }
@@ -2732,6 +2781,7 @@ function createBot() {
       информация: 'about',
       статистика: 'stats',
       правила: 'rules',
+      ['а' + 'правила']: 'admin_rules',
       обнять: 'hug',
       поцеловать: 'kiss',
       шлёпнуть: 'slap',
@@ -3295,7 +3345,7 @@ function createBot() {
         id: 'moderator',
         label: '👮 Модерские команды',
         commands: [
-          { cmd: 'rules', label: '/rules' }, { cmd: 'setrules', label: '/setrules' },
+          { cmd: 'rules', label: '/rules' }, { cmd: 'arule', label: '/arule' }, { cmd: 'setrules', label: '/setrules' },
           { cmd: 'setgreeting', label: '/setgreeting' }, { cmd: 'antispam', label: '+антиспам' },
           { cmd: 'antiflood', label: '+антифлуд' }, { cmd: 'antilinks', label: '+ссылки' },
           { cmd: 'warn', label: '/warn' }, { cmd: 'warnings', label: '/warnings' },
@@ -3880,6 +3930,13 @@ function createBot() {
     if (pending.action === 'settings_rules_set' && ctx.message.text) {
       moderationService.setRules(groupId, buildTextPayloadFromMessage(ctx));
       await ctx.reply('✅ Правила группы обновлены.');
+      clearPendingSettingsAction(ctx);
+      return true;
+    }
+
+    if (pending.action === 'settings_admin_rules_set' && ctx.message.text) {
+      moderationService.setAdminRules(groupId, buildTextPayloadFromMessage(ctx));
+      await ctx.reply('✅ Правила для администраторов обновлены.');
       clearPendingSettingsAction(ctx);
       return true;
     }
@@ -4962,6 +5019,28 @@ function createBot() {
     ctx.reply(moderationService.getRules(ctx.chat.id));
   }
 
+  async function adminRulesCommand(ctx) {
+    ensureGroup(ctx);
+    if (!isBotAdmin(ctx)) {
+      await deleteMessageSafely(ctx, ctx.message?.message_id);
+      await ctx.reply('Эта команда доступна только администраторам.');
+      return;
+    }
+
+    if (!moderationService.isAdminRulesEnabled(ctx.chat.id)) {
+      await deleteMessageSafely(ctx, ctx.message?.message_id);
+      await ctx.reply('⚠️ Правила для администраторов отключены.');
+      return;
+    }
+    const rules = moderationService.getAdminRules(ctx.chat.id);
+    await ctx.reply(rules || 'Правила для администраторов ещё не заданы.', {
+      reply_markup: {
+        inline_keyboard: [[{ text: 'Закрыть', callback_data: 'admin_rules:close' }]],
+      },
+    });
+    await deleteMessageSafely(ctx, ctx.message?.message_id);
+  }
+
   function setRulesCommand(ctx, args) {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
@@ -5553,6 +5632,9 @@ function createBot() {
       case 'правила':
         rulesCommand(ctx);
         return true;
+      case 'аправила':
+        await adminRulesCommand(ctx);
+        return true;
       case 'установить':
         if (secondWord === 'правила') {
           setRulesCommand(ctx, args.replace(/^правила\s*/i, ''));
@@ -5713,6 +5795,19 @@ function createBot() {
     }
   });
 
+  bot.action('admin_rules:close', async (ctx) => {
+    await safeAnswerCbQuery(ctx);
+    if (!isBotAdmin(ctx)) {
+      await ctx.reply('Закрыть правила могут только администраторы.');
+      return;
+    }
+    try {
+      await ctx.deleteMessage();
+    } catch (error) {
+      // Ignore stale or already deleted messages.
+    }
+  });
+
   bot.action(/^settings:(.+)$/, async (ctx) => {
     const action = ctx.match[1];
     const callbackData = ctx.callbackQuery?.data || `settings:${action}`;
@@ -5835,6 +5930,36 @@ function createBot() {
         service.enableRules(chatId);
       }
       await showSettingsRulesMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'admin_rules') {
+      await showSettingsAdminRulesMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'admin_rules_toggle') {
+      const service = activeModerationService || defaultModerationService;
+      if (service.isAdminRulesEnabled(chatId)) {
+        service.disableAdminRules(chatId);
+      } else {
+        service.enableAdminRules(chatId);
+      }
+      await showSettingsAdminRulesMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'admin_rules_edit' || parsed.target === 'admin_rules_add') {
+      setPendingSettingsAction(ctx, { action: 'settings_admin_rules_set', groupId: chatId });
+      await ctx.reply(parseSettingsPrompt('settings_admin_rules_set'));
+      return;
+    }
+
+    if (parsed.target === 'admin_rules_clear') {
+      const service = activeModerationService || defaultModerationService;
+      service.setAdminRules(chatId, '');
+      await ctx.reply('✅ Правила для администраторов очищены.');
+      await showSettingsAdminRulesMenu(ctx, chatId);
       return;
     }
 
@@ -6802,6 +6927,10 @@ function createBot() {
 
   bot.command(['rules', 'правила'], (ctx) => {
     rulesCommand(ctx);
+  });
+
+  bot.command('arule', async (ctx) => {
+    await adminRulesCommand(ctx);
   });
 
   bot.command(['hug', 'обнять'], async (ctx) => {
@@ -7826,6 +7955,7 @@ module.exports = {
   buildSettingsCommandRightsKeyboard,
   buildSettingsFirstMessageKeyboard,
   buildSettingsRulesMenuText,
+  buildSettingsAdminRulesMenuText,
   buildSettingsAnonymousMenuText,
   buildBotMediaSend,
   buildSettingsAnonymousKeyboard,

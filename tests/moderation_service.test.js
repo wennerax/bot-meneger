@@ -26,6 +26,23 @@ test('rules and filters are stored per chat and can be removed', () => {
   assert.equal(service.removeFilter(100, 'SPAM'), false);
 });
 
+test('admin rules are stored separately and can be toggled', () => {
+  const service = new ModerationService();
+
+  service.setRules(100, 'Правила для всех');
+  service.setAdminRules(100, 'Правила для администраторов');
+
+  assert.equal(service.getRules(100), 'Правила для всех');
+  assert.equal(service.getAdminRules(100), 'Правила для администраторов');
+  assert.equal(service.isAdminRulesEnabled(100), true);
+
+  service.disableAdminRules(100);
+  assert.equal(service.isAdminRulesEnabled(100), false);
+
+  service.enableAdminRules(100);
+  assert.equal(service.isAdminRulesEnabled(100), true);
+});
+
 test('spam and link protection can be toggled per chat', () => {
   const service = new ModerationService();
 

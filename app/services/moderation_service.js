@@ -173,6 +173,8 @@ class ModerationService {
   _normalizeChat(chat = {}) {
     return {
       rules: normalizeTextPayload(chat.rules ?? 'Правила чата пока не настроены.'),
+      adminRules: normalizeTextPayload(chat.adminRules ?? 'Правила для администраторов пока не настроены.'),
+      adminRulesEnabled: chat.adminRulesEnabled === undefined ? true : Boolean(chat.adminRulesEnabled),
       greeting: normalizeTextPayload(chat.greeting ?? 'Добро пожаловать в чат! Ознакомьтесь с правилами через /rules.'),
       warnings: chat.warnings && typeof chat.warnings === 'object'
         ? Object.fromEntries(Object.entries(chat.warnings).map(([key, value]) => [String(key), Number(value)]))
@@ -389,6 +391,33 @@ class ModerationService {
   setRules(chatId, rules) {
     this._getChat(chatId).rules = normalizeTextPayload(rules);
     this._save();
+  }
+
+  getAdminRules(chatId) {
+    return normalizeTextPayload(this._getChat(chatId).adminRules).text;
+  }
+
+  getAdminRulesPayload(chatId) {
+    return normalizeTextPayload(this._getChat(chatId).adminRules);
+  }
+
+  setAdminRules(chatId, rules) {
+    this._getChat(chatId).adminRules = normalizeTextPayload(rules);
+    this._save();
+  }
+
+  enableAdminRules(chatId) {
+    this._getChat(chatId).adminRulesEnabled = true;
+    this._save();
+  }
+
+  disableAdminRules(chatId) {
+    this._getChat(chatId).adminRulesEnabled = false;
+    this._save();
+  }
+
+  isAdminRulesEnabled(chatId) {
+    return this._getChat(chatId).adminRulesEnabled !== false;
   }
 
   getGreeting(chatId) {
