@@ -288,6 +288,7 @@ class ModerationService {
       },
       adminNotify: {
         mode: (chat.adminNotify && typeof chat.adminNotify.mode === 'string') ? chat.adminNotify.mode : 'none',
+        notificationGroupId: Number.isFinite(Number(chat.adminNotify?.notificationGroupId)) ? Number(chat.adminNotify.notificationGroupId) : 0,
         notifyOwner: Boolean(chat.adminNotify?.notifyOwner),
         notifyAdmins: Boolean(chat.adminNotify?.notifyAdmins),
         advanced: Boolean(chat.adminNotify?.advanced),
@@ -1100,6 +1101,26 @@ class ModerationService {
       return false;
     }
     this._getChat(chatId).adminNotify.mode = String(mode);
+    this._save();
+    return true;
+  }
+
+  getAdminNotifyGroupId(chatId) {
+    return Number(this._getChat(chatId).adminNotify.notificationGroupId) || 0;
+  }
+
+  setAdminNotifyGroupId(chatId, groupId) {
+    const normalized = Number(groupId);
+    if (!Number.isInteger(normalized) || normalized === 0) {
+      return false;
+    }
+    this._getChat(chatId).adminNotify.notificationGroupId = normalized;
+    this._save();
+    return true;
+  }
+
+  clearAdminNotifyGroupId(chatId) {
+    this._getChat(chatId).adminNotify.notificationGroupId = 0;
     this._save();
     return true;
   }

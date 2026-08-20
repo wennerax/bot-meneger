@@ -814,6 +814,7 @@ function buildSettingsBanwordsKeyboard(chatId) {
 function buildSettingsAdminKeyboard(chatId) {
   const service = activeModerationService || defaultModerationService;
   const mode = service.getAdminNotifyMode(chatId);
+  const notificationGroupId = service.getAdminNotifyGroupId(chatId);
   const notifyOwner = service.getAdminNotifyOwner(chatId);
   const notifyAdmins = service.getAdminNotifyAdmins(chatId);
   const advanced = service.getAdminNotifyAdvanced(chatId);
@@ -833,6 +834,7 @@ function buildSettingsAdminKeyboard(chatId) {
       [
         { text: `🔔 Уведомить Администраторов ${notifyAdmins ? '✅' : '❌'}`, callback_data: `settings:admin_notify:notify_admins:${chatId}` },
       ],
+      [{ text: `💬 Админ Чат: ${notificationGroupId || 'не задан'}`, callback_data: `settings:admin_notify_chat:${chatId}` }],
       [
         { text: `🛠️ Расширенные настройки${advanced ? ' ✅' : ''}`, callback_data: `settings:admin_notify_advanced:${chatId}` },
       ],
@@ -1022,6 +1024,17 @@ async function showSettingsAdminAdvancedMenu(ctx, chatId) {
   await ctx.editMessageText(buildSettingsAdminAdvancedMenuText(), { reply_markup: buildSettingsAdminAdvancedKeyboard(chatId) });
 }
 
+async function showSettingsAdminChatMenu(ctx, chatId) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+
+  await safeEditMessageText(ctx, buildSettingsAdminChatText(chatId), {
+    reply_markup: buildSettingsAdminChatKeyboard(chatId),
+  });
+}
+
 function buildSettingsAdminMenuText() {
   return [
     '🚨 @admin — это команда, доступная пользователям для привлечения внимания персонала группы, например, в случае, если какой-либо другой пользователь не соблюдает правила группы.',
@@ -1032,6 +1045,28 @@ function buildSettingsAdminMenuText() {
     '',
     'Уведомление получит:',
   ].join('\n');
+}
+
+function buildSettingsAdminChatText(chatId) {
+  const service = activeModerationService || defaultModerationService;
+  const groupId = service.getAdminNotifyGroupId(chatId);
+  return [
+    '💬 Админ Чат',
+    '',
+    'Укажите ID группы, куда будут приходить уведомления от пользователей через @admin.',
+    '',
+    `Текущая группа: ${groupId || 'не задана'}`,
+  ].join('\n');
+}
+
+function buildSettingsAdminChatKeyboard(chatId) {
+  return {
+    inline_keyboard: [
+      [{ text: 'Изменить ID группы', callback_data: `settings:admin_notify_chat_edit:${chatId}` }],
+      [{ text: 'Удалить группу', callback_data: `settings:admin_notify_chat_clear:${chatId}` }],
+      [{ text: 'Назад', callback_data: `settings:admin_notify:${chatId}` }],
+    ],
+  };
 }
 
 function buildSettingsAnonymousMenuText() {
@@ -1986,6 +2021,9 @@ function parseSettingsPrompt(action) {
   }
   if (action === 'settings_admin_rules_set') {
     return 'Отправьте новые правила для администраторов.';
+  }
+  if (action === 'settings_admin_notify_chat_set') {
+    return 'Отправьте ID группы для уведомлений @admin. Например: -1001234567890';
   }
   if (action === 'settings_banword_add') {
     return 'Отправьте слово или несколько слов для добавления.\nПоддерживаются форматы:\n• Через запятую: нарко, соль, травка\n• Через перевод строки: нарко\nсоль\nтравка';
@@ -3942,6 +3980,20 @@ function createBot() {
     if (pending.action === 'settings_admin_rules_set' && ctx.message.text) {
       moderationService.setAdminRules(groupId, buildTextPayloadFromMessage(ctx));
       await ctx.reply('✅ Правила для администраторов обновлены.');
+      clearPendingSettingsAction(ctx);
+      return true;
+    }
+
+    if (pending.action === 'settings_admin_notify_chat_set' && ctx.message.text) {
+      const groupIdText = String(ctx.message.text).trim();
+      const notificationGroupId = Number(groupIdText);
+      if (!/^-?\d+$/.test(groupIdText) || !Number.isInteger(notificationGroupId) || notificationGroupId === 0) {
+        await ctx.reply('⚠️ Укажите корректный числовой ID группы, например -1001234567890.');
+        return true;
+      }
+      moderationService.setAdminNotifyGroupId(groupId, notificationGroupId);
+      moderationService.setAdminNotifyAdmins(groupId, true);
+      await ctx.reply(`✅ Админ Чат сохранён: ${notificationGroupId}`);
       clearPendingSettingsAction(ctx);
       return true;
     }
@@ -6236,6 +6288,24 @@ function createBot() {
       return;
     }
 
+    if (parsed.target === 'admin_notify_chat') {
+      await showSettingsAdminChatMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'admin_notify_chat_edit') {
+      setPendingSettingsAction(ctx, { action: 'settings_admin_notify_chat_set', groupId: chatId });
+      await ctx.reply(parseSettingsPrompt('settings_admin_notify_chat_set'));
+      return;
+    }
+
+    if (parsed.target === 'admin_notify_chat_clear') {
+      const service = activeModerationService || defaultModerationService;
+      service.clearAdminNotifyGroupId(chatId);
+      await showSettingsAdminChatMenu(ctx, chatId);
+      return;
+    }
+
     if (parsed.target === 'admin_notify_advanced') {
       await showSettingsAdminAdvancedMenu(ctx, chatId);
       return;
@@ -7627,11 +7697,13 @@ function createBot() {
 
       const moderationService = activeModerationService || defaultModerationService;
       const shouldNotifyAdmins = moderationService.getAdminNotifyAdmins(ctx.chat.id);
-      if (shouldNotifyAdmins && Number.isFinite(ADMIN_NOTIFICATION_GROUP_ID) && ADMIN_NOTIFICATION_GROUP_ID !== 0 && ADMIN_NOTIFICATION_GROUP_ID !== ctx.chat.id) {
+      const configuredNotificationGroupId = moderationService.getAdminNotifyGroupId(ctx.chat.id);
+      const notificationGroupId = configuredNotificationGroupId || ADMIN_NOTIFICATION_GROUP_ID;
+      if (shouldNotifyAdmins && Number.isFinite(notificationGroupId) && notificationGroupId !== 0 && notificationGroupId !== ctx.chat.id) {
         try {
-          const adminMsg = await ctx.telegram.sendMessage(ADMIN_NOTIFICATION_GROUP_ID, formatAdminReportText(report), { reply_markup: buildAdminReportKeyboard(report) });
+          const adminMsg = await ctx.telegram.sendMessage(notificationGroupId, formatAdminReportText(report), { reply_markup: buildAdminReportKeyboard(report) });
           if (adminMsg && adminMsg.message_id) {
-            report.notifications.push({ chatId: ADMIN_NOTIFICATION_GROUP_ID, messageId: adminMsg.message_id, origin: false });
+            report.notifications.push({ chatId: notificationGroupId, messageId: adminMsg.message_id, origin: false });
           }
         } catch (error) {
           console.error('Failed to send admin notification to admin group:', error?.message || error);

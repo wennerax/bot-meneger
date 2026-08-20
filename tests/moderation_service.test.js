@@ -43,6 +43,19 @@ test('admin rules are stored separately and can be toggled', () => {
   assert.equal(service.isAdminRulesEnabled(100), true);
 });
 
+test('admin notification group is stored per chat', () => {
+  const service = new ModerationService();
+
+  assert.equal(service.getAdminNotifyGroupId(100), 0);
+  assert.equal(service.setAdminNotifyGroupId(100, -1001234567890), true);
+  assert.equal(service.getAdminNotifyGroupId(100), -1001234567890);
+  assert.equal(service.getAdminNotifyGroupId(200), 0);
+  assert.equal(service.setAdminNotifyGroupId(100, 0), false);
+
+  service.clearAdminNotifyGroupId(100);
+  assert.equal(service.getAdminNotifyGroupId(100), 0);
+});
+
 test('spam and link protection can be toggled per chat', () => {
   const service = new ModerationService();
 
