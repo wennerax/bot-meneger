@@ -7158,6 +7158,12 @@ function createBot() {
       return;
     }
 
+    const managedGroups = await getManagedGroupsForUser(ctx);
+    if (managedGroups.length > 1) {
+      await showSettingsGroupSelector(ctx);
+      return;
+    }
+
     await openSettingsForCurrentContext(ctx, chatId);
   });
 
