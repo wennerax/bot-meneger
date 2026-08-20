@@ -56,6 +56,17 @@ test('admin notification group is stored per chat', () => {
   assert.equal(service.getAdminNotifyGroupId(100), 0);
 });
 
+test('admin notification group resolves linked source chats', () => {
+  const service = new ModerationService();
+
+  service.setAdminNotifyGroupId(100, -1001234567890);
+  service.setAdminNotifyGroupId(200, -1001234567890);
+  service.setAdminNotifyGroupId(300, -1009876543210);
+
+  assert.deepEqual(service.getAdminNotifySourceChats(-1001234567890).sort((a, b) => a - b), [100, 200]);
+  assert.deepEqual(service.getAdminNotifySourceChats(-1009876543210), [300]);
+});
+
 test('spam and link protection can be toggled per chat', () => {
   const service = new ModerationService();
 

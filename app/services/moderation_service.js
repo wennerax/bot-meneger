@@ -1109,6 +1109,17 @@ class ModerationService {
     return Number(this._getChat(chatId).adminNotify.notificationGroupId) || 0;
   }
 
+  getAdminNotifySourceChats(notificationGroupId) {
+    const targetId = Number(notificationGroupId);
+    if (!Number.isInteger(targetId) || targetId === 0) {
+      return [];
+    }
+
+    return Array.from(this.chats.entries())
+      .filter(([, chat]) => Number(chat.adminNotify?.notificationGroupId) === targetId)
+      .map(([chatId]) => Number(chatId));
+  }
+
   setAdminNotifyGroupId(chatId, groupId) {
     const normalized = Number(groupId);
     if (!Number.isInteger(normalized) || normalized === 0) {

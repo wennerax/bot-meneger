@@ -260,6 +260,22 @@ async function canManageGroupSettings(ctx, targetChatId) {
     return true;
   }
 
+  const currentChatId = Number(ctx.chat?.id);
+  const service = activeModerationService || defaultModerationService;
+  if (Number.isFinite(currentChatId) && currentChatId !== chatId) {
+    const linkedSourceChats = service.getAdminNotifySourceChats(currentChatId);
+    if (linkedSourceChats.includes(chatId)) {
+      try {
+        const currentMember = await ctx.telegram.getChatMember(currentChatId, userId);
+        if (isGroupOwnerMember(currentMember) || isGroupMemberWithManageRights(currentMember)) {
+          return true;
+        }
+      } catch (error) {
+        // Continue with the regular target-group permission check.
+      }
+    }
+  }
+
   try {
     const member = await ctx.telegram.getChatMember(chatId, userId);
     if (isGroupOwnerMember(member) || isGroupMemberWithProfileChangePermission(member)) {
@@ -436,6 +452,17 @@ async function getManagedGroupsForUser(ctx) {
       }
     } catch (error) {
       // ignore
+    }
+
+    const service = activeModerationService || defaultModerationService;
+    const linkedSourceChats = service.getAdminNotifySourceChats(ctx.chat.id);
+    for (const sourceChatId of linkedSourceChats) {
+      try {
+        const sourceChat = await ctx.telegram.getChat(sourceChatId);
+        addGroup(sourceChatId, sourceChat?.title || String(sourceChatId));
+      } catch (error) {
+        addGroup(sourceChatId, String(sourceChatId));
+      }
     }
   }
 
