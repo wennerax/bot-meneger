@@ -592,7 +592,8 @@ function buildModerationLogsKeyboard(chatId) {
 }
 
 function formatModerationLogsText(chatId, limit = 10) {
-  const logs = moderationService.getModerationLogs(chatId, limit);
+  const service = activeModerationService || defaultModerationService;
+  const logs = service.getModerationLogs(chatId, limit);
   if (!logs.length) {
     return '📋 Логи модерации пустые.\n\nПока нет действий по предупреждениям, мутам и банам.';
   }
