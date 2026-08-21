@@ -286,6 +286,7 @@ class ModerationService {
       },
       spamProtectionEnabled: Boolean(chat.spamProtectionEnabled),
       linkProtectionEnabled: Boolean(chat.linkProtectionEnabled),
+      moderatorWarningsEnabled: chat.moderatorWarningsEnabled === undefined ? true : Boolean(chat.moderatorWarningsEnabled),
       floodProtectionEnabled: Boolean(chat.floodProtectionEnabled),
       rulesEnabled: chat.rulesEnabled === undefined ? true : Boolean(chat.rulesEnabled),
       streaksEnabled: chat.streaksEnabled === undefined ? true : Boolean(chat.streaksEnabled),
@@ -490,6 +491,20 @@ class ModerationService {
     this._getChat(chatId).moderationLogs = [];
     this._save();
     return true;
+  }
+
+  enableModeratorWarnings(chatId) {
+    this._getChat(chatId).moderatorWarningsEnabled = true;
+    this._save();
+  }
+
+  disableModeratorWarnings(chatId) {
+    this._getChat(chatId).moderatorWarningsEnabled = false;
+    this._save();
+  }
+
+  areModeratorWarningsEnabled(chatId) {
+    return this._getChat(chatId).moderatorWarningsEnabled !== false;
   }
 
   resetWarnings(chatId, userId) {

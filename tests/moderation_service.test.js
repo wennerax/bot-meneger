@@ -114,6 +114,16 @@ test('spam and link protection can be toggled per chat', () => {
   assert.equal(service.isLinkProtectionEnabled(100), false);
 });
 
+test('moderator warnings can be enabled and disabled per chat', () => {
+  const service = new ModerationService();
+
+  assert.equal(service.areModeratorWarningsEnabled(100), true);
+  service.disableModeratorWarnings(100);
+  assert.equal(service.areModeratorWarningsEnabled(100), false);
+  service.enableModeratorWarnings(100);
+  assert.equal(service.areModeratorWarningsEnabled(100), true);
+});
+
 test('flood protection can be toggled per chat', () => {
   const service = new ModerationService();
 

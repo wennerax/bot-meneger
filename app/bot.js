@@ -1360,9 +1360,12 @@ async function showSettingsMainMenu(ctx, chatId, page = 0) {
 }
 
 function buildSettingsModerationKeyboard(chatId) {
+  const service = activeModerationService || defaultModerationService;
+  const warningsEnabled = service.areModeratorWarningsEnabled(chatId);
   return {
     inline_keyboard: [
-      [{ text: '⚠️ Выдать предупреждение админу', callback_data: `settings:moderation_warn:${chatId}` }],
+      [{ text: warningsEnabled ? '⚠️ Выдать предупреждение админу' : '🔒 Предупреждения модерам выключены', callback_data: `settings:moderation_warn:${chatId}` }],
+      [{ text: warningsEnabled ? '🔕 Выключить предупреждения модерам' : '🔔 Включить предупреждения модерам', callback_data: `settings:moderation_warnings:${chatId}:${warningsEnabled ? 'off' : 'on'}` }],
       [{ text: '✅ Снять предупреждение', callback_data: `settings:moderation_unwarn:${chatId}` }],
       [{ text: '➖ Снять админа', callback_data: `settings:moderation_remove:${chatId}` }],
       [{ text: '⬆️ Повысить админа', callback_data: `settings:moderation_promote:${chatId}` }],
@@ -1405,6 +1408,8 @@ function formatModerationStatsText(chatId, adminProfiles = null) {
     '',
     'Администраторы бота:',
     adminLines,
+    '',
+    `Предупреждения модерам: ${service.areModeratorWarningsEnabled(chatId) ? 'включены' : 'выключены'}`,
     '',
     'Три предупреждения снимают вспомогательного администратора с роли.',
   ].join('\n');
@@ -4277,6 +4282,11 @@ function createBot() {
     const groupId = Number(pending.groupId || ctx.chat.id);
 
     if (pending.action.startsWith('moderation_') && ctx.message.text) {
+      if (pending.action === 'moderation_warn' && !moderationService.areModeratorWarningsEnabled(groupId)) {
+        await replyWithAutoDelete(ctx, '⚠️ Предупреждения модераторам сейчас выключены в настройках.');
+        clearPendingSettingsAction(ctx);
+        return true;
+      }
       if (!canUseBotAdminAction(ctx, 'manage_admins')) {
         await replyWithAutoDelete(ctx, 'Только владелец или администратор уровня 2 могут управлять администраторами.');
         clearPendingSettingsAction(ctx);
@@ -6503,6 +6513,17 @@ function createBot() {
       return;
     }
 
+    if (parsed.target === 'moderation_warnings') {
+      const service = activeModerationService || defaultModerationService;
+      if (parsed.value === 'on') {
+        service.enableModeratorWarnings(chatId);
+      } else {
+        service.disableModeratorWarnings(chatId);
+      }
+      await showSettingsModerationMenu(ctx, chatId);
+      return;
+    }
+
     if (parsed.target === 'moderation_clear') {
       database.clearBotAdminWarnings(chatId);
       await showSettingsModerationMenu(ctx, chatId);
@@ -6510,6 +6531,11 @@ function createBot() {
     }
 
     if (['moderation_warn', 'moderation_unwarn', 'moderation_remove', 'moderation_promote', 'moderation_add'].includes(parsed.target)) {
+      if (parsed.target === 'moderation_warn' && !moderationService.areModeratorWarningsEnabled(chatId)) {
+        await safeAnswerCbQuery(ctx, 'Предупреждения модерам выключены.');
+        await ctx.reply('⚠️ Выдача предупреждений модераторам отключена в настройках.');
+        return;
+      }
       setPendingSettingsAction(ctx, { action: parsed.target, groupId: chatId });
       const prompts = {
         moderation_warn: 'Отправьте ID или @username администратора для предупреждения.',
