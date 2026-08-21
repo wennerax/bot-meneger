@@ -585,7 +585,7 @@ function buildModerationLogsKeyboard(chatId) {
         { text: 'Очистить логи', callback_data: `menu:logs_clear:${chatId}` },
       ],
       [
-        { text: 'Назад', callback_data: 'menu:overview' },
+        { text: 'Назад', callback_data: `settings:main:${chatId}` },
       ],
     ],
   };
