@@ -1390,9 +1390,16 @@ function formatModerationStatsText(chatId, adminProfiles = null) {
   const adminLines = admins.length
     ? admins.map((userId) => {
       const profile = adminProfiles?.[String(userId)] || database?.data?.groupUsers?.[Number(chatId)]?.[userId] || {};
-      const label = profile.username
-        ? `@${String(profile.username).replace(/^@/, '')}`
-        : profile.first_name || profile.displayName || 'пользователь';
+      const username = String(profile.username || '').replace(/^@/, '').trim();
+      const firstName = String(profile.first_name || '').trim();
+      const displayName = String(profile.displayName || '').trim();
+      const label = username && !/^\W+$/.test(username)
+        ? `@${username}`
+        : firstName && !/^\W+$/.test(firstName)
+          ? firstName
+          : displayName && !/^\W+$/.test(displayName)
+            ? displayName
+            : 'Администратор';
       return `• ${label} — уровень ${database.getBotAdminLevel(chatId, userId)}, предупреждений ${database.getBotAdminWarnings(chatId, userId)}`;
     }).join('\n')
     : '• Нет администраторов бота';
