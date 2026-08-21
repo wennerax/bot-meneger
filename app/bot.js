@@ -4350,6 +4350,8 @@ function createBot() {
           await replyWithAutoDelete(ctx, 'Уровень должен быть от 2 до 5.');
         } else {
           database.addBotAdmin(groupId, targetId, level);
+          await deleteMessageSafely(ctx, ctx.message?.message_id);
+          await deleteMessageSafely(ctx, pending.promptMessageId);
           await replyWithAutoDelete(ctx, `✅ ${getMentionText(target)} назначен администратором уровня ${level}.`);
         }
       } else if (pending.action === 'moderation_promote') {
@@ -6543,7 +6545,6 @@ function createBot() {
         await ctx.reply('⚠️ Выдача предупреждений модераторам отключена в настройках.');
         return;
       }
-      setPendingSettingsAction(ctx, { action: parsed.target, groupId: chatId });
       const prompts = {
         moderation_warn: 'Отправьте ID или @username администратора для предупреждения.',
         moderation_unwarn: 'Отправьте ID или @username администратора для снятия предупреждения.',
@@ -6551,7 +6552,12 @@ function createBot() {
         moderation_promote: 'Отправьте ID или @username администратора и новый уровень через пробел. Например: @user 3',
         moderation_add: 'Отправьте ID или @username и уровень через пробел. Например: @user 5',
       };
-      await ctx.reply(prompts[parsed.target]);
+      const promptMessage = await ctx.reply(prompts[parsed.target]);
+      setPendingSettingsAction(ctx, {
+        action: parsed.target,
+        groupId: chatId,
+        promptMessageId: promptMessage?.message_id,
+      });
       return;
     }
 
