@@ -541,6 +541,9 @@ function buildSettingsMainKeyboard(chatId) {
       { text: '👥 Управление участниками', callback_data: `settings:section:members:${chatId}` },
       { text: '🤖 Бот Соо', callback_data: `menu:bot_message:${chatId}` },
     ],
+    [
+      { text: '📋 Логи', callback_data: 'menu:logs' },
+    ],
   ];
 }
 

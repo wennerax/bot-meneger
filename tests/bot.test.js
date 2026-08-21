@@ -116,7 +116,7 @@ test('buildSettingsMainKeyboard returns a grouped layout with section buttons', 
   const keyboard = buildSettingsMainKeyboard(42);
 
   assert.ok(Array.isArray(keyboard));
-  assert.equal(keyboard.length, 8);
+  assert.equal(keyboard.length, 9);
   assert.deepEqual(keyboard[0].map((button) => button.text), ['🧩 Капча', '🔗 Ссылки']);
   assert.deepEqual(keyboard[1].map((button) => button.text), ['🛡️ Антиспам', '📜 Правила']);
   assert.deepEqual(keyboard[2].map((button) => button.text), ['🚫 Банворды', '⚠️ Варны']);
@@ -141,6 +141,8 @@ test('buildSettingsMainKeyboard returns a grouped layout with section buttons', 
   assert.equal(keyboard[6][1].callback_data, 'settings:section:mention:42');
   assert.equal(keyboard[7][0].callback_data, 'settings:section:members:42');
   assert.equal(keyboard[7][1].callback_data, 'menu:bot_message:42');
+  assert.deepEqual(keyboard[8].map((button) => button.text), ['📋 Логи']);
+  assert.equal(keyboard[8][0].callback_data, 'menu:logs');
 });
 
 test('isGroupOwnerMember treats creator status as group owner', () => {
