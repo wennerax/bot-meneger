@@ -1063,6 +1063,7 @@ function getHelpPages() {
       '/kiss @юз, !поцеловать @юз - поцеловать пользователя',
       '/slap @юз, !шлёпнуть @юз - шлёпнуть пользователя',
       '/poke @юз, !тыкнуть @юз - ткнуть пользователя',
+      '/ttt - вызвать участников на игру в крестики-нолики',
       '/coin, !монетка - подбросить монетку',
       '/dice, !кубик - бросить кубик',
       '/fate, !вопрос - спросить судьбу',
@@ -3696,6 +3697,7 @@ function createBot() {
         commands: [
           { cmd: 'hug', label: '/hug' }, { cmd: 'kiss', label: '/kiss' },
           { cmd: 'slap', label: '/slap' }, { cmd: 'poke', label: '/poke' },
+          { cmd: 'ttt', label: '/ttt' },
           { cmd: 'coin', label: '/coin' }, { cmd: 'dice', label: '/dice' },
           { cmd: 'fate', label: '/fate' }, { cmd: 'compliment', label: '/compliment' },
           { cmd: 'insult', label: '/insult' }, { cmd: 'ai', label: '/ai' },
