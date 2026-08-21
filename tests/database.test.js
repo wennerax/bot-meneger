@@ -65,6 +65,33 @@ test('owner becomes primary bot admin and can add auxiliary bot admins', () => {
   db.close();
 });
 
+test('bot admin warnings remove an auxiliary admin at three warnings', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-meneger-'));
+  const db = new Database(path.join(dir, 'bot.json'));
+
+  db.ensureGroup(301, 'Warnings', 10);
+  db.addBotAdmin(301, 20, 3);
+  assert.deepEqual(db.addBotAdminWarning(301, 20), { count: 1, removed: false });
+  assert.deepEqual(db.addBotAdminWarning(301, 20), { count: 2, removed: false });
+  assert.deepEqual(db.addBotAdminWarning(301, 20), { count: 3, removed: true });
+  assert.equal(db.isBotAdmin(301, 20), false);
+  assert.equal(db.getBotAdminWarnings(301, 20), 3);
+
+  db.close();
+});
+
+test('bot admin warning reset preserves the primary admin', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-meneger-'));
+  const db = new Database(path.join(dir, 'bot.json'));
+
+  db.ensureGroup(302, 'Owner warnings', 10);
+  assert.deepEqual(db.addBotAdminWarning(302, 10), { count: 0, removed: false });
+  assert.equal(db.isBotAdmin(302, 10), true);
+
+  db.close();
+});
+
+
 test('active punishments persist and can be removed manually', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-meneger-'));
   const db = new Database(path.join(dir, 'bot.json'));

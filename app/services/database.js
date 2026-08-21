@@ -69,6 +69,7 @@ class Database {
         groups: parsed.groups || {},
         groupAdmins: parsed.groupAdmins || {},
         botAdmins: normalizedBotAdmins,
+        botAdminWarnings: parsed.botAdminWarnings || {},
         punishments: parsed.punishments || [],
         activePunishments: parsed.activePunishments || [],
         blacklist: parsed.blacklist || [],
@@ -87,6 +88,7 @@ class Database {
       groups: {},
       groupAdmins: {},
       botAdmins: {},
+      botAdminWarnings: {},
       punishments: [],
       activePunishments: [],
       blacklist: [],
@@ -291,6 +293,44 @@ class Database {
       admins.unshift(Number(ownerId));
     }
     return admins;
+  }
+
+  getBotAdminWarnings(chatId, userId) {
+    return Number(this.data.botAdminWarnings?.[String(Number(chatId))]?.[String(Number(userId))] || 0);
+  }
+
+  addBotAdminWarning(chatId, userId) {
+    const chatKey = String(Number(chatId));
+    const userKey = String(Number(userId));
+    if (this.isPrimaryBotAdmin(chatId, userId)) {
+      return { count: 0, removed: false };
+    }
+    if (!this.data.botAdminWarnings[chatKey]) {
+      this.data.botAdminWarnings[chatKey] = {};
+    }
+    const count = this.getBotAdminWarnings(chatId, userId) + 1;
+    this.data.botAdminWarnings[chatKey][userKey] = count;
+    let removed = false;
+    if (count >= 3) {
+      removed = this.removeBotAdmin(chatId, userId);
+    } else {
+      this._save();
+    }
+    return { count, removed };
+  }
+
+  clearBotAdminWarnings(chatId, userId = null) {
+    const chatKey = String(Number(chatId));
+    if (userId === null || userId === undefined) {
+      delete this.data.botAdminWarnings[chatKey];
+    } else if (this.data.botAdminWarnings[chatKey]) {
+      delete this.data.botAdminWarnings[chatKey][String(Number(userId))];
+      if (!Object.keys(this.data.botAdminWarnings[chatKey]).length) {
+        delete this.data.botAdminWarnings[chatKey];
+      }
+    }
+    this._save();
+    return true;
   }
 
   recordMessage(chatId, userId, displayName, username = null) {

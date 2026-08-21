@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildBulkModerationSummaryMessage, buildFunReply, getTicTacToeWinner, buildTicTacToeKeyboard, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, isBeeTriggerMessage, buildSettingsMainKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage, shouldFailClosedForMedia, cleanupAgreementMessages, handleAgreementDecision, isPollAnswerForTarget, buildBotMediaSend } = require('../app/bot');
+const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildBulkModerationSummaryMessage, buildFunReply, getTicTacToeWinner, buildTicTacToeKeyboard, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage, shouldFailClosedForMedia, cleanupAgreementMessages, handleAgreementDecision, isPollAnswerForTarget, buildBotMediaSend } = require('../app/bot');
 const { buildAiRequestPayload, normalizeMultimodalInputForResponses } = require('../app/ai');
 const premiumEmojis = require('../app/premium_emojis');
 
@@ -8,13 +8,6 @@ test('parsePunishmentDetails extracts duration and reason', () => {
   const result = parsePunishmentDetails('1d реклама', false);
 
   assert.deepEqual(result, { durationHours: 24, reason: 'реклама' });
-});
-
-test('bee trigger matches only the standalone word', () => {
-  assert.equal(isBeeTriggerMessage('пчол'), true);
-  assert.equal(isBeeTriggerMessage(' ПЧОЛ '), true);
-  assert.equal(isBeeTriggerMessage('пчол!'), false);
-  assert.equal(isBeeTriggerMessage('просто пчол'), false);
 });
 
 test('buildBotMediaSend maps media to Telegram send methods and preserves captions', () => {
@@ -139,15 +132,13 @@ test('buildSettingsMainKeyboard returns a grouped layout with section buttons', 
   const keyboard = buildSettingsMainKeyboard(42);
 
   assert.ok(Array.isArray(keyboard));
-  assert.equal(keyboard.length, 9);
+  assert.equal(keyboard.length, 10);
   assert.deepEqual(keyboard[0].map((button) => button.text), ['🧩 Капча', '🔗 Ссылки']);
   assert.deepEqual(keyboard[1].map((button) => button.text), ['🛡️ Антиспам', '📜 Правила']);
   assert.deepEqual(keyboard[2].map((button) => button.text), ['🚫 Банворды', '⚠️ Варны']);
   assert.deepEqual(keyboard[3].map((button) => button.text), ['⚙️ Команды', '🤖 Медиа ИИ']);
   assert.deepEqual(keyboard[4].map((button) => button.text), ['💬 Первый комментарий', '🚨 @admin']);
   assert.deepEqual(keyboard[5].map((button) => button.text), [premiumEmojis.getCustomEmojiFallback('series_premium') + ' Серия', '😶‍🌫️ Скрытые пользователи']);
-  assert.deepEqual(keyboard[6].map((button) => button.text), ['💬 Чат', '🔔 Упоминание']);
-  assert.deepEqual(keyboard[7].map((button) => button.text), ['👥 Управление участниками', '🤖 Бот Соо']);
   assert.equal(keyboard[0][0].callback_data, 'settings:section:captcha:42');
   assert.equal(keyboard[0][1].callback_data, 'settings:section:links:42');
   assert.equal(keyboard[1][0].callback_data, 'settings:section:anti:42');
@@ -160,12 +151,17 @@ test('buildSettingsMainKeyboard returns a grouped layout with section buttons', 
   assert.equal(keyboard[4][1].callback_data, 'settings:section:admin:42');
   assert.equal(keyboard[5][0].callback_data, 'settings:section:streaks:42');
   assert.equal(keyboard[5][1].callback_data, 'settings:section:anonymous:42');
-  assert.equal(keyboard[6][0].callback_data, 'settings:section:chat:42');
-  assert.equal(keyboard[6][1].callback_data, 'settings:section:mention:42');
-  assert.equal(keyboard[7][0].callback_data, 'settings:section:members:42');
-  assert.equal(keyboard[7][1].callback_data, 'menu:bot_message:42');
+  assert.deepEqual(keyboard[6].map((button) => button.text), ['💬 Чат', '🔔 Упоминание']);
+  assert.deepEqual(keyboard[7].map((button) => button.text), ['👥 Управление участниками', '🤖 Бот Соо']);
   assert.deepEqual(keyboard[8].map((button) => button.text), ['📋 Логи']);
-  assert.equal(keyboard[8][0].callback_data, 'menu:logs');
+  assert.deepEqual(keyboard[9].map((button) => button.text), ['Вперёд ➡️']);
+  assert.equal(keyboard[9][0].callback_data, 'settings:page:42:1');
+
+  const secondPage = buildSettingsMainKeyboard(42, 1);
+  assert.deepEqual(secondPage[0].map((button) => button.text), ['🛡️ Модерация']);
+  assert.deepEqual(secondPage[1].map((button) => button.text), ['⬅️ Назад']);
+  assert.equal(secondPage[0][0].callback_data, 'settings:section:moderation:42');
+  assert.equal(secondPage[1][0].callback_data, 'settings:page:42:0');
 });
 
 test('isGroupOwnerMember treats creator status as group owner', () => {

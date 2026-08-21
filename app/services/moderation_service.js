@@ -331,7 +331,6 @@ class ModerationService {
       commandDisabled: (chat.commandDisabled && typeof chat.commandDisabled === 'object')
         ? { ...chat.commandDisabled }
         : {},
-      beeTriggerEnabled: chat.beeTriggerEnabled !== false,
     };
   }
 
@@ -1504,16 +1503,6 @@ class ModerationService {
 
   getAllCommandDisabled(chatId) {
     return { ...this._getChat(chatId).commandDisabled };
-  }
-
-  isBeeTriggerEnabled(chatId) {
-    return this._getChat(chatId).beeTriggerEnabled !== false;
-  }
-
-  setBeeTriggerEnabled(chatId, enabled) {
-    this._getChat(chatId).beeTriggerEnabled = Boolean(enabled);
-    this._save();
-    return this._getChat(chatId).beeTriggerEnabled;
   }
 }
 

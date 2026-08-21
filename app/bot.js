@@ -49,10 +49,6 @@ function detectForbiddenWord(text) {
   return defaultModerationService.findBanWord(0, text);
 }
 
-function isBeeTriggerMessage(text) {
-  return String(text || '').trim().toLowerCase() === 'пчол';
-}
-
 function isChannelPostInGroupMessage(message = {}) {
   if (!message || typeof message !== 'object') {
     return false;
@@ -511,8 +507,9 @@ async function showSettingsGroupSelector(ctx) {
   }
 }
 
-function buildSettingsMainKeyboard(chatId) {
-  return [
+function buildSettingsMainKeyboard(chatId, page = 0) {
+  const pages = [
+    [
     [
       { text: '🧩 Капча', callback_data: `settings:section:captcha:${chatId}` },
       { text: '🔗 Ссылки', callback_data: `settings:section:links:${chatId}` },
@@ -548,7 +545,22 @@ function buildSettingsMainKeyboard(chatId) {
     [
       { text: '📋 Логи', callback_data: 'menu:logs' },
     ],
+    ],
+    [
+    [
+      { text: '🛡️ Модерация', callback_data: `settings:section:moderation:${chatId}` },
+    ],
+    ],
   ];
+  const selectedPage = Math.max(0, Math.min(Number(page) || 0, pages.length - 1));
+  const navigation = [];
+  if (selectedPage > 0) {
+    navigation.push({ text: '⬅️ Назад', callback_data: `settings:page:${chatId}:${selectedPage - 1}` });
+  }
+  if (selectedPage < pages.length - 1) {
+    navigation.push({ text: 'Вперёд ➡️', callback_data: `settings:page:${chatId}:${selectedPage + 1}` });
+  }
+  return [...pages[selectedPage], navigation];
 }
 
 function buildMenuKeyboard(chatId) {
@@ -1331,7 +1343,7 @@ async function showSettingsAdminMenu(ctx, chatId) {
   await safeEditMessageText(ctx, buildSettingsAdminMenuText(), { reply_markup: buildSettingsAdminKeyboard(chatId) });
 }
 
-async function showSettingsMainMenu(ctx, chatId) {
+async function showSettingsMainMenu(ctx, chatId, page = 0) {
   if (!(await canManageGroupSettings(ctx, chatId))) {
     await ctx.reply('⚠️ У вас нет прав менять настройки этой группы.');
     return;
@@ -1339,12 +1351,76 @@ async function showSettingsMainMenu(ctx, chatId) {
 
   const title = getGroupDisplayName(chatId, String(chatId));
   const text = `⚙️ Панель управления группой\n\n🏘️ ${title}\n\nВыберите раздел настроек ниже:`;
-  const replyMarkup = { inline_keyboard: buildSettingsMainKeyboard(chatId) };
+  const replyMarkup = { inline_keyboard: buildSettingsMainKeyboard(chatId, page) };
   if (ctx.callbackQuery) {
     await safeEditMessageText(ctx, text, { reply_markup: replyMarkup });
   } else {
     await ctx.reply(text, { reply_markup: replyMarkup });
   }
+}
+
+function buildSettingsModerationKeyboard(chatId) {
+  return {
+    inline_keyboard: [
+      [{ text: '⚠️ Выдать предупреждение админу', callback_data: `settings:moderation_warn:${chatId}` }],
+      [{ text: '✅ Снять предупреждение', callback_data: `settings:moderation_unwarn:${chatId}` }],
+      [{ text: '➖ Снять админа', callback_data: `settings:moderation_remove:${chatId}` }],
+      [{ text: '⬆️ Повысить админа', callback_data: `settings:moderation_promote:${chatId}` }],
+      [{ text: '➕ Добавить админа', callback_data: `settings:moderation_add:${chatId}` }],
+      [{ text: '🧹 Снять предупреждения всем', callback_data: `settings:moderation_clear:${chatId}` }],
+      [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
+    ],
+  };
+}
+
+function formatModerationStatsText(chatId) {
+  const database = activeDatabase;
+  const service = activeModerationService || defaultModerationService;
+  const punishments = (database?.data?.punishments || []).filter((item) => Number(item.chatId) === Number(chatId));
+  const logs = service.getModerationLogs(chatId, 100);
+  const actionCounts = logs.reduce((counts, item) => {
+    const action = String(item.action || 'action').toUpperCase();
+    counts[action] = (counts[action] || 0) + 1;
+    return counts;
+  }, {});
+  const admins = database?.getBotAdmins(chatId) || [];
+  const adminLines = admins.length
+    ? admins.map((userId) => `• ${userId} — уровень ${database.getBotAdminLevel(chatId, userId)}, предупреждений ${database.getBotAdminWarnings(chatId, userId)}`).join('\n')
+    : '• Нет администраторов бота';
+  const actions = Object.entries(actionCounts).map(([action, count]) => `${action}: ${count}`).join(', ') || 'нет';
+
+  return [
+    '🛡️ Модерация и статистика',
+    '',
+    `Наказаний в истории: ${punishments.length}`,
+    `Действий в логах: ${logs.length}`,
+    `Репутация модерации: ${Math.max(0, 100 - punishments.length)}/100`,
+    `По действиям: ${actions}`,
+    '',
+    'Администраторы бота:',
+    adminLines,
+    '',
+    'Три предупреждения снимают вспомогательного администратора с роли.',
+  ].join('\n');
+}
+
+async function showSettingsModerationMenu(ctx, chatId) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+  let groupAdminsText = '• Не удалось получить список администраторов группы';
+  try {
+    const groupAdmins = await ctx.telegram.getChatAdministrators(chatId);
+    groupAdminsText = groupAdmins.map((item) => {
+      const user = item.user || {};
+      return `• ${getMentionText(user)} — ${item.status === 'creator' ? 'владелец' : 'администратор'}`;
+    }).join('\n') || groupAdminsText;
+  } catch (error) {
+    // Telegram may deny the list when the bot lacks admin permissions.
+  }
+  const text = `${formatModerationStatsText(chatId)}\n\nАдминистраторы группы:\n${groupAdminsText}`;
+  await safeEditMessageText(ctx, text, { reply_markup: buildSettingsModerationKeyboard(chatId) });
 }
 
 async function showSettingsChatMenu(ctx, chatId) {
@@ -3070,7 +3146,7 @@ function createBot() {
   }
 
   function isKnownCommandText(text) {
-    const slashCommand = /^\/(start|help|id|about|whoami|stats|rules|arule|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|dice|fate|compliment|insult|top|admins|banlist|mutelist|setrules|warn|delwarn|warnings|unwarn|mute|delmute|unmute|ban|delban|unban|setgreeting|addadmin|removeadmin|promote|demote|clearhistory|miniapp|admincom|ai)(\s|$)/i;
+    const slashCommand = /^\/(start|help|id|about|whoami|stats|rules|arule|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|dice|fate|compliment|insult|top|admins|banlist|mutelist|setrules|warn|delwarn|warnings|unwarn|mute|delmute|unmute|ban|delban|unban|setgreeting|addadmin|removeadmin|promote|demote|clearhistory|miniapp|admincom|ai|modstats)(\s|$)/i;
     const bangCommand = /^!(delban|delmute|delwarn|начало|помощь|айди|информация|кто\s*я|статистика|правила|аправила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|инсульт|предупреждение|варны|мут|размут|бан|разбан|топ)(\s|$)/i;
     const plusMinusCommand = /^(\+антиспам|\+antispam|\+антифлуд|\+antiflood|\-антиспам|\-antispam|\-антифлуд|\-antiflood|\+ссылки|\+links|\-ссылки|\-links|\+описание|\+description|\+rules|\+правила|\+greeting|\+приветствие)(\s|$)/i;
     return slashCommand.test(text) || bangCommand.test(text) || plusMinusCommand.test(text);
@@ -3692,7 +3768,7 @@ function createBot() {
           { cmd: 'admins', label: '/admins' }, { cmd: 'addadmin', label: '/addadmin' },
           { cmd: 'removeadmin', label: '/removeadmin' }, { cmd: 'promote', label: '/promote' },
           { cmd: 'demote', label: '/demote' }, { cmd: 'clearhistory', label: '/clearhistory' },
-          { cmd: 'admincom', label: '/admincom' },
+          { cmd: 'admincom', label: '/admincom' }, { cmd: 'modstats', label: '/modstats' },
         ],
       },
       {
@@ -3762,7 +3838,6 @@ function createBot() {
     const service = activeModerationService || defaultModerationService;
     const commands = getCommandsList();
     const disabled = service.getAllCommandDisabled(chatId);
-    const beeTriggerEnabled = service.isBeeTriggerEnabled(chatId);
     const totalPages = Math.max(1, Math.ceil(commands.length / COMMANDS_PER_PAGE));
     const page = Math.max(0, Math.min(pageIndex, totalPages - 1));
 
@@ -3772,8 +3847,6 @@ function createBot() {
       'В этом меню можно отключать разделы или отдельные команды бота.',
       '',
       'Статус: ❌ отключено, ✅ включено',
-      '',
-      `${beeTriggerEnabled ? '✅' : '❌'} Триггер «пчол» → «бжж»`,
       '',
     ];
 
@@ -3803,11 +3876,6 @@ function createBot() {
     const rows = [];
     const suffix = returnFlag === 'settings' ? ':settings' : '';
 
-    const beeTriggerEnabled = service.isBeeTriggerEnabled(chatId);
-    rows.push([
-      { text: `${beeTriggerEnabled ? '✅' : '❌'} Триггер «пчол»`, callback_data: 'menu:none' },
-      { text: beeTriggerEnabled ? 'Отключить' : 'Включить', callback_data: `menu:command_rights:bee_trigger:${beeTriggerEnabled ? 'off' : 'on'}${suffix}` },
-    ]);
     rows.push([{ text: '📚 Управление разделами', callback_data: `menu:command_rights:sections${suffix}` }]);
 
     pageCommands.forEach((item, idx) => {
@@ -4190,6 +4258,78 @@ function createBot() {
     }
 
     const groupId = Number(pending.groupId || ctx.chat.id);
+
+    if (pending.action.startsWith('moderation_') && ctx.message.text) {
+      if (!canUseBotAdminAction(ctx, 'manage_admins')) {
+        await replyWithAutoDelete(ctx, 'Только владелец или администратор уровня 2 могут управлять администраторами.');
+        clearPendingSettingsAction(ctx);
+        return true;
+      }
+
+      const parts = String(ctx.message.text).trim().split(/\s+/).filter(Boolean);
+      const rawTarget = parts[0] || '';
+      let target = null;
+      if (/^-?\d+$/.test(rawTarget)) {
+        target = { id: Number(rawTarget), first_name: rawTarget };
+      } else {
+        const resolved = await resolveUsernameTarget(ctx, rawTarget, 'ID или @username', database);
+        target = resolved?.target || null;
+      }
+      if (!target || !Number.isFinite(Number(target.id))) {
+        clearPendingSettingsAction(ctx);
+        return true;
+      }
+
+      const targetId = Number(target.id);
+      const isOwner = database.isPrimaryBotAdmin(groupId, targetId);
+      const isExistingAdmin = database.isBotAdmin(groupId, targetId);
+      if (['moderation_warn', 'moderation_unwarn'].includes(pending.action) && !isExistingAdmin) {
+        await replyWithAutoDelete(ctx, 'Предупреждения из этого раздела можно выдавать только администраторам бота.');
+        clearPendingSettingsAction(ctx);
+        return true;
+      }
+      if (isOwner && pending.action !== 'moderation_unwarn') {
+        await replyWithAutoDelete(ctx, 'Главного администратора нельзя изменить или снять.');
+        clearPendingSettingsAction(ctx);
+        return true;
+      }
+      if (isExistingAdmin && !database.canManageBotAdmin(groupId, ctx.from.id, targetId)) {
+        await replyWithAutoDelete(ctx, 'У вас нет прав управлять этим администратором.');
+        clearPendingSettingsAction(ctx);
+        return true;
+      }
+
+      if (pending.action === 'moderation_warn') {
+        const result = database.addBotAdminWarning(groupId, targetId);
+        await replyWithAutoDelete(ctx, result.removed
+          ? `⚠️ Администратор ${getMentionText(target)} получил предупреждение 3/3 и снят с роли.`
+          : `⚠️ Администратору ${getMentionText(target)} выдано предупреждение ${result.count}/3.`);
+      } else if (pending.action === 'moderation_unwarn') {
+        database.clearBotAdminWarnings(groupId, targetId);
+        await replyWithAutoDelete(ctx, `✅ Предупреждения администратора ${getMentionText(target)} сняты.`);
+      } else if (pending.action === 'moderation_remove') {
+        database.removeBotAdmin(groupId, targetId);
+        await replyWithAutoDelete(ctx, `✅ Администратор ${getMentionText(target)} снят с роли.`);
+      } else if (pending.action === 'moderation_add') {
+        const level = Number(parts[1] || 5);
+        if (!Number.isInteger(level) || level < 2 || level > 5) {
+          await replyWithAutoDelete(ctx, 'Уровень должен быть от 2 до 5.');
+        } else {
+          database.addBotAdmin(groupId, targetId, level);
+          await replyWithAutoDelete(ctx, `✅ ${getMentionText(target)} назначен администратором уровня ${level}.`);
+        }
+      } else if (pending.action === 'moderation_promote') {
+        const level = Number(parts[1]);
+        if (!Number.isInteger(level) || level < 2 || level > 5 || !isExistingAdmin) {
+          await replyWithAutoDelete(ctx, 'Укажите существующего админа и новый уровень от 2 до 5.');
+        } else {
+          database.addBotAdmin(groupId, targetId, level);
+          await replyWithAutoDelete(ctx, `✅ Уровень ${getMentionText(target)} изменён на ${level}.`);
+        }
+      }
+      clearPendingSettingsAction(ctx);
+      return true;
+    }
 
     if (pending.action === 'settings_link_add' && ctx.message.text) {
       const value = String(ctx.message.text).trim();
@@ -4774,6 +4914,7 @@ function createBot() {
           '/removeadmin @юз, !снять админа @юз - снять вспомогательного администратора бота',
           '/promote @юз [уровень], !повышение @юз [уровень] - повысить администратора (если уровень не указан, повышает на 1)',
           '/demote @юз [уровень], !разжалование @юз [уровень] - понизить администратора (если уровень не указан, понижает на 1)',
+          '/modstats - статистика модерации и администраторов',
           '',
           '🛡️ КОМАНДЫ НАКАЗАНИЙ',
           '/admincom - список команд наказаний и примеры их использования',
@@ -4954,6 +5095,15 @@ function createBot() {
   function funCommand(ctx, kind) {
     const reply = buildFunReply(kind);
     ctx.reply(reply);
+  }
+
+  async function modStatsCommand(ctx) {
+    ensureGroup(ctx);
+    if (!isBotAdmin(ctx)) {
+      await ctx.reply('Эта команда доступна только администраторам.');
+      return;
+    }
+    await ctx.reply(formatModerationStatsText(ctx.chat.id));
   }
 
   async function handlePrivateAIMessages(ctx, text) {
@@ -6259,6 +6409,11 @@ function createBot() {
       return;
     }
 
+    if (parsed.target === 'page') {
+      await showSettingsMainMenu(ctx, chatId, Number(parsed.value) || 0);
+      return;
+    }
+
     if (parsed.target === 'section') {
       if (parsed.section === 'captcha') {
         await showSettingsCaptchaMenu(ctx, chatId);
@@ -6291,7 +6446,33 @@ function createBot() {
       } else if (parsed.section === 'commands') {
         // Open interactive command rights UI from settings menu
         await showMenuCommandRightsMenu(ctx, chatId, 0, `settings:main:${chatId}`, 'settings');
+      } else if (parsed.section === 'moderation') {
+        await showSettingsModerationMenu(ctx, chatId);
       }
+      return;
+    }
+
+    if (parsed.target === 'moderation') {
+      await showSettingsModerationMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'moderation_clear') {
+      database.clearBotAdminWarnings(chatId);
+      await showSettingsModerationMenu(ctx, chatId);
+      return;
+    }
+
+    if (['moderation_warn', 'moderation_unwarn', 'moderation_remove', 'moderation_promote', 'moderation_add'].includes(parsed.target)) {
+      setPendingSettingsAction(ctx, { action: parsed.target, groupId: chatId });
+      const prompts = {
+        moderation_warn: 'Отправьте ID или @username администратора для предупреждения.',
+        moderation_unwarn: 'Отправьте ID или @username администратора для снятия предупреждения.',
+        moderation_remove: 'Отправьте ID или @username администратора для снятия роли.',
+        moderation_promote: 'Отправьте ID или @username администратора и новый уровень через пробел. Например: @user 3',
+        moderation_add: 'Отправьте ID или @username и уровень через пробел. Например: @user 5',
+      };
+      await ctx.reply(prompts[parsed.target]);
       return;
     }
 
@@ -7316,20 +7497,6 @@ function createBot() {
       return;
     }
 
-    if (action.startsWith('command_rights:bee_trigger:')) {
-      const parts = action.split(':');
-      const mode = parts[3];
-      const returnFlag = parts.includes('settings') ? 'settings' : 'menu';
-      const returnCallback = returnFlag === 'settings' ? `settings:main:${chatId}` : 'menu:overview';
-      if (!['on', 'off'].includes(mode)) {
-        return;
-      }
-      moderationService.setBeeTriggerEnabled(chatId, mode === 'on');
-      await safeAnswerCbQuery(ctx, mode === 'on' ? '✅ Триггер включён.' : '❌ Триггер отключён.');
-      await showMenuCommandRightsMenu(ctx, chatId, 0, returnCallback, returnFlag);
-      return;
-    }
-
     if (action.startsWith('command_rights:commands:')) {
       const parts = action.split(':');
       const pageIndex = Number(parts[3]);
@@ -7515,6 +7682,10 @@ function createBot() {
     await ctx.reply(formatModerationLogsText(ctx.chat.id, 10), {
       reply_markup: buildModerationLogsKeyboard(ctx.chat.id),
     });
+  });
+
+  bot.command(['modstats', 'статистика_модерации'], async (ctx) => {
+    await modStatsCommand(ctx);
   });
 
   bot.command(['clearhistory', 'сбросистории', 'сброс_истории', 'clear_history'], async (ctx, next) => {
@@ -7803,11 +7974,6 @@ function createBot() {
     const lowerText = text.toLowerCase();
     const hasMessageContent = Boolean(text || isMediaMessage(ctx));
     if (!hasMessageContent) {
-      return;
-    }
-
-    if (isGroupChat(ctx) && moderationService.isBeeTriggerEnabled(ctx.chat.id) && isBeeTriggerMessage(text)) {
-      await ctx.reply('бжж');
       return;
     }
 
@@ -8479,7 +8645,6 @@ module.exports = {
   detectForbiddenWord,
   isLinkMessage,
   isAllowedLinkUrl,
-  isBeeTriggerMessage,
   isGroupOwnerMember,
   isGroupMemberWithProfileChangePermission,
   isGroupMemberWithManageRights,
