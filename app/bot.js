@@ -2550,6 +2550,7 @@ function createBot() {
         },
       }
     );
+    await deleteMessageSafely(ctx, ctx.message?.message_id);
   }
 
   async function handleTicTacToeAccept(ctx, chatId) {
@@ -7013,6 +7014,7 @@ function createBot() {
     ticTacToeGames.delete(String(chatId));
     await safeAnswerCbQuery(ctx, 'Вызов отменён.');
     await safeEditMessageText(ctx, '❌ Вызов на игру отменён.');
+    scheduleDeleteForContext(ctx, ctx.callbackQuery?.message?.message_id, 1000);
   });
 
   bot.action(/^ttt:move:(-?\d+):(\d)$/, async (ctx) => {
