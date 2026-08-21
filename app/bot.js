@@ -564,11 +564,77 @@ function buildMenuKeyboard(chatId) {
         { text: 'Управление Участниками', callback_data: 'menu:members' },
       ],
       [
-        { text: '🤖 От Бота', callback_data: 'menu:bot_message' },
+        { text: 'Логи', callback_data: 'menu:logs' },
         { text: '🤖 Бот Соо', callback_data: 'menu:bot_message' },
       ],
     ],
   };
+}
+
+function buildModerationLogsKeyboard(chatId) {
+  return {
+    inline_keyboard: [
+      [
+        { text: 'Логи', callback_data: `menu:logs_show:${chatId}` },
+        { text: 'Обновить логи', callback_data: `menu:logs_refresh:${chatId}` },
+      ],
+      [
+        { text: 'Очистить логи', callback_data: `menu:logs_clear:${chatId}` },
+      ],
+      [
+        { text: 'Назад', callback_data: 'menu:overview' },
+      ],
+    ],
+  };
+}
+
+function formatModerationLogsText(chatId, limit = 10) {
+  const logs = moderationService.getModerationLogs(chatId, limit);
+  if (!logs.length) {
+    return '📋 Логи модерации пустые.\n\nПока нет действий по предупреждениям, мутам и банам.';
+  }
+
+  const lines = ['📋 Последние действия модерации', ''];
+  logs.forEach((log, index) => {
+    const stamp = log.timestamp ? new Date(log.timestamp).toLocaleString('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    }) : '—';
+
+    const action = String(log.action || 'action').toUpperCase();
+    const actor = Number.isFinite(Number(log.actorId)) ? `админ ${log.actorId}` : 'система';
+    const target = Number.isFinite(Number(log.targetId)) ? `участник ${log.targetId}` : '—';
+    const reason = log.reason ? ` | причина: ${log.reason}` : '';
+    const duration = log.duration ? ` | срок: ${log.duration}` : '';
+    const details = log.details ? ` | ${log.details}` : '';
+    lines.push(`${index + 1}. ${stamp} | ${action} | ${actor} → ${target}${duration}${reason}${details}`);
+  });
+
+  return lines.join('\n');
+}
+
+function recordModerationLog(chatId, payload = {}) {
+  if (!Number.isFinite(Number(chatId)) || Number(chatId) === 0) {
+    return null;
+  }
+
+  const action = String(payload.action || 'action').trim();
+  if (!action) {
+    return null;
+  }
+
+  return moderationService.addModerationLog(Number(chatId), {
+    action,
+    actorId: Number(payload.actorId) || null,
+    targetId: Number(payload.targetId) || null,
+    reason: String(payload.reason || '').trim(),
+    duration: String(payload.duration || '').trim(),
+    details: String(payload.details || '').trim(),
+    timestamp: payload.timestamp || new Date().toISOString(),
+  });
 }
 
 function buildSettingsChatKeyboard(chatId) {
@@ -5192,6 +5258,13 @@ function createBot() {
     const details = parsePunishmentDetails(targetData.remainingArgs, !!ctx.message.reply_to_message);
     moderationService.addWarning(ctx.chat.id, targetData.target.id);
     database.addPunishment(ctx.chat.id, targetData.target.id, 'warn', details.reason, null);
+    recordModerationLog(ctx.chat.id, {
+      action: 'warn',
+      actorId: ctx.from.id,
+      targetId: targetData.target.id,
+      reason: details.reason,
+      details: `Выдано предупреждение ${moderationService.getWarnings(ctx.chat.id, targetData.target.id)}/${moderationService.getWarnLimit(ctx.chat.id)}`,
+    });
     const warningCount = moderationService.getWarnings(ctx.chat.id, targetData.target.id);
     const warnLimit = moderationService.getWarnLimit(ctx.chat.id);
     
@@ -5263,6 +5336,13 @@ function createBot() {
     }
 
     moderationService.resetWarnings(ctx.chat.id, targetData.target.id);
+    recordModerationLog(ctx.chat.id, {
+      action: 'unwarn',
+      actorId: ctx.from.id,
+      targetId: targetData.target.id,
+      reason: 'Сброс предупреждений',
+      details: 'Предупреждения пользователя обнулены',
+    });
     await replyWithAutoDelete(ctx, `Предупреждения пользователя ${targetData.target.first_name || targetData.target.username || targetData.target.id} сброшены.`);
   }
 
@@ -5300,6 +5380,14 @@ function createBot() {
 
     database.addPunishment(ctx.chat.id, targetData.target.id, 'mute', details.reason, untilDate || null);
     database.addActivePunishment(ctx.chat.id, targetData.target.id, 'mute', details.reason, untilDate || null);
+    recordModerationLog(ctx.chat.id, {
+      action: 'mute',
+      actorId: ctx.from.id,
+      targetId: targetData.target.id,
+      reason: details.reason,
+      duration: formatDurationLabel(details.durationHours),
+      details: `Выдан мут${untilDate ? ` до ${new Date(untilDate * 1000).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ' бессрочно'}`,
+    });
     if (untilDate) {
       schedulePunishmentExpiry({
         chatId: ctx.chat.id,
@@ -5339,6 +5427,13 @@ function createBot() {
       await ctx.telegram.restrictChatMember(ctx.chat.id, targetData.target.id, buildMutePermissions(true));
       database.removeActivePunishment(ctx.chat.id, targetData.target.id, 'mute');
       clearScheduledPunishment(ctx.chat.id, targetData.target.id, 'mute');
+      recordModerationLog(ctx.chat.id, {
+        action: 'unmute',
+        actorId: ctx.from.id,
+        targetId: targetData.target.id,
+        reason: 'Снятие мьюта',
+        details: 'Ограничение на отправку сообщений снято',
+      });
     } catch (error) {
       await replyWithAutoDelete(ctx, 'Не удалось снять mute: у бота нет прав администратора.');
       return;
@@ -5376,6 +5471,14 @@ function createBot() {
 
     database.addPunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, untilDate || null);
     database.addActivePunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, untilDate || null);
+    recordModerationLog(ctx.chat.id, {
+      action: 'ban',
+      actorId: ctx.from.id,
+      targetId: targetData.target.id,
+      reason: details.reason,
+      duration: formatDurationLabel(details.durationHours),
+      details: `Выдан бан${untilDate ? ` до ${new Date(untilDate * 1000).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ' бессрочно'}`,
+    });
     if (untilDate) {
       schedulePunishmentExpiry({
         chatId: ctx.chat.id,
@@ -5424,6 +5527,14 @@ function createBot() {
 
     database.addPunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, untilDate || null);
     database.addActivePunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, untilDate || null);
+    recordModerationLog(ctx.chat.id, {
+      action: 'ban',
+      actorId: ctx.from.id,
+      targetId: targetData.target.id,
+      reason: details.reason,
+      duration: formatDurationLabel(details.durationHours),
+      details: `Выдан бан с удалением сообщения${untilDate ? ` до ${new Date(untilDate * 1000).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ' бессрочно'}`,
+    });
     if (untilDate) {
       schedulePunishmentExpiry({
         chatId: ctx.chat.id,
@@ -5460,6 +5571,13 @@ function createBot() {
       await ctx.telegram.unbanChatMember(ctx.chat.id, targetData.target.id, true);
       database.removeActivePunishment(ctx.chat.id, targetData.target.id, 'ban');
       clearScheduledPunishment(ctx.chat.id, targetData.target.id, 'ban');
+      recordModerationLog(ctx.chat.id, {
+        action: 'unban',
+        actorId: ctx.from.id,
+        targetId: targetData.target.id,
+        reason: 'Снятие бана',
+        details: 'Блокировка пользователя снята',
+      });
     } catch (error) {
       await replyWithAutoDelete(ctx, 'Не удалось снять ban: у бота нет прав администратора.');
       return;
@@ -6823,6 +6941,24 @@ function createBot() {
       return;
     }
 
+    if (action === 'logs') {
+      await safeEditMessageText(ctx, formatModerationLogsText(chatId, 10), { reply_markup: buildModerationLogsKeyboard(chatId) });
+      return;
+    }
+
+    if (action === 'logs_show' || action === 'logs_refresh') {
+      const targetChatId = Number(action.split(':')[1] || chatId) || chatId;
+      await safeEditMessageText(ctx, formatModerationLogsText(targetChatId, 10), { reply_markup: buildModerationLogsKeyboard(targetChatId) });
+      return;
+    }
+
+    if (action.startsWith('logs_clear')) {
+      const targetChatId = Number(action.split(':')[1] || chatId) || chatId;
+      moderationService.clearModerationLogs(targetChatId);
+      await safeEditMessageText(ctx, '✅ Логи модерации очищены.', { reply_markup: buildModerationLogsKeyboard(targetChatId) });
+      return;
+    }
+
     if (action.startsWith('members:')) {
       const [, , specificAction] = String(action).split(':');
       if (specificAction === 'unrestrict_all') {
@@ -7119,6 +7255,18 @@ function createBot() {
 
   bot.command(['admins', 'админы'], (ctx) => {
     listBotAdminsCommand(ctx);
+  });
+
+  bot.command(['logs', 'логи'], async (ctx) => {
+    ensureGroup(ctx);
+    if (!isBotAdmin(ctx)) {
+      await ctx.reply('Эта команда доступна только администраторам.');
+      return;
+    }
+
+    await ctx.reply(formatModerationLogsText(ctx.chat.id, 10), {
+      reply_markup: buildModerationLogsKeyboard(ctx.chat.id),
+    });
   });
 
   bot.command(['clearhistory', 'сбросистории', 'сброс_истории', 'clear_history'], async (ctx, next) => {

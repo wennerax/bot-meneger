@@ -179,6 +179,20 @@ class ModerationService {
       warnings: chat.warnings && typeof chat.warnings === 'object'
         ? Object.fromEntries(Object.entries(chat.warnings).map(([key, value]) => [String(key), Number(value)]))
         : {},
+      moderationLogs: Array.isArray(chat.moderationLogs)
+        ? chat.moderationLogs
+            .filter((item) => item && typeof item === 'object')
+            .map((item) => ({
+              action: String(item.action || 'action').toLowerCase(),
+              actorId: Number(item.actorId) || null,
+              targetId: Number(item.targetId) || null,
+              reason: String(item.reason || '').trim(),
+              duration: String(item.duration || '').trim(),
+              details: String(item.details || '').trim(),
+              timestamp: item.timestamp || new Date().toISOString(),
+            }))
+            .slice(0, 100)
+        : [],
       filters: chat.filters && typeof chat.filters === 'object' ? { ...chat.filters } : {},
       banWords: Array.isArray(chat.banWords)
         ? [...new Set(chat.banWords.map((item) => String(item).trim().toLowerCase()).filter(Boolean))]
@@ -444,6 +458,38 @@ class ModerationService {
 
   getWarnings(chatId, userId) {
     return this._getChat(chatId).warnings[Number(userId)] || 0;
+  }
+
+  addModerationLog(chatId, logEntry = {}) {
+    const chat = this._getChat(chatId);
+    const entry = {
+      action: String(logEntry.action || 'action').toLowerCase(),
+      actorId: Number(logEntry.actorId) || null,
+      targetId: Number(logEntry.targetId) || null,
+      reason: String(logEntry.reason || '').trim(),
+      duration: String(logEntry.duration || '').trim(),
+      details: String(logEntry.details || '').trim(),
+      timestamp: logEntry.timestamp || new Date().toISOString(),
+    };
+
+    chat.moderationLogs = Array.isArray(chat.moderationLogs) ? chat.moderationLogs : [];
+    chat.moderationLogs.unshift(entry);
+    chat.moderationLogs = chat.moderationLogs.slice(0, 100);
+    this._save();
+    return entry;
+  }
+
+  getModerationLogs(chatId, limit = 10) {
+    const logs = Array.isArray(this._getChat(chatId).moderationLogs) ? this._getChat(chatId).moderationLogs : [];
+    const normalizedLimit = Number(limit);
+    const safeLimit = Number.isFinite(normalizedLimit) && normalizedLimit > 0 ? normalizedLimit : 10;
+    return logs.slice(0, safeLimit).map((entry) => ({ ...entry }));
+  }
+
+  clearModerationLogs(chatId) {
+    this._getChat(chatId).moderationLogs = [];
+    this._save();
+    return true;
   }
 
   resetWarnings(chatId, userId) {

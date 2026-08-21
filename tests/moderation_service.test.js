@@ -14,6 +14,34 @@ test('warnings are stored per chat and user', () => {
   assert.equal(service.getWarnings(200, 7), 0);
 });
 
+test('moderation logs store recent actions and can be cleared', () => {
+  const service = new ModerationService();
+
+  service.addModerationLog(100, {
+    action: 'warn',
+    actorId: 10,
+    targetId: 7,
+    reason: 'Спам',
+    details: 'Предупреждение за спам',
+  });
+  service.addModerationLog(100, {
+    action: 'mute',
+    actorId: 10,
+    targetId: 7,
+    reason: 'Реклама',
+    duration: '10m',
+    details: 'Мут на 10 минут',
+  });
+
+  const logs = service.getModerationLogs(100, 10);
+  assert.equal(logs.length, 2);
+  assert.equal(logs[0].action, 'mute');
+  assert.equal(logs[1].reason, 'Спам');
+
+  service.clearModerationLogs(100);
+  assert.deepEqual(service.getModerationLogs(100, 10), []);
+});
+
 test('rules and filters are stored per chat and can be removed', () => {
   const service = new ModerationService();
 
