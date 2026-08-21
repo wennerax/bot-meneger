@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildBulkModerationSummaryMessage, buildFunReply, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage, shouldFailClosedForMedia, cleanupAgreementMessages, handleAgreementDecision, isPollAnswerForTarget, buildBotMediaSend } = require('../app/bot');
+const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildBulkModerationSummaryMessage, buildFunReply, getTicTacToeWinner, buildTicTacToeKeyboard, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage, shouldFailClosedForMedia, cleanupAgreementMessages, handleAgreementDecision, isPollAnswerForTarget, buildBotMediaSend } = require('../app/bot');
 const { buildAiRequestPayload, normalizeMultimodalInputForResponses } = require('../app/ai');
 const premiumEmojis = require('../app/premium_emojis');
 
@@ -80,6 +80,22 @@ test('buildFunReply returns a valid dice result', () => {
   const result = buildFunReply('dice');
 
   assert.ok(/^[1-6]$/.test(result));
+});
+
+test('tic-tac-toe detects wins, draws and unfinished boards', () => {
+  assert.equal(getTicTacToeWinner(['X', 'X', 'X', '', '', '', '', '', '']), 'X');
+  assert.equal(getTicTacToeWinner(['O', '', '', '', 'O', '', '', '', 'O']), 'O');
+  assert.equal(getTicTacToeWinner(['X', 'O', 'X', 'X', 'O', 'O', 'O', 'X', 'X']), 'draw');
+  assert.equal(getTicTacToeWinner(['X', '', '', '', 'O', '', '', '', '']), null);
+});
+
+test('tic-tac-toe keyboard has a 3x3 field and callback positions', () => {
+  const keyboard = buildTicTacToeKeyboard(Array(9).fill(''), -100123, false);
+
+  assert.equal(keyboard.inline_keyboard.length, 3);
+  assert.deepEqual(keyboard.inline_keyboard.map((row) => row.length), [3, 3, 3]);
+  assert.equal(keyboard.inline_keyboard[0][0].callback_data, 'ttt:move:-100123:0');
+  assert.equal(keyboard.inline_keyboard[2][2].callback_data, 'ttt:move:-100123:8');
 });
 
 test('parsePageNumber defaults to page 1 and accepts explicit pages', () => {

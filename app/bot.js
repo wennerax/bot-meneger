@@ -2333,6 +2333,35 @@ function buildFunReply(kind) {
   return 'Пока что нет такой игры.';
 }
 
+function getTicTacToeWinner(board) {
+  const lines = [
+    [0, 1, 2], [3, 4, 5], [6, 7, 8],
+    [0, 3, 6], [1, 4, 7], [2, 5, 8],
+    [0, 4, 8], [2, 4, 6],
+  ];
+
+  for (const [first, second, third] of lines) {
+    if (board[first] && board[first] === board[second] && board[first] === board[third]) {
+      return board[first];
+    }
+  }
+
+  return board.every(Boolean) ? 'draw' : null;
+}
+
+function buildTicTacToeKeyboard(board, chatId, disabled = false) {
+  const cells = Array.isArray(board) ? board : Array(9).fill('');
+  return {
+    inline_keyboard: [0, 1, 2].map((row) => [0, 1, 2].map((column) => {
+      const index = row * 3 + column;
+      return {
+        text: cells[index] || '·',
+        callback_data: disabled || cells[index] ? 'ttt:noop' : `ttt:move:${chatId}:${index}`,
+      };
+    })),
+  };
+}
+
 function parsePageNumber(input = '') {
   const trimmed = String(input || '').trim();
   if (!trimmed) {
@@ -2452,6 +2481,149 @@ function createBot() {
   const agreementStates = new Map();
   const pendingMenuActions = new Map();
   const pendingSettingsActions = new Map();
+  const ticTacToeGames = new Map();
+
+  function getTicTacToeUserLabel(user) {
+    if (user?.username) {
+      return `@${user.username}`;
+    }
+    return user?.first_name || String(user?.id || 'участник');
+  }
+
+  function formatTicTacToeGame(game) {
+    const xPlayer = game.players[String(game.x)];
+    const oPlayer = game.players[String(game.o)];
+    const winner = getTicTacToeWinner(game.board);
+    const lines = [
+      '🎮 Крестики-нолики',
+      '',
+      `❌ Крестик: ${xPlayer.name}`,
+      `⭕ Нолик: ${oPlayer.name}`,
+      '',
+    ];
+
+    if (winner === 'draw') {
+      lines.push('🤝 Ничья!');
+    } else if (winner) {
+      lines.push(`🏆 Победил ${winner === 'X' ? 'крестик' : 'нолик'}: ${game.players[String(winner === 'X' ? game.x : game.o)].name}`);
+    } else {
+      lines.push(`Ход: ${game.players[String(game.turn)].name} (${game.players[String(game.turn)].symbol})`);
+    }
+
+    return lines.join('\n');
+  }
+
+  async function startTicTacToeCommand(ctx) {
+    if (!isGroupChat(ctx)) {
+      await ctx.reply('🎮 Играть в крестики-нолики можно только в группе.');
+      return;
+    }
+
+    const chatId = ctx.chat.id;
+    const current = ticTacToeGames.get(String(chatId));
+    if (current) {
+      await ctx.reply(current.type === 'challenge'
+        ? '⏳ В этом чате уже есть активный вызов на игру.'
+        : '🎮 В этом чате уже идёт игра.');
+      return;
+    }
+
+    const challenger = ctx.from;
+    ticTacToeGames.set(String(chatId), {
+      type: 'challenge',
+      challengerId: Number(challenger.id),
+      challenger: {
+        id: Number(challenger.id),
+        name: getTicTacToeUserLabel(challenger),
+      },
+      createdAt: Date.now(),
+    });
+
+    await ctx.reply(
+      `🎮 ${getTicTacToeUserLabel(challenger)} вызывает на битву в крестики-нолики!\n\nНажми кнопку, чтобы принять вызов.`,
+      {
+        reply_markup: {
+          inline_keyboard: [[
+            { text: '✅ Принять вызов', callback_data: `ttt:accept:${chatId}` },
+            { text: '❌ Отменить', callback_data: `ttt:cancel:${chatId}` },
+          ]],
+        },
+      }
+    );
+  }
+
+  async function handleTicTacToeAccept(ctx, chatId) {
+    const game = ticTacToeGames.get(String(chatId));
+    if (!game || game.type !== 'challenge') {
+      await safeAnswerCbQuery(ctx, 'Вызов уже завершён.');
+      return;
+    }
+    if (Number(ctx.from?.id) === game.challengerId) {
+      await safeAnswerCbQuery(ctx, 'Нельзя принять собственный вызов.');
+      return;
+    }
+
+    const opponent = {
+      id: Number(ctx.from.id),
+      name: getTicTacToeUserLabel(ctx.from),
+    };
+    const challengerIsX = Math.random() < 0.5;
+    const players = {
+      [game.challengerId]: { ...game.challenger, symbol: challengerIsX ? 'X' : 'O' },
+      [opponent.id]: { ...opponent, symbol: challengerIsX ? 'O' : 'X' },
+    };
+    const x = challengerIsX ? game.challengerId : opponent.id;
+    const o = challengerIsX ? opponent.id : game.challengerId;
+    const activeGame = {
+      type: 'game',
+      players,
+      x,
+      o,
+      turn: x,
+      board: Array(9).fill(''),
+    };
+    ticTacToeGames.set(String(chatId), activeGame);
+    await safeAnswerCbQuery(ctx, 'Игра началась!');
+    await safeEditMessageText(ctx, formatTicTacToeGame(activeGame), {
+      reply_markup: buildTicTacToeKeyboard(activeGame.board, chatId),
+    });
+  }
+
+  async function handleTicTacToeMove(ctx, chatId, index) {
+    const game = ticTacToeGames.get(String(chatId));
+    if (!game || game.type !== 'game') {
+      await safeAnswerCbQuery(ctx, 'Игра уже завершена.');
+      return;
+    }
+    const userId = Number(ctx.from?.id);
+    if (!game.players[String(userId)]) {
+      await safeAnswerCbQuery(ctx, 'Вы не участвуете в этой игре.');
+      return;
+    }
+    if (game.turn !== userId) {
+      await safeAnswerCbQuery(ctx, 'Сейчас ход другого игрока.');
+      return;
+    }
+    if (!Number.isInteger(index) || index < 0 || index > 8 || game.board[index]) {
+      await safeAnswerCbQuery(ctx, 'Эта клетка уже занята.');
+      return;
+    }
+
+    const symbol = game.players[String(userId)].symbol;
+    game.board[index] = symbol;
+    const winner = getTicTacToeWinner(game.board);
+    if (!winner) {
+      game.turn = game.turn === game.x ? game.o : game.x;
+    }
+
+    await safeAnswerCbQuery(ctx);
+    await safeEditMessageText(ctx, formatTicTacToeGame(game), {
+      reply_markup: buildTicTacToeKeyboard(game.board, chatId, Boolean(winner)),
+    });
+    if (winner) {
+      ticTacToeGames.delete(String(chatId));
+    }
+  }
 
   bot.use(async (ctx, next) => {
     const message = ctx.message;
@@ -6823,6 +6995,34 @@ function createBot() {
     return;
   });
 
+  bot.action(/^ttt:accept:(-?\d+)$/, async (ctx) => {
+    await handleTicTacToeAccept(ctx, Number(ctx.match[1]));
+  });
+
+  bot.action(/^ttt:cancel:(-?\d+)$/, async (ctx) => {
+    const chatId = Number(ctx.match[1]);
+    const game = ticTacToeGames.get(String(chatId));
+    if (!game || game.type !== 'challenge') {
+      await safeAnswerCbQuery(ctx, 'Вызов уже завершён.');
+      return;
+    }
+    if (Number(ctx.from?.id) !== game.challengerId) {
+      await safeAnswerCbQuery(ctx, 'Отменить вызов может только автор.');
+      return;
+    }
+    ticTacToeGames.delete(String(chatId));
+    await safeAnswerCbQuery(ctx, 'Вызов отменён.');
+    await safeEditMessageText(ctx, '❌ Вызов на игру отменён.');
+  });
+
+  bot.action(/^ttt:move:(-?\d+):(\d)$/, async (ctx) => {
+    await handleTicTacToeMove(ctx, Number(ctx.match[1]), Number(ctx.match[2]));
+  });
+
+  bot.action('ttt:noop', async (ctx) => {
+    await safeAnswerCbQuery(ctx, 'Эта кнопка уже неактивна.');
+  });
+
   bot.action(/^stats:clear_history:(-?\d+):(\d+)$/, async (ctx) => {
     const chatId = Number(ctx.match[1]);
     const targetUserId = Number(ctx.match[2]);
@@ -7247,6 +7447,10 @@ function createBot() {
 
   bot.command(['coin', 'монетка'], (ctx) => {
     funCommand(ctx, 'coin');
+  });
+
+  bot.command(['ttt', 'крестики', 'крестики-нолики'], async (ctx) => {
+    await startTicTacToeCommand(ctx);
   });
 
   bot.command(['dice', 'кубик'], (ctx) => {
@@ -8215,6 +8419,8 @@ module.exports = {
   buildModerationAlertMessage,
   buildBulkModerationSummaryMessage,
   buildFunReply,
+  getTicTacToeWinner,
+  buildTicTacToeKeyboard,
   parsePageNumber,
   buildPunishmentListMessage,
   buildBotAdminListMessage,
