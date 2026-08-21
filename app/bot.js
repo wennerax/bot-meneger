@@ -1373,7 +1373,7 @@ function buildSettingsModerationKeyboard(chatId) {
   };
 }
 
-function formatModerationStatsText(chatId) {
+function formatModerationStatsText(chatId, adminProfiles = null) {
   const database = activeDatabase;
   const service = activeModerationService || defaultModerationService;
   const punishments = (database?.data?.punishments || []).filter((item) => Number(item.chatId) === Number(chatId));
@@ -1383,9 +1383,15 @@ function formatModerationStatsText(chatId) {
     counts[action] = (counts[action] || 0) + 1;
     return counts;
   }, {});
-  const admins = database?.getBotAdmins(chatId) || [];
+  const admins = (database?.getBotAdmins(chatId) || []).filter((userId) => !adminProfiles?.[String(userId)]?.is_bot);
   const adminLines = admins.length
-    ? admins.map((userId) => `• ${userId} — уровень ${database.getBotAdminLevel(chatId, userId)}, предупреждений ${database.getBotAdminWarnings(chatId, userId)}`).join('\n')
+    ? admins.map((userId) => {
+      const profile = adminProfiles?.[String(userId)] || database?.data?.groupUsers?.[Number(chatId)]?.[userId] || {};
+      const label = profile.username
+        ? `@${String(profile.username).replace(/^@/, '')}`
+        : profile.first_name || profile.displayName || 'пользователь';
+      return `• ${label} — уровень ${database.getBotAdminLevel(chatId, userId)}, предупреждений ${database.getBotAdminWarnings(chatId, userId)}`;
+    }).join('\n')
     : '• Нет администраторов бота';
   const actions = Object.entries(actionCounts).map(([action, count]) => `${action}: ${count}`).join(', ') || 'нет';
 
@@ -1410,16 +1416,27 @@ async function showSettingsModerationMenu(ctx, chatId) {
     return;
   }
   let groupAdminsText = '• Не удалось получить список администраторов группы';
+  const adminProfiles = {};
   try {
     const groupAdmins = await ctx.telegram.getChatAdministrators(chatId);
-    groupAdminsText = groupAdmins.map((item) => {
+    groupAdminsText = groupAdmins.filter((item) => !item.user?.is_bot).map((item) => {
       const user = item.user || {};
       return `• ${getMentionText(user)} — ${item.status === 'creator' ? 'владелец' : 'администратор'}`;
     }).join('\n') || groupAdminsText;
   } catch (error) {
     // Telegram may deny the list when the bot lacks admin permissions.
   }
-  const text = `${formatModerationStatsText(chatId)}\n\nАдминистраторы группы:\n${groupAdminsText}`;
+  for (const userId of activeDatabase?.getBotAdmins(chatId) || []) {
+    try {
+      const member = await ctx.telegram.getChatMember(chatId, userId);
+      if (member?.user) {
+        adminProfiles[String(userId)] = member.user;
+      }
+    } catch (error) {
+      // Keep the stored profile fallback when Telegram lookup is unavailable.
+    }
+  }
+  const text = `${formatModerationStatsText(chatId, adminProfiles)}\n\nАдминистраторы группы:\n${groupAdminsText}`;
   await safeEditMessageText(ctx, text, { reply_markup: buildSettingsModerationKeyboard(chatId) });
 }
 
@@ -5103,7 +5120,36 @@ function createBot() {
       await ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
-    await ctx.reply(formatModerationStatsText(ctx.chat.id));
+
+    const moderatorId = Number(ctx.from.id);
+    const logs = moderationService.getModerationLogs(ctx.chat.id, 100)
+      .filter((entry) => Number(entry.actorId) === moderatorId);
+    const actionCounts = logs.reduce((counts, entry) => {
+      const action = String(entry.action || 'action').toUpperCase();
+      counts[action] = (counts[action] || 0) + 1;
+      return counts;
+    }, {});
+    const actionSummary = Object.entries(actionCounts)
+      .map(([action, count]) => `${action}: ${count}`)
+      .join(', ') || 'нет';
+    const level = database.isPrimaryBotAdmin(ctx.chat.id, moderatorId)
+      ? 1
+      : database.getBotAdminLevel(ctx.chat.id, moderatorId);
+    const warnings = database.getBotAdminWarnings(ctx.chat.id, moderatorId);
+    const report = [
+      '📊 Моя статистика модерации',
+      '',
+      `Модератор: ${getMentionText(ctx.from)}`,
+      `Уровень админа: ${level || 'не назначен'}`,
+      `Предупреждения: ${warnings}/3`,
+      `Всего действий: ${logs.length}`,
+      `По действиям: ${actionSummary}`,
+      '',
+      'Статистика считается по действиям, записанным в логах модерации.',
+    ].join('\n');
+
+    await deleteMessageSafely(ctx, ctx.message?.message_id);
+    await ctx.reply(report);
   }
 
   async function handlePrivateAIMessages(ctx, text) {
