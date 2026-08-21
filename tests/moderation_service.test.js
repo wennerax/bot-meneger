@@ -138,6 +138,18 @@ test('rules feature can be enabled and disabled per chat', () => {
   assert.equal(service.isRulesEnabled(100), true);
 });
 
+test('bee trigger is enabled by default and can be toggled per chat', () => {
+  const service = new ModerationService();
+
+  assert.equal(service.isBeeTriggerEnabled(100), true);
+  assert.equal(service.setBeeTriggerEnabled(100, false), false);
+  assert.equal(service.isBeeTriggerEnabled(100), false);
+  assert.equal(service.isBeeTriggerEnabled(200), true);
+
+  service.setBeeTriggerEnabled(100, true);
+  assert.equal(service.isBeeTriggerEnabled(100), true);
+});
+
 test('streak feature can be enabled and disabled per chat', () => {
   const service = new ModerationService();
 

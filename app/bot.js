@@ -49,6 +49,10 @@ function detectForbiddenWord(text) {
   return defaultModerationService.findBanWord(0, text);
 }
 
+function isBeeTriggerMessage(text) {
+  return String(text || '').trim().toLowerCase() === 'пчол';
+}
+
 function isChannelPostInGroupMessage(message = {}) {
   if (!message || typeof message !== 'object') {
     return false;
@@ -3758,6 +3762,7 @@ function createBot() {
     const service = activeModerationService || defaultModerationService;
     const commands = getCommandsList();
     const disabled = service.getAllCommandDisabled(chatId);
+    const beeTriggerEnabled = service.isBeeTriggerEnabled(chatId);
     const totalPages = Math.max(1, Math.ceil(commands.length / COMMANDS_PER_PAGE));
     const page = Math.max(0, Math.min(pageIndex, totalPages - 1));
 
@@ -3767,6 +3772,8 @@ function createBot() {
       'В этом меню можно отключать разделы или отдельные команды бота.',
       '',
       'Статус: ❌ отключено, ✅ включено',
+      '',
+      `${beeTriggerEnabled ? '✅' : '❌'} Триггер «пчол» → «бжж»`,
       '',
     ];
 
@@ -3796,6 +3803,11 @@ function createBot() {
     const rows = [];
     const suffix = returnFlag === 'settings' ? ':settings' : '';
 
+    const beeTriggerEnabled = service.isBeeTriggerEnabled(chatId);
+    rows.push([
+      { text: `${beeTriggerEnabled ? '✅' : '❌'} Триггер «пчол»`, callback_data: 'menu:none' },
+      { text: beeTriggerEnabled ? 'Отключить' : 'Включить', callback_data: `menu:command_rights:bee_trigger:${beeTriggerEnabled ? 'off' : 'on'}${suffix}` },
+    ]);
     rows.push([{ text: '📚 Управление разделами', callback_data: `menu:command_rights:sections${suffix}` }]);
 
     pageCommands.forEach((item, idx) => {
@@ -7304,6 +7316,20 @@ function createBot() {
       return;
     }
 
+    if (action.startsWith('command_rights:bee_trigger:')) {
+      const parts = action.split(':');
+      const mode = parts[3];
+      const returnFlag = parts.includes('settings') ? 'settings' : 'menu';
+      const returnCallback = returnFlag === 'settings' ? `settings:main:${chatId}` : 'menu:overview';
+      if (!['on', 'off'].includes(mode)) {
+        return;
+      }
+      moderationService.setBeeTriggerEnabled(chatId, mode === 'on');
+      await safeAnswerCbQuery(ctx, mode === 'on' ? '✅ Триггер включён.' : '❌ Триггер отключён.');
+      await showMenuCommandRightsMenu(ctx, chatId, 0, returnCallback, returnFlag);
+      return;
+    }
+
     if (action.startsWith('command_rights:commands:')) {
       const parts = action.split(':');
       const pageIndex = Number(parts[3]);
@@ -7777,6 +7803,11 @@ function createBot() {
     const lowerText = text.toLowerCase();
     const hasMessageContent = Boolean(text || isMediaMessage(ctx));
     if (!hasMessageContent) {
+      return;
+    }
+
+    if (isGroupChat(ctx) && moderationService.isBeeTriggerEnabled(ctx.chat.id) && isBeeTriggerMessage(text)) {
+      await ctx.reply('бжж');
       return;
     }
 
@@ -8448,6 +8479,7 @@ module.exports = {
   detectForbiddenWord,
   isLinkMessage,
   isAllowedLinkUrl,
+  isBeeTriggerMessage,
   isGroupOwnerMember,
   isGroupMemberWithProfileChangePermission,
   isGroupMemberWithManageRights,
