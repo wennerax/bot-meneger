@@ -630,7 +630,8 @@ function recordModerationLog(chatId, payload = {}) {
     return null;
   }
 
-  return moderationService.addModerationLog(Number(chatId), {
+  const service = activeModerationService || defaultModerationService;
+  return service.addModerationLog(Number(chatId), {
     action,
     actorId: Number(payload.actorId) || null,
     targetId: Number(payload.targetId) || null,
