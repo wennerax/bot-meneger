@@ -2453,6 +2453,15 @@ function createBot() {
   const pendingMenuActions = new Map();
   const pendingSettingsActions = new Map();
 
+  bot.use(async (ctx, next) => {
+    const message = ctx.message;
+    const commandText = message?.text || '';
+    if (message && ctx.chat?.type !== 'private' && ctx.from && !ctx.from.is_bot && /^\/\S+/.test(commandText)) {
+      database.recordMessage(ctx.chat.id, ctx.from.id, getDisplayName(ctx), ctx.from.username);
+    }
+    await next();
+  });
+
   function getPunishmentTimerKey(chatId, userId, action) {
     return `${chatId}:${userId}:${action}`;
   }

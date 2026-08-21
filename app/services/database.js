@@ -391,8 +391,10 @@ class Database {
     const latestDayKey = activeDates[activeDates.length - 1];
     const latestDay = new Date(`${latestDayKey}T00:00:00Z`);
     const todayDate = new Date(`${todayKey}T00:00:00Z`);
+    const yesterdayDate = new Date(todayDate);
+    yesterdayDate.setUTCDate(yesterdayDate.getUTCDate() - 1);
 
-    if (latestDay.getTime() < todayDate.getTime()) {
+    if (latestDay.getTime() < yesterdayDate.getTime()) {
       return 0;
     }
 
@@ -406,7 +408,7 @@ class Database {
         break;
       }
       streak += 1;
-      cursor.setDate(cursor.getDate() - 1);
+      cursor.setUTCDate(cursor.getUTCDate() - 1);
     }
 
     return streak;
