@@ -3175,9 +3175,9 @@ function createBot() {
   }
 
   function isKnownCommandText(text) {
-    const slashCommand = /^\/(start|help|id|about|whoami|stats|rules|arule|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|dice|fate|compliment|insult|top|admins|banlist|mutelist|setrules|warn|delwarn|warnings|unwarn|mute|delmute|unmute|ban|delban|unban|setgreeting|addadmin|removeadmin|promote|demote|clearhistory|miniapp|admincom|ai|modstats)(\s|$)/i;
+    const slashCommand = /^\/(start|help|bot|id|about|whoami|кто_я|stats|rules|arule|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|монетка|dice|кубик|fate|вопрос|compliment|комплимент|insult|инсульт|top|топ|admins|админы|banlist|баны|mutelist|муты|setrules|установить_правила|warn|предупреждение|delwarn|warnings|варны|unwarn|снять_предупреждение|mute|мут|delmute|unmute|размут|ban|бан|delban|unban|разбан|setgreeting|установить_приветствие|addadmin|добавить_админа|removeadmin|снять_админа|promote|повышение|demote|разжалование|clearhistory|сбросистории|сброс_истории|clear_history|miniapp|миниприложение|admincom|ai|modstats|статистика_модерации|ttt|крестики|крестики-нолики)(?:@[\w_]+)?(\s|$)/i;
     const bangCommand = /^!(delban|delmute|delwarn|начало|помощь|айди|информация|кто\s*я|статистика|правила|аправила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|инсульт|предупреждение|варны|мут|размут|бан|разбан|топ)(\s|$)/i;
-    const plusMinusCommand = /^(\+антиспам|\+antispam|\+антифлуд|\+antiflood|\-антиспам|\-antispam|\-антифлуд|\-antiflood|\+ссылки|\+links|\-ссылки|\-links|\+описание|\+description|\+rules|\+правила|\+greeting|\+приветствие)(\s|$)/i;
+    const plusMinusCommand = /^(\+антиспам|\+antispam|\+антифлуд|\+antiflood|\-антиспам|\-antispam|\-антифлуд|\-antiflood|\+ссылки|\+links|\-ссылки|\-links|\+описание|\+description|\+rules(?=\s+\S)|\+правила(?=\s+\S)|\+greeting(?=\s+\S)|\+приветствие(?=\s+\S))(\s|$)/i;
     return slashCommand.test(text) || bangCommand.test(text) || plusMinusCommand.test(text);
   }
 
@@ -3275,6 +3275,21 @@ function createBot() {
       });
     }
   }
+
+  async function deleteRecognizedCommandMessage(ctx, next) {
+    await next();
+
+    if (!ctx.chat || !isGroupChat(ctx) || !ctx.message || ctx.from?.is_bot) {
+      return;
+    }
+
+    const text = getMessageText(ctx);
+    if (isKnownCommandText(text)) {
+      await deleteMessageSafely(ctx, ctx.message.message_id);
+    }
+  }
+
+  bot.use(deleteRecognizedCommandMessage);
 
   function recordRecentMessage(ctx) {
     if (!isGroupChat(ctx)) {
