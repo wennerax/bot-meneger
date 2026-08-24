@@ -12,6 +12,7 @@ function main() {
   const config = loadConfig();
   console.log(`Bot manager ready with token: ${config.botToken ? 'configured' : 'missing'}`);
   console.log(`Admin IDs: ${config.adminIds.join(', ') || 'none'}`);
+  console.log(`Reload admin IDs: ${config.reloadAdminIds.join(', ') || 'none'}`);
   console.log(`Database: ${config.databasePath}`);
 
   if (process.env.NODE_ENV === 'production' && !process.env.BOT_TOKEN) {
