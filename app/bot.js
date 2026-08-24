@@ -1,5 +1,4 @@
 ﻿const path = require('node:path');
-const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const { Telegraf } = require('telegraf');
 const sharp = require('sharp');
@@ -3210,19 +3209,10 @@ function createBot() {
       }
     }
 
-    const child = spawn(process.execPath, process.argv.slice(1), {
-      detached: true,
-      stdio: 'ignore',
-      cwd: process.cwd(),
-      env: {
-        ...process.env,
-        BOT_RELOAD_DELAY_MS: '1500',
-        BOT_RELOAD_PARENT_PID: String(process.pid),
-        BOT_RELOAD_CHAT_ID: String(ctx.chat.id),
-        BOT_RELOAD_MESSAGE_ID: String(progressMessage.message_id),
-      },
-    });
-    child.unref();
+    fs.writeFileSync(path.join(__dirname, '..', 'data', 'bot-reload-status.json'), JSON.stringify({
+      chatId: ctx.chat.id,
+      messageId: progressMessage.message_id,
+    }), 'utf8');
     process.exit(0);
   }
 

@@ -5,6 +5,7 @@ const { createBot, startBot } = require('./bot');
 
 const instanceLockPath = path.join(__dirname, '..', 'data', 'bot-instance.lock');
 const reloadLockPath = path.join(__dirname, '..', 'data', 'bot-reload.lock');
+const reloadStatusPath = path.join(__dirname, '..', 'data', 'bot-reload-status.json');
 
 function acquireInstanceLock(replacingPid = null) {
   fs.mkdirSync(path.dirname(instanceLockPath), { recursive: true });
@@ -66,24 +67,28 @@ function releaseReloadLock() {
   }
 }
 
+function readReloadStatus() {
+  try {
+    return JSON.parse(fs.readFileSync(reloadStatusPath, 'utf8'));
+  } catch (error) {
+    return null;
+  }
+}
+
+function clearReloadStatus() {
+  try {
+    fs.unlinkSync(reloadStatusPath);
+  } catch (error) {
+    // The status may already be removed after a successful update.
+  }
+}
+
 function main() {
-  const reloadDelayMs = Number(process.env.BOT_RELOAD_DELAY_MS || 0);
-  const reloadChatId = process.env.BOT_RELOAD_CHAT_ID;
-  const reloadMessageId = process.env.BOT_RELOAD_MESSAGE_ID;
-  const reloadParentPid = Number(process.env.BOT_RELOAD_PARENT_PID);
-  if (Number.isFinite(reloadDelayMs) && reloadDelayMs > 0) {
-    delete process.env.BOT_RELOAD_DELAY_MS;
-    setTimeout(main, reloadDelayMs);
+  if (!acquireInstanceLock()) {
     return;
   }
 
-  delete process.env.BOT_RELOAD_CHAT_ID;
-  delete process.env.BOT_RELOAD_MESSAGE_ID;
-  delete process.env.BOT_RELOAD_PARENT_PID;
-
-  if (!acquireInstanceLock(reloadParentPid)) {
-    return;
-  }
+  const reloadStatus = readReloadStatus();
 
   const config = loadConfig();
   console.log(`Bot manager ready with token: ${config.botToken ? 'configured' : 'missing'}`);
@@ -99,22 +104,21 @@ function main() {
   console.log(`AI key present: ${config.aiApiKey ? 'yes' : 'no'}`);
 
   const botState = createBot();
-  if (reloadChatId && reloadMessageId) {
-    releaseReloadLock();
-  }
+  releaseReloadLock();
 
   startBot(botState, async (bot) => {
-    if (reloadChatId && reloadMessageId) {
+    if (reloadStatus?.chatId && reloadStatus?.messageId) {
       try {
         await bot.telegram.editMessageText(
-          reloadChatId,
-          Number(reloadMessageId),
+          reloadStatus.chatId,
+          Number(reloadStatus.messageId),
           undefined,
           '✅ Бот успешно перезапустился.',
         );
+        clearReloadStatus();
         setTimeout(async () => {
           try {
-            await bot.telegram.deleteMessage(reloadChatId, Number(reloadMessageId));
+            await bot.telegram.deleteMessage(reloadStatus.chatId, Number(reloadStatus.messageId));
           } catch (error) {
             console.warn('Failed to delete reload status message:', error?.message || error);
           }
