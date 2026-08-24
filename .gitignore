@@ -6,5 +6,6 @@ __pycache__/
 data/*.sqlite3
 data/bot-instance.lock
 data/bot-reload-status.json
+data/reload-command-*.lock
 .idea/
 .vscode/

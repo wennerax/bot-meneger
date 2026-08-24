@@ -17,6 +17,7 @@ let activeConfig = null;
 const adminReports = new Map();
 const reloadLockPath = path.join(__dirname, '..', 'data', 'bot-reload.lock');
 const reloadLockMaxAgeMs = 2 * 60 * 1000;
+const reloadCommandClaimMaxAgeMs = 10 * 60 * 1000;
 
 // Установите сюда ID группы модераторов, в которую будут приходить уведомления при включенном уведомлении администраторов.
 // Пример: const ADMIN_NOTIFICATION_GROUP_ID = -1001234567890;
@@ -3156,6 +3157,38 @@ function createBot() {
     }
   }
 
+  function claimReloadCommand(ctx) {
+    const chatId = Number(ctx.chat?.id);
+    const messageId = Number(ctx.message?.message_id);
+    if (!Number.isFinite(chatId) || !Number.isFinite(messageId)) {
+      return false;
+    }
+
+    const claimPath = path.join(__dirname, '..', 'data', `reload-command-${chatId}-${messageId}.lock`);
+    try {
+      const lockAgeMs = Date.now() - fs.statSync(claimPath).mtimeMs;
+      if (lockAgeMs > reloadCommandClaimMaxAgeMs) {
+        fs.unlinkSync(claimPath);
+      }
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        console.warn('Failed to inspect reload command claim:', error?.message || error);
+      }
+    }
+
+    try {
+      fs.writeFileSync(claimPath, String(process.pid), { flag: 'wx' });
+      return true;
+    } catch (error) {
+      if (error.code === 'EEXIST') {
+        console.log(`Reload command already handled: ${chatId}/${messageId}.`);
+      } else {
+        console.warn('Failed to claim reload command:', error?.message || error);
+      }
+      return false;
+    }
+  }
+
   async function reloadCommand(ctx) {
     if (!canReloadBot(ctx)) {
       await ctx.reply('Эта команда доступна только администраторам перезагрузки.');
@@ -3169,6 +3202,11 @@ function createBot() {
 
     if (!acquireReloadLock()) {
       console.log('Reload command ignored: another reload is already in progress.');
+      return;
+    }
+
+    if (!claimReloadCommand(ctx)) {
+      releaseReloadLock();
       return;
     }
 
