@@ -125,13 +125,12 @@ function main() {
           successText,
         );
         clearReloadStatus(reloadStatusClaim.path);
-        setTimeout(async () => {
-          try {
-            await bot.telegram.deleteMessage(reloadStatus.chatId, Number(reloadStatus.messageId));
-          } catch (error) {
-            console.warn('Failed to delete reload status message:', error?.message || error);
-          }
-        }, 2000);
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        try {
+          await bot.telegram.deleteMessage(reloadStatus.chatId, Number(reloadStatus.messageId));
+        } catch (error) {
+          console.warn('Failed to delete reload status message:', error?.message || error);
+        }
       } catch (error) {
         console.warn('Failed to update reload status message:', error?.message || error);
         clearReloadStatus(reloadStatusClaim.path);
