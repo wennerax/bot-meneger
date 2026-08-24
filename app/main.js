@@ -87,25 +87,31 @@ function main() {
   console.log(`AI key present: ${config.aiApiKey ? 'yes' : 'no'}`);
 
   const botState = createBot();
-  startBot(botState);
   if (reloadChatId && reloadMessageId) {
     releaseReloadLock();
   }
 
-  if (reloadChatId && reloadMessageId) {
-    setTimeout(async () => {
+  startBot(botState, async (bot) => {
+    if (reloadChatId && reloadMessageId) {
       try {
-        await botState.bot.telegram.editMessageText(
+        await bot.telegram.editMessageText(
           reloadChatId,
           Number(reloadMessageId),
           undefined,
           '✅ Бот успешно перезапустился.',
         );
+        setTimeout(async () => {
+          try {
+            await bot.telegram.deleteMessage(reloadChatId, Number(reloadMessageId));
+          } catch (error) {
+            console.warn('Failed to delete reload status message:', error?.message || error);
+          }
+        }, 2000);
       } catch (error) {
         console.warn('Failed to update reload status message:', error?.message || error);
       }
-    }, 2500);
-  }
+    }
+  });
 
   if (config.aiApiKey) {
     const aiModule = require('./ai');

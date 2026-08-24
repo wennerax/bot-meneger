@@ -3165,6 +3165,13 @@ function createBot() {
       releaseReloadLock();
       return;
     }
+
+    try {
+      await ctx.deleteMessage();
+    } catch (error) {
+      console.warn('Failed to delete reload command message:', error?.message || error);
+    }
+
     const progressSteps = [
       '🔄 Перезапускаем бота: 10-20%',
       '🔄 Перезапускаем бота: 20-30%',
@@ -8800,17 +8807,22 @@ function createBot() {
   return { bot, config, userService, moderationService, database };
 }
 
-function startBot(botState = null) {
+function startBot(botState = null, onStarted = null) {
   const state = botState || createBot();
   const { bot, config } = state;
   if (!config.botToken) {
     console.log('BOT_TOKEN is not configured.');
-    return;
+    return Promise.resolve(false);
   }
-  bot.launch().then(() => {
+  return bot.launch().then(async () => {
     console.log('Bot started');
+    if (typeof onStarted === 'function') {
+      await onStarted(bot);
+    }
+    return true;
   }).catch((error) => {
     console.error(error);
+    return false;
   });
 }
 
