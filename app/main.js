@@ -1,5 +1,60 @@
+const fs = require('node:fs');
+const path = require('node:path');
 const { loadConfig } = require('./config');
 const { createBot, startBot } = require('./bot');
+
+const instanceLockPath = path.join(__dirname, '..', 'data', 'bot-instance.lock');
+const reloadLockPath = path.join(__dirname, '..', 'data', 'bot-reload.lock');
+
+function acquireInstanceLock() {
+  fs.mkdirSync(path.dirname(instanceLockPath), { recursive: true });
+
+  try {
+    fs.writeFileSync(instanceLockPath, String(process.pid), { flag: 'wx' });
+  } catch (error) {
+    if (error.code !== 'EEXIST') {
+      throw error;
+    }
+
+    const existingPid = Number(fs.readFileSync(instanceLockPath, 'utf8'));
+    try {
+      process.kill(existingPid, 0);
+      console.error(`Another bot instance is already running (PID ${existingPid}).`);
+      return false;
+    } catch (probeError) {
+      fs.unlinkSync(instanceLockPath);
+      fs.writeFileSync(instanceLockPath, String(process.pid), { flag: 'wx' });
+    }
+  }
+
+  const releaseLock = () => {
+    try {
+      if (Number(fs.readFileSync(instanceLockPath, 'utf8')) === process.pid) {
+        fs.unlinkSync(instanceLockPath);
+      }
+    } catch (error) {
+      // The lock may already be removed during shutdown.
+    }
+  };
+  process.once('exit', releaseLock);
+  process.once('SIGINT', () => {
+    releaseLock();
+    process.exit(0);
+  });
+  process.once('SIGTERM', () => {
+    releaseLock();
+    process.exit(0);
+  });
+  return true;
+}
+
+function releaseReloadLock() {
+  try {
+    fs.unlinkSync(reloadLockPath);
+  } catch (error) {
+    // The lock may already be removed after a failed reload.
+  }
+}
 
 function main() {
   const reloadDelayMs = Number(process.env.BOT_RELOAD_DELAY_MS || 0);
@@ -13,6 +68,10 @@ function main() {
 
   delete process.env.BOT_RELOAD_CHAT_ID;
   delete process.env.BOT_RELOAD_MESSAGE_ID;
+
+  if (!acquireInstanceLock()) {
+    return;
+  }
 
   const config = loadConfig();
   console.log(`Bot manager ready with token: ${config.botToken ? 'configured' : 'missing'}`);
@@ -29,6 +88,9 @@ function main() {
 
   const botState = createBot();
   startBot(botState);
+  if (reloadChatId && reloadMessageId) {
+    releaseReloadLock();
+  }
 
   if (reloadChatId && reloadMessageId) {
     setTimeout(async () => {

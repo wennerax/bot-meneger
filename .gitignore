@@ -4,5 +4,6 @@ __pycache__/
 .pytest_cache/
 .env
 data/*.sqlite3
+data/bot-instance.lock
 .idea/
 .vscode/

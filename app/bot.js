@@ -1,5 +1,6 @@
 ﻿const path = require('node:path');
 const { spawn } = require('node:child_process');
+const fs = require('node:fs');
 const { Telegraf } = require('telegraf');
 const sharp = require('sharp');
 const { loadConfig, getMiniAppPort, detectPublicMiniAppUrl } = require('./config');
@@ -15,6 +16,7 @@ let activeDatabase = null;
 let activeModerationService = null;
 let activeConfig = null;
 const adminReports = new Map();
+const reloadLockPath = path.join(__dirname, '..', 'data', 'bot-reload.lock');
 
 // Установите сюда ID группы модераторов, в которую будут приходить уведомления при включенном уведомлении администраторов.
 // Пример: const ADMIN_NOTIFICATION_GROUP_ID = -1001234567890;
@@ -3105,6 +3107,41 @@ function createBot() {
 
   let reloadInProgress = false;
 
+  function acquireReloadLock() {
+    try {
+      fs.mkdirSync(path.dirname(reloadLockPath), { recursive: true });
+      fs.writeFileSync(reloadLockPath, String(process.pid), { flag: 'wx' });
+      return true;
+    } catch (error) {
+      if (error.code !== 'EEXIST') {
+        console.warn('Failed to create reload lock:', error?.message || error);
+        return false;
+      }
+
+      try {
+        const existingPid = Number(fs.readFileSync(reloadLockPath, 'utf8'));
+        process.kill(existingPid, 0);
+        return false;
+      } catch (probeError) {
+        try {
+          fs.unlinkSync(reloadLockPath);
+          fs.writeFileSync(reloadLockPath, String(process.pid), { flag: 'wx' });
+          return true;
+        } catch (retryError) {
+          return false;
+        }
+      }
+    }
+  }
+
+  function releaseReloadLock() {
+    try {
+      fs.unlinkSync(reloadLockPath);
+    } catch (error) {
+      // The lock may already be removed by the restarted process.
+    }
+  }
+
   async function reloadCommand(ctx) {
     if (!canReloadBot(ctx)) {
       await ctx.reply('Эта команда доступна только администраторам перезагрузки.');
@@ -3115,8 +3152,19 @@ function createBot() {
       return;
     }
 
+    if (!acquireReloadLock()) {
+      return;
+    }
+
     reloadInProgress = true;
-    const progressMessage = await ctx.reply('🔄 Перезапускаем бота: 0-10%');
+    let progressMessage;
+    try {
+      progressMessage = await ctx.reply('🔄 Перезапускаем бота: 0-10%');
+    } catch (error) {
+      console.warn('Failed to send reload progress message:', error?.message || error);
+      releaseReloadLock();
+      return;
+    }
     const progressSteps = [
       '🔄 Перезапускаем бота: 10-20%',
       '🔄 Перезапускаем бота: 20-30%',
@@ -3130,7 +3178,7 @@ function createBot() {
     ];
 
     for (const progressText of progressSteps) {
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      await new Promise((resolve) => setTimeout(resolve, 1100));
       try {
         await ctx.telegram.editMessageText(ctx.chat.id, progressMessage.message_id, undefined, progressText);
       } catch (error) {
