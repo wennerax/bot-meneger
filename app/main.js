@@ -115,11 +115,14 @@ function main() {
   startBot(botState, async (bot) => {
     if (reloadStatus?.chatId && reloadStatus?.messageId) {
       try {
+        const successText = typeof reloadStatus.successText === 'string' && reloadStatus.successText
+          ? reloadStatus.successText
+          : '✅ Бот успешно перезапустился.';
         await bot.telegram.editMessageText(
           reloadStatus.chatId,
           Number(reloadStatus.messageId),
           undefined,
-          '✅ Бот успешно перезапустился.',
+          successText,
         );
         clearReloadStatus(reloadStatusClaim.path);
         setTimeout(async () => {

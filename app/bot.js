@@ -187,6 +187,18 @@ function scheduleDeleteMessage(telegram, chatId, messageId, delay = 5000) {
   }, delay);
 }
 
+function buildReloadStatusMessage(progressPercent) {
+  const safePercent = Number.isFinite(Number(progressPercent)) ? Number(progressPercent) : 0;
+  if (safePercent >= 100) {
+    return '✅ Перезапуск успешно выполнен.';
+  }
+  if (safePercent <= 0) {
+    return '🔄 Перезапускаем бота: 0-10%';
+  }
+  const nextStep = Math.min(90, Math.max(10, Math.floor((safePercent / 10)) * 10));
+  return `🔄 Перезапускаем бота: ${nextStep}-${nextStep + 10}%`;
+}
+
 function canSelfClearPunishmentHistory(ctx, targetUserId, actionName) {
   if (String(actionName || '').toLowerCase() !== 'clear_history') {
     return false;
@@ -3229,31 +3241,25 @@ function createBot() {
       }
     }
 
-    const progressSteps = [
-      '🔄 Перезапускаем бота: 10-20%',
-      '🔄 Перезапускаем бота: 20-30%',
-      '🔄 Перезапускаем бота: 30-40%',
-      '🔄 Перезапускаем бота: 40-50%',
-      '🔄 Перезапускаем бота: 50-60%',
-      '🔄 Перезапускаем бота: 60-70%',
-      '🔄 Перезапускаем бота: 70-80%',
-      '🔄 Перезапускаем бота: 80-90%',
-      '🔄 Перезапускаем бота: 90-100%',
-    ];
+    const progressSteps = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
 
-    for (const progressText of progressSteps) {
+    for (const percent of progressSteps) {
       await new Promise((resolve) => setTimeout(resolve, 1100));
+      const progressText = buildReloadStatusMessage(percent);
       try {
         await ctx.telegram.editMessageText(ctx.chat.id, progressMessage.message_id, undefined, progressText);
       } catch (error) {
         // Continue restarting if the progress message was deleted meanwhile.
       }
+      if (percent >= 100) {
+        fs.writeFileSync(path.join(__dirname, '..', 'data', 'bot-reload-status.json'), JSON.stringify({
+          chatId: ctx.chat.id,
+          messageId: progressMessage.message_id,
+          successText: progressText,
+        }), 'utf8');
+      }
     }
 
-    fs.writeFileSync(path.join(__dirname, '..', 'data', 'bot-reload-status.json'), JSON.stringify({
-      chatId: ctx.chat.id,
-      messageId: progressMessage.message_id,
-    }), 'utf8');
     process.exit(0);
   }
 
@@ -8920,6 +8926,7 @@ module.exports = {
   cleanupAgreementMessages,
   handleAgreementDecision,
   isPollAnswerForTarget,
+  buildReloadStatusMessage,
 };
 
 2

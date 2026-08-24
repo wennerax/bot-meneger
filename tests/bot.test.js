@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildBulkModerationSummaryMessage, buildFunReply, getTicTacToeWinner, buildTicTacToeKeyboard, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage, shouldFailClosedForMedia, cleanupAgreementMessages, handleAgreementDecision, isPollAnswerForTarget, buildBotMediaSend } = require('../app/bot');
+const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildBulkModerationSummaryMessage, buildFunReply, getTicTacToeWinner, buildTicTacToeKeyboard, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage, shouldFailClosedForMedia, cleanupAgreementMessages, handleAgreementDecision, isPollAnswerForTarget, buildBotMediaSend, buildReloadStatusMessage } = require('../app/bot');
 const { buildAiRequestPayload, normalizeMultimodalInputForResponses } = require('../app/ai');
 const premiumEmojis = require('../app/premium_emojis');
 
@@ -42,6 +42,11 @@ test('parsePunishmentDetails makes a reply ban permanent without a reason or dur
   const result = parsePunishmentDetails('', true);
 
   assert.deepEqual(result, { durationHours: null, reason: 'Без причины' });
+});
+
+test('reload status shows success when the bot reaches 100%', () => {
+  assert.equal(buildReloadStatusMessage(0), '🔄 Перезапускаем бота: 0-10%');
+  assert.equal(buildReloadStatusMessage(100), '✅ Перезапуск успешно выполнен.');
 });
 
 test('poll answers are accepted only from the user assigned to the poll', () => {
