@@ -3185,7 +3185,10 @@ function createBot() {
     try {
       await ctx.deleteMessage();
     } catch (error) {
-      console.warn('Failed to delete reload command message:', error?.message || error);
+      const description = String(error?.response?.description || error?.message || error);
+      if (!description.includes('message to delete not found')) {
+        console.warn('Failed to delete reload command message:', description);
+      }
     }
 
     const progressSteps = [

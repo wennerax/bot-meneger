@@ -67,17 +67,22 @@ function releaseReloadLock() {
   }
 }
 
-function readReloadStatus() {
+function claimReloadStatus() {
+  const claimedPath = `${reloadStatusPath}.${process.pid}.processing`;
   try {
-    return JSON.parse(fs.readFileSync(reloadStatusPath, 'utf8'));
+    fs.renameSync(reloadStatusPath, claimedPath);
+    return {
+      path: claimedPath,
+      status: JSON.parse(fs.readFileSync(claimedPath, 'utf8')),
+    };
   } catch (error) {
     return null;
   }
 }
 
-function clearReloadStatus() {
+function clearReloadStatus(statusPath) {
   try {
-    fs.unlinkSync(reloadStatusPath);
+    fs.unlinkSync(statusPath);
   } catch (error) {
     // The status may already be removed after a successful update.
   }
@@ -88,7 +93,8 @@ function main() {
     return;
   }
 
-  const reloadStatus = readReloadStatus();
+  const reloadStatusClaim = claimReloadStatus();
+  const reloadStatus = reloadStatusClaim?.status;
 
   const config = loadConfig();
   console.log(`Bot manager ready with token: ${config.botToken ? 'configured' : 'missing'}`);
@@ -115,7 +121,7 @@ function main() {
           undefined,
           '✅ Бот успешно перезапустился.',
         );
-        clearReloadStatus();
+        clearReloadStatus(reloadStatusClaim.path);
         setTimeout(async () => {
           try {
             await bot.telegram.deleteMessage(reloadStatus.chatId, Number(reloadStatus.messageId));
@@ -125,6 +131,7 @@ function main() {
         }, 2000);
       } catch (error) {
         console.warn('Failed to update reload status message:', error?.message || error);
+        clearReloadStatus(reloadStatusClaim.path);
       }
     }
   });
