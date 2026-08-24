@@ -3,11 +3,16 @@ const { createBot, startBot } = require('./bot');
 
 function main() {
   const reloadDelayMs = Number(process.env.BOT_RELOAD_DELAY_MS || 0);
+  const reloadChatId = process.env.BOT_RELOAD_CHAT_ID;
+  const reloadMessageId = process.env.BOT_RELOAD_MESSAGE_ID;
   if (Number.isFinite(reloadDelayMs) && reloadDelayMs > 0) {
     delete process.env.BOT_RELOAD_DELAY_MS;
     setTimeout(main, reloadDelayMs);
     return;
   }
+
+  delete process.env.BOT_RELOAD_CHAT_ID;
+  delete process.env.BOT_RELOAD_MESSAGE_ID;
 
   const config = loadConfig();
   console.log(`Bot manager ready with token: ${config.botToken ? 'configured' : 'missing'}`);
@@ -24,6 +29,21 @@ function main() {
 
   const botState = createBot();
   startBot(botState);
+
+  if (reloadChatId && reloadMessageId) {
+    setTimeout(async () => {
+      try {
+        await botState.bot.telegram.editMessageText(
+          reloadChatId,
+          Number(reloadMessageId),
+          undefined,
+          '✅ Бот успешно перезапустился.',
+        );
+      } catch (error) {
+        console.warn('Failed to update reload status message:', error?.message || error);
+      }
+    }, 2500);
+  }
 
   if (config.aiApiKey) {
     const aiModule = require('./ai');

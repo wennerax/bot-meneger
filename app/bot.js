@@ -3103,18 +3103,51 @@ function createBot() {
     return Number.isFinite(userId) && config.reloadAdminIds.includes(userId);
   }
 
+  let reloadInProgress = false;
+
   async function reloadCommand(ctx) {
     if (!canReloadBot(ctx)) {
       await ctx.reply('Эта команда доступна только администраторам перезагрузки.');
       return;
     }
 
-    await ctx.reply('Перезагрузка бота...');
+    if (reloadInProgress) {
+      return;
+    }
+
+    reloadInProgress = true;
+    const progressMessage = await ctx.reply('🔄 Перезапускаем бота: 0-10%');
+    const progressSteps = [
+      '🔄 Перезапускаем бота: 10-20%',
+      '🔄 Перезапускаем бота: 20-30%',
+      '🔄 Перезапускаем бота: 30-40%',
+      '🔄 Перезапускаем бота: 40-50%',
+      '🔄 Перезапускаем бота: 50-60%',
+      '🔄 Перезапускаем бота: 60-70%',
+      '🔄 Перезапускаем бота: 70-80%',
+      '🔄 Перезапускаем бота: 80-90%',
+      '🔄 Перезапускаем бота: 90-100%',
+    ];
+
+    for (const progressText of progressSteps) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      try {
+        await ctx.telegram.editMessageText(ctx.chat.id, progressMessage.message_id, undefined, progressText);
+      } catch (error) {
+        // Continue restarting if the progress message was deleted meanwhile.
+      }
+    }
+
     const child = spawn(process.execPath, process.argv.slice(1), {
       detached: true,
       stdio: 'ignore',
       cwd: process.cwd(),
-      env: process.env,
+      env: {
+        ...process.env,
+        BOT_RELOAD_DELAY_MS: '1500',
+        BOT_RELOAD_CHAT_ID: String(ctx.chat.id),
+        BOT_RELOAD_MESSAGE_ID: String(progressMessage.message_id),
+      },
     });
     child.unref();
     process.exit(0);
