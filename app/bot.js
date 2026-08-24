@@ -2,7 +2,7 @@
 const { spawn } = require('node:child_process');
 const { Telegraf } = require('telegraf');
 const sharp = require('sharp');
-const { loadConfig } = require('./config');
+const { loadConfig, getMiniAppPort, detectPublicMiniAppUrl } = require('./config');
 const UserService = require('./services/user_service');
 const ModerationService = require('./services/moderation_service');
 const Database = require('./services/database');
@@ -26,7 +26,7 @@ function normalizeUrlPattern(value) {
 
 function getLinkCandidates(text) {
   return Array.from(String(text || '').matchAll(/(?:https?:\/\/|www\.)\S+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/\S*)?/ig), (match) => {
-    const raw = match[0].replace(/[.,;:!?)+\]}"']+$/g, '');
+    const raw = match[0].replace(/[.,;:!?)+\]}>'"`]+$/g, '');
     return raw;
   });
 }
@@ -2594,27 +2594,6 @@ function createBot() {
   const pendingSettingsActions = new Map();
   const ticTacToeGames = new Map();
 
-  function persistRecoveryState() {
-    database.setRuntimeState({
-      captchaStates: Array.from(captchaStates.entries()),
-      agreementStates: Array.from(agreementStates.entries()),
-      adminReports: Array.from(adminReports.entries()),
-    });
-  }
-
-  function restoreRecoveryState() {
-    const state = database.getRuntimeState();
-    for (const [pollId, captcha] of Array.isArray(state.captchaStates) ? state.captchaStates : []) {
-      if (captcha && captcha.chatId && captcha.userId) captchaStates.set(String(pollId), captcha);
-    }
-    for (const [pollId, agreement] of Array.isArray(state.agreementStates) ? state.agreementStates : []) {
-      if (agreement && agreement.chatId && agreement.userId) agreementStates.set(String(pollId), agreement);
-    }
-    for (const [reportId, report] of Array.isArray(state.adminReports) ? state.adminReports : []) {
-      if (report && report.chatId && report.target) adminReports.set(String(reportId), report);
-    }
-  }
-
   function getTicTacToeUserLabel(user) {
     if (user?.username) {
       return `@${user.username}`;
@@ -2887,10 +2866,8 @@ function createBot() {
       correctOptionId,
       pollMessageId,
       instructionMessageId: instructionMessage?.message_id,
-      timeoutMinutes,
       createdAt: Date.now(),
     });
-    persistRecoveryState();
   }
 
   async function cleanupAgreementMessages(telegram, chatId, messageIds = []) {
@@ -2992,7 +2969,6 @@ function createBot() {
     }
 
     captchaStates.delete(pollId);
-    persistRecoveryState();
 
     if (passed) {
       const moderationService = activeModerationService || defaultModerationService;
@@ -3027,7 +3003,6 @@ function createBot() {
           agreementMessageIds: agreementMessage?.message_id ? [agreementMessage.message_id] : [],
           createdAt: Date.now(),
         });
-        persistRecoveryState();
 
         scheduleDeleteMessage(ctx.telegram, state.chatId, state.pollMessageId);
         scheduleDeleteMessage(ctx.telegram, state.chatId, state.instructionMessageId);
@@ -3053,26 +3028,6 @@ function createBot() {
     scheduleDeleteMessage(ctx.telegram, state.chatId, state.pollMessageId);
   }
 
-  function restoreWorkflowTimers() {
-    const now = Date.now();
-    for (const [pollId, state] of captchaStates.entries()) {
-      const timeoutMs = Math.max(0, (Number(state.timeoutMinutes) || 3) * 60 * 1000 - (now - Number(state.createdAt || now)));
-      setTimeout(() => void completeCaptcha({ telegram: bot.telegram }, pollId, false), timeoutMs);
-    }
-    for (const [pollId, state] of agreementStates.entries()) {
-      const timeoutMs = Math.max(0, 5 * 60 * 1000 - (now - Number(state.createdAt || now)));
-      setTimeout(async () => {
-        const current = agreementStates.get(pollId);
-        if (!current) return;
-        agreementStates.delete(pollId);
-        persistRecoveryState();
-        await handleAgreementDecision(bot.telegram, current, false);
-      }, timeoutMs);
-    }
-  }
-
-  restoreWorkflowTimers();
-
   async function expirePunishment(punishment) {
     const { chatId, userId, action } = punishment;
     clearScheduledPunishment(chatId, userId, action);
@@ -3095,8 +3050,6 @@ function createBot() {
       console.error(`Не удалось автоматически снять ${action} для ${userId} в чате ${chatId}:`, error?.message || error);
     }
   }
-
-  restoreRecoveryState();
 
   function schedulePunishmentExpiry(punishment) {
     if (!punishment?.untilAt) {
@@ -3157,20 +3110,14 @@ function createBot() {
     }
 
     await ctx.reply('Перезагрузка бота...');
-    try {
-      bot.stop('reload');
-    } catch (error) {
-      // The bot may not have been launched yet in development or tests.
-    }
-
     const child = spawn(process.execPath, process.argv.slice(1), {
       detached: true,
       stdio: 'ignore',
       cwd: process.cwd(),
-      env: { ...process.env, BOT_RELOAD_DELAY_MS: '1500' },
+      env: process.env,
     });
     child.unref();
-    setTimeout(() => process.exit(0), 250);
+    process.exit(0);
   }
 
   async function canUseAdminPunishmentCommands(ctx) {
@@ -3251,7 +3198,7 @@ function createBot() {
   }
 
   function isKnownCommandText(text) {
-    const slashCommand = /^\/(start|help|bot|id|about|whoami|кто_я|stats|rules|arule|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|монетка|dice|кубик|fate|вопрос|compliment|комплимент|insult|инсульт|top|топ|admins|админы|banlist|баны|mutelist|муты|setrules|установить_правила|warn|предупреждение|delwarn|warnings|варны|unwarn|снять_предупреждение|mute|мут|delmute|unmute|размут|ban|бан|delban|unban|разбан|setgreeting|установить_приветствие|addadmin|добавить_админа|removeadmin|снять_админа|promote|повышение|demote|разжалование|clearhistory|сбросистории|сброс_истории|clear_history|admincom|ai|modstats|статистика_модерации|ttt|крестики|крестики-нолики)(?:@[\w_]+)?(\s|$)/i;
+    const slashCommand = /^\/(start|help|bot|id|about|whoami|кто_я|stats|rules|arule|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|монетка|dice|кубик|fate|вопрос|compliment|комплимент|insult|инсульт|top|топ|admins|админы|banlist|баны|mutelist|муты|setrules|установить_правила|warn|предупреждение|delwarn|warnings|варны|unwarn|снять_предупреждение|mute|мут|delmute|unmute|размут|ban|бан|delban|unban|разбан|setgreeting|установить_приветствие|addadmin|добавить_админа|removeadmin|снять_админа|promote|повышение|demote|разжалование|clearhistory|сбросистории|сброс_истории|clear_history|miniapp|миниприложение|admincom|ai|modstats|статистика_модерации|ttt|крестики|крестики-нолики)(?:@[\w_]+)?(\s|$)/i;
     const bangCommand = /^!(delban|delmute|delwarn|начало|помощь|айди|информация|кто\s*я|статистика|правила|аправила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|инсульт|предупреждение|варны|мут|размут|бан|разбан|топ)(\s|$)/i;
     const plusMinusCommand = /^(\+антиспам|\+antispam|\+антифлуд|\+antiflood|\-антиспам|\-antispam|\-антифлуд|\-antiflood|\+ссылки|\+links|\-ссылки|\-links|\+описание|\+description|\+rules(?=\s+\S)|\+правила(?=\s+\S)|\+greeting(?=\s+\S)|\+приветствие(?=\s+\S))(\s|$)/i;
     return slashCommand.test(text) || bangCommand.test(text) || plusMinusCommand.test(text);
@@ -4820,7 +4767,6 @@ function createBot() {
 
       // remove stored report
       adminReports.delete(reportId);
-      persistRecoveryState();
       clearPendingSettingsAction(ctx);
       // optionally confirm in the admin chat
       try {
@@ -7912,6 +7858,29 @@ function createBot() {
     await openSettingsForCurrentContext(ctx, chatId);
   });
 
+  bot.command(['miniapp', 'миниприложение'], async (ctx) => {
+    const chatId = Number(ctx.chat?.id || 0);
+    if (!chatId) {
+      return;
+    }
+
+    if (!(await canManageGroupSettings(ctx, chatId))) {
+      await ctx.reply('У вас нет прав администратора группы с правом менять профиль группы.');
+      return;
+    }
+
+    const port = getMiniAppPort();
+    const url = detectPublicMiniAppUrl(config, port);
+    await ctx.reply('Открыл мини-приложение для настроек группы.', {
+      reply_markup: {
+        inline_keyboard: [[{
+          text: 'Открыть настройки',
+          web_app: { url: `${url}/?chat_id=${chatId}` },
+        }]],
+      },
+    });
+  });
+
   bot.command(['allowed'], (ctx) => {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
@@ -8014,7 +7983,6 @@ function createBot() {
 
       const selectedOption = (pollAnswer.option_ids || [])[0];
       agreementStates.delete(pollAnswer.poll_id);
-      persistRecoveryState();
 
       if (selectedOption === 0) {
         await handleAgreementDecision(ctx.telegram, agreementState, true);
@@ -8437,7 +8405,6 @@ function createBot() {
       // store report and message IDs for notifications
       report.notifications = [];
       adminReports.set(reportId, report);
-      persistRecoveryState();
 
       try {
         const mode = moderationService.getAdminNotifyMode(ctx.chat.id);

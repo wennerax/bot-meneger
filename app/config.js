@@ -16,6 +16,8 @@ function parseAdminIds(value) {
 
   return [...new Set(
     String(value)
+      .trim()
+      .replace(/^\[|\]$/g, '')
       .split(',')
       .map((item) => item.trim())
       .filter(Boolean)
