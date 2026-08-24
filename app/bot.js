@@ -187,6 +187,12 @@ function scheduleDeleteMessage(telegram, chatId, messageId, delay = 5000) {
   }, delay);
 }
 
+async function replyAndScheduleDelete(ctx, text, delay = 2000) {
+  const replyMessage = await ctx.reply(text);
+  scheduleDeleteMessage(ctx.telegram, ctx.chat?.id, replyMessage?.message_id, delay);
+  return replyMessage;
+}
+
 function buildReloadStatusMessage(progressPercent) {
   const safePercent = Number.isFinite(Number(progressPercent)) ? Number(progressPercent) : 0;
   if (safePercent >= 100) {
@@ -8610,7 +8616,7 @@ function createBot() {
         return;
       }
       moderationService.enableSpamProtection(ctx.chat.id);
-      ctx.reply('✅ Антиспам включён.');
+      await replyAndScheduleDelete(ctx, '✅ Антиспам включён.');
       return;
     }
 
@@ -8621,7 +8627,7 @@ function createBot() {
         return;
       }
       moderationService.disableSpamProtection(ctx.chat.id);
-      ctx.reply('✅ Антиспам выключен.');
+      await replyAndScheduleDelete(ctx, '✅ Антиспам выключен.');
       return;
     }
 
@@ -8632,7 +8638,7 @@ function createBot() {
         return;
       }
       moderationService.enableFloodProtection(ctx.chat.id);
-      ctx.reply('✅ Антифлуд включён.');
+      await replyAndScheduleDelete(ctx, '✅ Антифлуд включён.');
       return;
     }
 
@@ -8643,7 +8649,7 @@ function createBot() {
         return;
       }
       moderationService.disableFloodProtection(ctx.chat.id);
-      ctx.reply('✅ Антифлуд выключен.');
+      await replyAndScheduleDelete(ctx, '✅ Антифлуд выключен.');
       return;
     }
 
@@ -8677,7 +8683,7 @@ function createBot() {
       const argValue = removeAllowedLinkMatch[1].trim();
       if (!argValue) {
         moderationService.disableLinkProtection(ctx.chat.id);
-        ctx.reply('✅ Антиссылки выключены.');
+        await replyAndScheduleDelete(ctx, '✅ Антиссылки выключены.');
         return;
       }
 
@@ -8705,7 +8711,7 @@ function createBot() {
         return;
       }
       moderationService.enableLinkProtection(ctx.chat.id);
-      ctx.reply('✅ Антиссылки включены.');
+      await replyAndScheduleDelete(ctx, '✅ Антиссылки включены.');
       return;
     }
 
@@ -8716,7 +8722,7 @@ function createBot() {
         return;
       }
       moderationService.disableLinkProtection(ctx.chat.id);
-      ctx.reply('✅ Антиссылки выключены.');
+      await replyAndScheduleDelete(ctx, '✅ Антиссылки выключены.');
       return;
     }
 
