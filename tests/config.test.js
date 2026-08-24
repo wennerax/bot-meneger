@@ -10,6 +10,12 @@ test('admin ids are parsed from comma separated values', () => {
   assert.deepEqual(settings.adminIds, [10, 20]);
 });
 
+test('reload admin ids are parsed from comma separated values', () => {
+  const settings = loadConfig({ RELOAD_ADMIN_IDS: '30, 40,30' }, { filePath: '.env' });
+
+  assert.deepEqual(settings.reloadAdminIds, [30, 40]);
+});
+
 test('empty admin ids become an empty array', () => {
   const settings = loadConfig({ BOT_TOKEN: 'token', ADMIN_IDS: '' }, { filePath: '.env' });
 

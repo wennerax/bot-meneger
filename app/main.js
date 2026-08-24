@@ -1,8 +1,14 @@
-const { loadConfig, getMiniAppPort, detectPublicMiniAppUrl } = require('./config');
+const { loadConfig } = require('./config');
 const { createBot, startBot } = require('./bot');
-const { buildMiniAppServer } = require('../miniapp/server');
 
 function main() {
+  const reloadDelayMs = Number(process.env.BOT_RELOAD_DELAY_MS || 0);
+  if (Number.isFinite(reloadDelayMs) && reloadDelayMs > 0) {
+    delete process.env.BOT_RELOAD_DELAY_MS;
+    setTimeout(main, reloadDelayMs);
+    return;
+  }
+
   const config = loadConfig();
   console.log(`Bot manager ready with token: ${config.botToken ? 'configured' : 'missing'}`);
   console.log(`Admin IDs: ${config.adminIds.join(', ') || 'none'}`);
@@ -16,20 +22,6 @@ function main() {
   console.log(`AI key present: ${config.aiApiKey ? 'yes' : 'no'}`);
 
   const botState = createBot();
-  const miniAppServer = buildMiniAppServer({
-    bot: botState.bot,
-    moderationService: botState.moderationService,
-    database: botState.database,
-  });
-  const port = getMiniAppPort();
-  const miniAppUrl = detectPublicMiniAppUrl(config, port);
-
-  miniAppServer.listen(port, () => {
-    console.log(`Mini app server listening on http://localhost:${port}`);
-    console.log(`Mini app permanent URL: ${miniAppUrl}`);
-    saveMiniAppUrlToFile(miniAppUrl);
-  });
-
   startBot(botState);
 
   if (config.aiApiKey) {
@@ -50,20 +42,6 @@ function main() {
     })();
   } else {
     console.log('AI endpoint check skipped: no key configured');
-  }
-}
-
-const fs = require('node:fs');
-const path = require('node:path');
-
-function saveMiniAppUrlToFile(url) {
-  try {
-    const filePath = path.join(__dirname, '..', 'data', 'miniapp_url.txt');
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, String(url || '').trim(), 'utf8');
-    console.log(`Mini app URL saved to ${filePath}`);
-  } catch (error) {
-    console.warn('Failed to save mini app URL to file:', error?.message || error);
   }
 }
 

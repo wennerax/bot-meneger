@@ -17,5 +17,6 @@
   "messageCounts": {},
   "groupUsers": {},
   "userDescriptions": {},
-  "dailyActivity": {}
+  "dailyActivity": {},
+  "runtimeState": {}
 }

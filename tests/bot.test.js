@@ -422,6 +422,11 @@ test('allowed links bypass link protection while suspicious ones trigger it', ()
   assert.equal(isLinkMessage('https://example.com/shop', (link) => link.includes('t.me')), true);
 });
 
+test('link protection ignores closing quotes around URLs', () => {
+  assert.equal(isLinkMessage('"https://example.com"', (link) => link === 'https://example.com'), false);
+  assert.equal(isLinkMessage("'https://example.com'", (link) => link === 'https://example.com'), false);
+});
+
 test('buildAiRequestPayload builds an OpenAI-compatible request body for text prompts', async () => {
   const payload = await buildAiRequestPayload('привет', 'gpt-4o-mini');
 

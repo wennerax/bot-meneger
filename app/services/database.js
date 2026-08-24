@@ -77,6 +77,7 @@ class Database {
         groupUsers: parsed.groupUsers || {},
         userDescriptions: parsed.userDescriptions || {},
         dailyActivity: parsed.dailyActivity || {},
+        runtimeState: parsed.runtimeState && typeof parsed.runtimeState === 'object' ? parsed.runtimeState : {},
       };
     } catch (error) {
       return this._emptyState();
@@ -96,6 +97,7 @@ class Database {
       groupUsers: {},
       userDescriptions: {},
       dailyActivity: {},
+      runtimeState: {},
     };
   }
 
@@ -106,6 +108,15 @@ class Database {
 
   _now() {
     return new Date().toISOString();
+  }
+
+  getRuntimeState() {
+    return JSON.parse(JSON.stringify(this.data.runtimeState || {}));
+  }
+
+  setRuntimeState(state = {}) {
+    this.data.runtimeState = state && typeof state === 'object' ? state : {};
+    this._save();
   }
 
   ensureGroup(chatId, title, ownerId = null) {
