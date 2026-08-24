@@ -17,6 +17,7 @@ let activeModerationService = null;
 let activeConfig = null;
 const adminReports = new Map();
 const reloadLockPath = path.join(__dirname, '..', 'data', 'bot-reload.lock');
+const reloadLockMaxAgeMs = 2 * 60 * 1000;
 
 // Установите сюда ID группы модераторов, в которую будут приходить уведомления при включенном уведомлении администраторов.
 // Пример: const ADMIN_NOTIFICATION_GROUP_ID = -1001234567890;
@@ -3119,8 +3120,21 @@ function createBot() {
       }
 
       try {
+        const lockAgeMs = Date.now() - fs.statSync(reloadLockPath).mtimeMs;
+        if (lockAgeMs > reloadLockMaxAgeMs) {
+          fs.unlinkSync(reloadLockPath);
+          fs.writeFileSync(reloadLockPath, String(process.pid), { flag: 'wx' });
+          console.warn('Removed stale reload lock.');
+          return true;
+        }
+      } catch (lockError) {
+        console.warn('Failed to inspect reload lock:', lockError?.message || lockError);
+      }
+
+      try {
         const existingPid = Number(fs.readFileSync(reloadLockPath, 'utf8'));
         process.kill(existingPid, 0);
+        console.log(`Reload is already in progress (PID ${existingPid}).`);
         return false;
       } catch (probeError) {
         try {
@@ -3128,6 +3142,7 @@ function createBot() {
           fs.writeFileSync(reloadLockPath, String(process.pid), { flag: 'wx' });
           return true;
         } catch (retryError) {
+          console.warn('Failed to acquire reload lock:', retryError?.message || retryError);
           return false;
         }
       }
@@ -3149,10 +3164,12 @@ function createBot() {
     }
 
     if (reloadInProgress) {
+      console.log('Reload command ignored: reload is already in progress in this process.');
       return;
     }
 
     if (!acquireReloadLock()) {
+      console.log('Reload command ignored: another reload is already in progress.');
       return;
     }
 
