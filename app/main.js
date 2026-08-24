@@ -6,7 +6,7 @@ const { createBot, startBot } = require('./bot');
 const instanceLockPath = path.join(__dirname, '..', 'data', 'bot-instance.lock');
 const reloadLockPath = path.join(__dirname, '..', 'data', 'bot-reload.lock');
 
-function acquireInstanceLock() {
+function acquireInstanceLock(replacingPid = null) {
   fs.mkdirSync(path.dirname(instanceLockPath), { recursive: true });
 
   try {
@@ -17,6 +17,12 @@ function acquireInstanceLock() {
     }
 
     const existingPid = Number(fs.readFileSync(instanceLockPath, 'utf8'));
+    if (Number.isFinite(replacingPid) && existingPid === replacingPid) {
+      fs.unlinkSync(instanceLockPath);
+      fs.writeFileSync(instanceLockPath, String(process.pid), { flag: 'wx' });
+      return registerInstanceLockCleanup();
+    }
+
     try {
       process.kill(existingPid, 0);
       console.error(`Another bot instance is already running (PID ${existingPid}).`);
@@ -27,6 +33,10 @@ function acquireInstanceLock() {
     }
   }
 
+  return registerInstanceLockCleanup();
+}
+
+function registerInstanceLockCleanup() {
   const releaseLock = () => {
     try {
       if (Number(fs.readFileSync(instanceLockPath, 'utf8')) === process.pid) {
@@ -60,6 +70,7 @@ function main() {
   const reloadDelayMs = Number(process.env.BOT_RELOAD_DELAY_MS || 0);
   const reloadChatId = process.env.BOT_RELOAD_CHAT_ID;
   const reloadMessageId = process.env.BOT_RELOAD_MESSAGE_ID;
+  const reloadParentPid = Number(process.env.BOT_RELOAD_PARENT_PID);
   if (Number.isFinite(reloadDelayMs) && reloadDelayMs > 0) {
     delete process.env.BOT_RELOAD_DELAY_MS;
     setTimeout(main, reloadDelayMs);
@@ -68,8 +79,9 @@ function main() {
 
   delete process.env.BOT_RELOAD_CHAT_ID;
   delete process.env.BOT_RELOAD_MESSAGE_ID;
+  delete process.env.BOT_RELOAD_PARENT_PID;
 
-  if (!acquireInstanceLock()) {
+  if (!acquireInstanceLock(reloadParentPid)) {
     return;
   }
 

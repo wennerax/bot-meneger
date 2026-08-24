@@ -3200,6 +3200,7 @@ function createBot() {
       env: {
         ...process.env,
         BOT_RELOAD_DELAY_MS: '1500',
+        BOT_RELOAD_PARENT_PID: String(process.pid),
         BOT_RELOAD_CHAT_ID: String(ctx.chat.id),
         BOT_RELOAD_MESSAGE_ID: String(progressMessage.message_id),
       },
