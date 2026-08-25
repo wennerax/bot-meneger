@@ -567,7 +567,7 @@ function buildSettingsMainKeyboard(chatId, page = 0) {
       { text: '🤖 Бот Соо', callback_data: `menu:bot_message:${chatId}` },
     ],
     [
-      { text: '📋 Логи', callback_data: 'menu:logs' },
+      { text: '📋 Логи', callback_data: `settings:section:logs:${chatId}` },
     ],
     ],
     [
@@ -614,7 +614,7 @@ function buildMenuKeyboard(chatId) {
   };
 }
 
-function buildModerationLogsKeyboard(chatId) {
+function buildModerationLogsKeyboard(chatId, returnCallback = 'menu:overview') {
   return {
     inline_keyboard: [
       [
@@ -625,7 +625,7 @@ function buildModerationLogsKeyboard(chatId) {
         { text: 'Очистить логи', callback_data: `menu:logs_clear:${chatId}` },
       ],
       [
-        { text: 'Назад', callback_data: `settings:main:${chatId}` },
+        { text: 'Назад', callback_data: returnCallback },
       ],
     ],
   };
@@ -6745,6 +6745,10 @@ function createBot() {
         await showMenuCommandRightsMenu(ctx, chatId, 0, `settings:main:${chatId}`, 'settings');
       } else if (parsed.section === 'moderation') {
         await showSettingsModerationMenu(ctx, chatId);
+      } else if (parsed.section === 'logs') {
+        await safeEditMessageText(ctx, formatModerationLogsText(chatId, 10), {
+          reply_markup: buildModerationLogsKeyboard(chatId, `settings:main:${chatId}`),
+        });
       }
       return;
     }
@@ -8958,6 +8962,7 @@ module.exports = {
   buildPunishmentListMessage,
   buildBotAdminListMessage,
   buildSettingsMainKeyboard,
+  buildModerationLogsKeyboard,
   buildSettingsChatKeyboard,
   buildMenuKeyboard,
   buildMembersManagementKeyboard,
