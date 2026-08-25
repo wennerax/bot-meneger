@@ -184,6 +184,20 @@ test('chat starts with no allowed links by default', () => {
   assert.equal(service.isAllowedLink(100, 'https://t.me/wwhisbot?start=faq'), false);
 });
 
+test('link protection exceptions can be managed per user', () => {
+  const service = new ModerationService();
+
+  assert.deepEqual(service.getLinkExceptionUsers(100), []);
+  assert.equal(service.isLinkExceptionUser(100, 42), false);
+  assert.equal(service.addLinkExceptionUser(100, 42), true);
+  assert.equal(service.addLinkExceptionUser(100, 42), false);
+  assert.equal(service.isLinkExceptionUser(100, 42), true);
+  assert.equal(service.isLinkExceptionUser(100, 43), false);
+  assert.equal(service.removeLinkExceptionUser(100, 42), true);
+  assert.equal(service.removeLinkExceptionUser(100, 42), false);
+  assert.equal(service.isLinkExceptionUser(100, 42), false);
+});
+
 test('allowed links accept only exact configured URLs', () => {
   const service = new ModerationService();
 

@@ -748,6 +748,8 @@ function buildSettingsLinksKeyboard(chatId) {
       [{ text: enabled ? 'Выключить антиссылки' : 'Включить антиссылки', callback_data: `settings:toggle_links:${chatId}:${enabled ? 'off' : 'on'}` }],
       [{ text: 'Добавить ссылку/домен', callback_data: `settings:add_link:${chatId}` }],
       [{ text: 'Убрать ссылку/домен', callback_data: `settings:remove_link:${chatId}` }],
+      [{ text: 'Добавить Искл.Пользователь', callback_data: `settings:add_link_user:${chatId}` }],
+      [{ text: 'Удалить Искл.Пользователь', callback_data: `settings:remove_link_user:${chatId}` }],
       [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
     ],
   };
@@ -1621,12 +1623,16 @@ async function showSettingsLinksMenu(ctx, chatId) {
   const moderationService = activeModerationService || defaultModerationService;
   const enabled = moderationService.isLinkProtectionEnabled(chatId);
   const links = moderationService.getAllowedLinks(chatId);
+  const linkExceptionUsers = moderationService.getLinkExceptionUsers(chatId);
   const text = [
     '🔗 Настройки антиссылок',
     '',
     enabled ? '✅ Антиссылки включены' : '⚪ Антиссылки выключены',
     `📋 Разрешённых ссылок/доменов: ${links.length}`,
     links.length ? `• ${links.join('\n• ')}` : 'Список разрешённых ссылок пуст.',
+    '',
+    `👤 Искл.Пользователь: ${linkExceptionUsers.length}`,
+    linkExceptionUsers.length ? `• ${linkExceptionUsers.join('\n• ')}` : 'Список исключённых пользователей пуст.',
   ].join('\n');
 
   await ctx.editMessageText(text, { reply_markup: buildSettingsLinksKeyboard(chatId) });
@@ -2235,6 +2241,12 @@ function parseSettingsPrompt(action) {
   }
   if (action === 'settings_link_remove') {
     return 'Отправьте ссылку или домен для удаления из списка разрешённых.';
+  }
+  if (action === 'settings_link_user_add') {
+    return 'Отправьте ID пользователя, @username или ответьте на его сообщение для добавления в Искл.Пользователь.';
+  }
+  if (action === 'settings_link_user_remove') {
+    return 'Отправьте ID пользователя, @username или ответьте на его сообщение для удаления из Искл.Пользователь.';
   }
   if (action === 'settings_forward_add') {
     return 'Отправьте @username, t.me/username или ID пользователя/канала/группы для добавления в исключения пересылок.';
@@ -4582,6 +4594,33 @@ function createBot() {
       } else {
         await ctx.reply('⚠️ Такого значения нет в списке.');
       }
+      clearPendingSettingsAction(ctx);
+      return true;
+    }
+
+    if (['settings_link_user_add', 'settings_link_user_remove'].includes(pending.action)) {
+      const repliedUser = ctx.message.reply_to_message?.from;
+      const rawValue = String(ctx.message.text || '').trim().split(/\s+/)[0];
+      let target = repliedUser && Number.isSafeInteger(Number(repliedUser.id)) ? repliedUser : null;
+      if (!target && /^-?\d+$/.test(rawValue)) {
+        target = { id: Number(rawValue), first_name: rawValue };
+      } else if (!target && rawValue.startsWith('@')) {
+        const resolved = await resolveUsernameTarget(ctx, rawValue, 'ID или @username', database);
+        target = resolved?.target || null;
+      }
+      if (!target || !Number.isSafeInteger(Number(target.id)) || Number(target.id) === 0) {
+        await ctx.reply('⚠️ Пользователь не найден. Укажите ID, @username или ответьте на сообщение пользователя.');
+        return true;
+      }
+
+      const targetId = Number(target.id);
+      const changed = pending.action === 'settings_link_user_add'
+        ? moderationService.addLinkExceptionUser(groupId, targetId)
+        : moderationService.removeLinkExceptionUser(groupId, targetId);
+      const actionText = pending.action === 'settings_link_user_add' ? 'добавлен в' : 'удалён из';
+      await ctx.reply(changed
+        ? `✅ Пользователь ${targetId} ${actionText} Искл.Пользователь.`
+        : `⚠️ Пользователь ${targetId} уже ${pending.action === 'settings_link_user_add' ? 'есть в' : 'отсутствует в'} Искл.Пользователь.`);
       clearPendingSettingsAction(ctx);
       return true;
     }
@@ -6949,6 +6988,13 @@ function createBot() {
       return;
     }
 
+    if (parsed.target === 'add_link_user' || parsed.target === 'remove_link_user') {
+      const action = parsed.target === 'add_link_user' ? 'settings_link_user_add' : 'settings_link_user_remove';
+      setPendingSettingsAction(ctx, { action, groupId: chatId });
+      await ctx.reply(parseSettingsPrompt(action));
+      return;
+    }
+
     if (parsed.target === 'forwards_menu') {
       await showSettingsForwardsMenu(ctx, chatId);
       return;
@@ -8800,7 +8846,9 @@ function createBot() {
       return;
     }
 
-    if (isGroupChat(ctx) && moderationService.isLinkProtectionEnabled(ctx.chat.id) && isLinkMessage(text, (link) => moderationService.isAllowedLink(ctx.chat.id, link))) {
+    if (isGroupChat(ctx) && moderationService.isLinkProtectionEnabled(ctx.chat.id)
+      && !moderationService.isLinkExceptionUser(ctx.chat.id, ctx.from?.id)
+      && isLinkMessage(text, (link) => moderationService.isAllowedLink(ctx.chat.id, link))) {
       console.log('anti-link triggered', {
         chatId: ctx.chat.id,
         userId: ctx.from?.id,

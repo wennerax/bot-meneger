@@ -223,6 +223,15 @@ class ModerationService {
         const chatList = chat.allowedLinks.map((item) => String(item).trim().toLowerCase()).filter(Boolean);
         return [...new Set(chatList)];
       })(),
+      linkExceptionUsers: (() => {
+        if (!Array.isArray(chat.linkExceptionUsers)) {
+          return [];
+        }
+        const userIds = chat.linkExceptionUsers
+          .map((item) => Number(item))
+          .filter((item) => Number.isSafeInteger(item) && item !== 0);
+        return [...new Set(userIds)];
+      })(),
       allowedForwards: (() => {
         if (!Array.isArray(chat.allowedForwards)) {
           return [];
@@ -971,6 +980,39 @@ class ModerationService {
       return false;
     }
     chat.allowedLinks = [];
+    this._save();
+    return true;
+  }
+
+  getLinkExceptionUsers(chatId) {
+    return [...this._getChat(chatId).linkExceptionUsers];
+  }
+
+  isLinkExceptionUser(chatId, userId) {
+    const normalizedUserId = Number(userId);
+    return Number.isSafeInteger(normalizedUserId)
+      && this._getChat(chatId).linkExceptionUsers.includes(normalizedUserId);
+  }
+
+  addLinkExceptionUser(chatId, userId) {
+    const chat = this._getChat(chatId);
+    const normalizedUserId = Number(userId);
+    if (!Number.isSafeInteger(normalizedUserId) || normalizedUserId === 0 || chat.linkExceptionUsers.includes(normalizedUserId)) {
+      return false;
+    }
+    chat.linkExceptionUsers.push(normalizedUserId);
+    this._save();
+    return true;
+  }
+
+  removeLinkExceptionUser(chatId, userId) {
+    const chat = this._getChat(chatId);
+    const normalizedUserId = Number(userId);
+    const before = chat.linkExceptionUsers.length;
+    chat.linkExceptionUsers = chat.linkExceptionUsers.filter((item) => item !== normalizedUserId);
+    if (chat.linkExceptionUsers.length === before) {
+      return false;
+    }
     this._save();
     return true;
   }
