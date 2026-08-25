@@ -4618,9 +4618,12 @@ function createBot() {
         ? moderationService.addLinkExceptionUser(groupId, targetId)
         : moderationService.removeLinkExceptionUser(groupId, targetId);
       const actionText = pending.action === 'settings_link_user_add' ? 'добавлен в' : 'удалён из';
-      await ctx.reply(changed
+      const confirmationMessage = await ctx.reply(changed
         ? `✅ Пользователь ${targetId} ${actionText} Искл.Пользователь.`
         : `⚠️ Пользователь ${targetId} уже ${pending.action === 'settings_link_user_add' ? 'есть в' : 'отсутствует в'} Искл.Пользователь.`);
+      scheduleDeleteForContext(ctx, ctx.message?.message_id, 2000);
+      scheduleDeleteForContext(ctx, confirmationMessage?.message_id, 2000);
+      scheduleDeleteForContext(ctx, pending.promptMessageId, 2000);
       clearPendingSettingsAction(ctx);
       return true;
     }
@@ -6991,7 +6994,8 @@ function createBot() {
     if (parsed.target === 'add_link_user' || parsed.target === 'remove_link_user') {
       const action = parsed.target === 'add_link_user' ? 'settings_link_user_add' : 'settings_link_user_remove';
       setPendingSettingsAction(ctx, { action, groupId: chatId });
-      await ctx.reply(parseSettingsPrompt(action));
+      const promptMessage = await ctx.reply(parseSettingsPrompt(action));
+      setPendingSettingsAction(ctx, { action, groupId: chatId, promptMessageId: promptMessage?.message_id });
       return;
     }
 
