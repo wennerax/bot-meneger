@@ -626,14 +626,15 @@ function buildMenuKeyboard(chatId) {
 }
 
 function buildModerationLogsKeyboard(chatId, returnCallback = 'menu:overview') {
+  const callbackSuffix = returnCallback === 'menu:overview' ? '' : `:${returnCallback}`;
   return {
     inline_keyboard: [
       [
-        { text: 'Логи', callback_data: `menu:logs_show:${chatId}` },
-        { text: 'Обновить логи', callback_data: `menu:logs_refresh:${chatId}` },
+        { text: 'Логи', callback_data: `menu:logs_show:${chatId}${callbackSuffix}` },
+        { text: 'Обновить логи', callback_data: `menu:logs_refresh:${chatId}${callbackSuffix}` },
       ],
       [
-        { text: 'Очистить логи', callback_data: `menu:logs_clear:${chatId}` },
+        { text: 'Очистить логи', callback_data: `menu:logs_clear:${chatId}${callbackSuffix}` },
       ],
       [
         { text: 'Назад', callback_data: returnCallback },
@@ -7733,15 +7734,19 @@ function createBot() {
     }
 
     if (action === 'logs_show' || action === 'logs_refresh') {
-      const targetChatId = Number(action.split(':')[1] || chatId) || chatId;
-      await safeEditMessageText(ctx, formatModerationLogsText(targetChatId, 10), { reply_markup: buildModerationLogsKeyboard(targetChatId) });
+      const actionParts = action.split(':');
+      const targetChatId = Number(actionParts[1] || chatId) || chatId;
+      const returnCallback = actionParts.slice(2).join(':') || 'menu:overview';
+      await safeEditMessageText(ctx, formatModerationLogsText(targetChatId, 10), { reply_markup: buildModerationLogsKeyboard(targetChatId, returnCallback) });
       return;
     }
 
     if (action.startsWith('logs_clear')) {
-      const targetChatId = Number(action.split(':')[1] || chatId) || chatId;
+      const actionParts = action.split(':');
+      const targetChatId = Number(actionParts[1] || chatId) || chatId;
+      const returnCallback = actionParts.slice(2).join(':') || 'menu:overview';
       moderationService.clearModerationLogs(targetChatId);
-      await safeEditMessageText(ctx, '✅ Логи модерации очищены.', { reply_markup: buildModerationLogsKeyboard(targetChatId) });
+      await safeEditMessageText(ctx, '✅ Логи модерации очищены.', { reply_markup: buildModerationLogsKeyboard(targetChatId, returnCallback) });
       return;
     }
 
