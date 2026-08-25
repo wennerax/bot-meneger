@@ -1,6 +1,7 @@
 ﻿const path = require('node:path');
 const fs = require('node:fs');
 const { Telegraf } = require('telegraf');
+const GIFEncoder = require('gif-encoder-2');
 const sharp = require('sharp');
 const { loadConfig, getMiniAppPort, detectPublicMiniAppUrl } = require('./config');
 const UserService = require('./services/user_service');
@@ -22,8 +23,7 @@ const reloadCommandClaimMaxAgeMs = 10 * 60 * 1000;
 // Установите сюда ID группы модераторов, в которую будут приходить уведомления при включенном уведомлении администраторов.
 // Пример: const ADMIN_NOTIFICATION_GROUP_ID = -1001234567890;
 const ADMIN_NOTIFICATION_GROUP_ID = 0;
-const BREDISH_FRAME_DELAY_MS = 3200;
-const BREDISH_ANIMATION_FRAME_COUNT = 10;
+const BREDISH_FRAME_DELAY_MS = 500;
 const BREDISH_ART = [
   '██████╗░██████╗░███████╗██████╗░██╗░██████╗██╗░░██╗',
   '██╔══██╗██╔══██╗██╔════╝██╔══██╗██║██╔════╝██║░░██║',
@@ -35,34 +35,54 @@ const BREDISH_ART = [
 
 function buildBredishFrames(frameCount = null) {
   const lines = BREDISH_ART.split('\n').map((line) => Array.from(line));
+  const symbols = lines.flatMap((line, lineIndex) => line.map((symbol, columnIndex) => ({ symbol, lineIndex, columnIndex })))
+    .filter(({ symbol }) => symbol !== ' ');
+  const requestedFrameCount = frameCount === null ? symbols.length : Math.floor(Number(frameCount));
+  const safeFrameCount = Math.max(2, Math.min(symbols.length, requestedFrameCount || symbols.length));
   const width = Math.max(...lines.map((line) => line.length));
-  const requestedFrameCount = frameCount === null ? width : Math.floor(Number(frameCount));
-  const safeFrameCount = Math.max(2, Math.min(width, requestedFrameCount || width));
 
   return Array.from({ length: safeFrameCount }, (_, frameIndex) => {
-    const visibleWidth = Math.min(width, Math.floor((width * (frameIndex + 1)) / safeFrameCount));
+    const visibleSymbols = Math.floor((symbols.length - 1) * frameIndex / (safeFrameCount - 1)) + 1;
+    const visible = new Set(symbols.slice(0, visibleSymbols).map(({ lineIndex, columnIndex }) => `${lineIndex}:${columnIndex}`));
     return lines
-      .map((line) => `${line.slice(0, visibleWidth).join('')}${' '.repeat(width - visibleWidth)}`)
+      .map((line, lineIndex) => line.map((symbol, columnIndex) => (
+        visible.has(`${lineIndex}:${columnIndex}`) ? symbol : ' '
+      )).join(''))
       .join('\n');
   });
 }
 
+function escapeSvgText(text) {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+async function buildBredishGif() {
+  const frames = buildBredishFrames();
+  const width = Math.max(...BREDISH_ART.split('\n').map((line) => line.length));
+  const fontSize = 18;
+  const lineHeight = 22;
+  const imageWidth = width * fontSize;
+  const imageHeight = 6 * lineHeight + 12;
+  const encoder = new GIFEncoder(imageWidth, imageHeight);
+
+  encoder.setDelay(BREDISH_FRAME_DELAY_MS);
+  encoder.setRepeat(0);
+  encoder.setQuality(10);
+  encoder.start();
+
+  for (const frame of frames) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${imageWidth}" height="${imageHeight}"><rect width="100%" height="100%" fill="#111111"/><text x="6" y="${fontSize + 6}" fill="#ffffff" font-family="monospace" font-size="${fontSize}" xml:space="preserve">${escapeSvgText(frame).split('\n').map((line, index) => `<tspan x="6" dy="${index === 0 ? 0 : lineHeight}">${line}</tspan>`).join('')}</text></svg>`;
+    const pixels = await sharp(Buffer.from(svg)).raw().toBuffer();
+    encoder.addFrame(pixels);
+  }
+
+  encoder.finish();
+  return encoder.out.getData();
+}
+
 async function bredishCommand(ctx) {
-  const frames = buildBredishFrames(BREDISH_ANIMATION_FRAME_COUNT);
-  const message = await ctx.reply(`<pre>${frames[0]}</pre>`, { parse_mode: 'HTML' });
-  const chatId = ctx.chat?.id;
-  const messageId = message?.message_id;
-
-  if (!chatId || !messageId) {
-    return message;
-  }
-
-  for (const frame of frames.slice(1)) {
-    await new Promise((resolve) => setTimeout(resolve, BREDISH_FRAME_DELAY_MS));
-    await ctx.telegram.editMessageText(chatId, messageId, undefined, `<pre>${frame}</pre>`, { parse_mode: 'HTML' });
-  }
-
-  return message;
+  const gif = await buildBredishGif();
+  return ctx.replyWithAnimation({ source: gif });
 }
 
 function normalizeUrlPattern(value) {
@@ -8980,6 +9000,7 @@ module.exports = {
   isPollAnswerForTarget,
   buildReloadStatusMessage,
   buildBredishFrames,
+  buildBredishGif,
 };
 
 2
