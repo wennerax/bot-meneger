@@ -4912,6 +4912,7 @@ function createBot() {
       const [title, url] = String(ctx.message.text).split('|').map((part) => part.trim());
       if (!title || !url) {
         await ctx.reply('⚠️ Неверный формат. Отправьте в формате: Название | URL');
+        await deleteMessageSafely(ctx, ctx.message.message_id);
         return true;
       }
       if (!moderationService.addMenuButton(groupId, title, url, typeof pending.rowIndex === 'number' ? pending.rowIndex : null)) {
@@ -4919,6 +4920,7 @@ function createBot() {
       } else {
         await ctx.reply(`✅ Кнопка добавлена: ${title} → ${url}`);
       }
+      await deleteMessageSafely(ctx, ctx.message.message_id);
       clearPendingSettingsAction(ctx);
       return true;
     }
@@ -4927,10 +4929,12 @@ function createBot() {
       const payload = getMediaPayloadFromMessage(ctx);
       if (!payload) {
         await ctx.reply('⚠️ Я не нашёл медиа. Отправьте фото, видео, документ, голос или стикер.');
+        await deleteMessageSafely(ctx, ctx.message.message_id);
         return true;
       }
       moderationService.setMenuMedia(groupId, payload);
       await ctx.reply(`✅ Медиа сохранено как ${payload.type}.`);
+      await deleteMessageSafely(ctx, ctx.message.message_id);
       clearPendingSettingsAction(ctx);
       return true;
     }
@@ -5049,6 +5053,7 @@ function createBot() {
     if (pending.action === 'text' && ctx.message.text) {
       moderationService.setMenuText(ctx.chat.id, buildTextPayloadFromMessage(ctx));
       await ctx.reply('✅ Текст первого сообщения обновлён.');
+      await deleteMessageSafely(ctx, ctx.message.message_id);
       clearPendingMenuAction(ctx);
       return true;
     }
@@ -5058,6 +5063,7 @@ function createBot() {
       const rowIndex = typeof pending.rowIndex === 'number' ? pending.rowIndex : null;
       if (!title || !url) {
         await ctx.reply('⚠️ Неверный формат. Отправьте в формате: Название | URL');
+        await deleteMessageSafely(ctx, ctx.message.message_id);
         return true;
       }
       if (!moderationService.addMenuButton(ctx.chat.id, title, url, rowIndex)) {
@@ -5065,6 +5071,7 @@ function createBot() {
       } else {
         await ctx.reply(`✅ Кнопка добавлена: ${title} → ${url}`);
       }
+      await deleteMessageSafely(ctx, ctx.message.message_id);
       clearPendingMenuAction(ctx);
       return true;
     }
@@ -5073,10 +5080,12 @@ function createBot() {
       const payload = getMediaPayloadFromMessage(ctx);
       if (!payload) {
         await ctx.reply('⚠️ Я не нашёл медиа. Отправьте фото, видео, документ, голос или стикер.');
+        await deleteMessageSafely(ctx, ctx.message.message_id);
         return true;
       }
       moderationService.setMenuMedia(ctx.chat.id, payload);
       await ctx.reply(`✅ Медиа сохранено как ${payload.type}.`);
+      await deleteMessageSafely(ctx, ctx.message.message_id);
       clearPendingMenuAction(ctx);
       return true;
     }
