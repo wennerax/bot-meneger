@@ -22,8 +22,8 @@ const reloadCommandClaimMaxAgeMs = 10 * 60 * 1000;
 // Установите сюда ID группы модераторов, в которую будут приходить уведомления при включенном уведомлении администраторов.
 // Пример: const ADMIN_NOTIFICATION_GROUP_ID = -1001234567890;
 const ADMIN_NOTIFICATION_GROUP_ID = 0;
-const BREDISH_FRAME_DELAY_MS = 1100;
-const BREDISH_ANIMATION_FRAME_COUNT = 8;
+const BREDISH_FRAME_DELAY_MS = 1000;
+const BREDISH_ANIMATION_FRAME_COUNT = 6;
 const BREDISH_ART = [
   '██████╗░██████╗░███████╗██████╗░██╗░██████╗██╗░░██╗',
   '██╔══██╗██╔══██╗██╔════╝██╔══██╗██║██╔════╝██║░░██║',
