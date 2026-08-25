@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildBulkModerationSummaryMessage, buildFunReply, getTicTacToeWinner, buildTicTacToeKeyboard, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage, shouldFailClosedForMedia, cleanupAgreementMessages, handleAgreementDecision, isPollAnswerForTarget, buildBotMediaSend, buildReloadStatusMessage, buildBredishFrames, buildBredishGif } = require('../app/bot');
+const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildBulkModerationSummaryMessage, buildFunReply, getTicTacToeWinner, buildTicTacToeKeyboard, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage, shouldFailClosedForMedia, cleanupAgreementMessages, handleAgreementDecision, isPollAnswerForTarget, buildBotMediaSend, buildReloadStatusMessage, buildBredishFrames } = require('../app/bot');
 const { buildAiRequestPayload, normalizeMultimodalInputForResponses } = require('../app/ai');
 const premiumEmojis = require('../app/premium_emojis');
 
@@ -25,13 +25,6 @@ test('bredish animation ends with the requested six-line art', () => {
   assert.equal(fastFrames.at(-1), expectedArt);
   const visibleSymbolCount = (frame) => [...frame].filter((symbol) => symbol !== ' ' && symbol !== '\n').length;
   assert.ok(fastFrames.every((frame, index) => index === 0 || visibleSymbolCount(frame) > visibleSymbolCount(fastFrames[index - 1])));
-});
-
-test('bredish animation builds a GIF for Telegram', async () => {
-  const gif = await buildBredishGif();
-
-  assert.ok(gif.length > 1000);
-  assert.equal(gif.subarray(0, 6).toString(), 'GIF89a');
 });
 
 test('parsePunishmentDetails extracts duration and reason', () => {

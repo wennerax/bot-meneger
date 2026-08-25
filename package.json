@@ -8,7 +8,6 @@
     "test": "node --test tests/*.test.js"
   },
   "dependencies": {
-    "gif-encoder-2": "^1.0.5",
     "openai": "^4.60.0",
     "sharp": "^0.32.0",
     "telegraf": "^4.16.0"
