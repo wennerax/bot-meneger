@@ -25,53 +25,6 @@ const reloadCommandClaimMaxAgeMs = 10 * 60 * 1000;
 // Установите сюда ID группы модераторов, в которую будут приходить уведомления при включенном уведомлении администраторов.
 // Пример: const ADMIN_NOTIFICATION_GROUP_ID = -1001234567890;
 const ADMIN_NOTIFICATION_GROUP_ID = 0;
-const BREDISH_FRAME_DELAY_MS = 1100;
-const BREDISH_ART = [
-  '██████╗░██████╗░███████╗██████╗░██╗░██████╗██╗░░██╗',
-  '██╔══██╗██╔══██╗██╔════╝██╔══██╗██║██╔════╝██║░░██║',
-  '██████╦╝██████╔╝█████╗░░██║░░██║██║╚█████╗░███████║',
-  '██╔══██╗██╔══██╗██╔══╝░░██║░░██║██║░╚═══██╗██╔══██║',
-  '██████╦╝██║░░██║███████╗██████╔╝██║██████╔╝██║░░██║',
-  '╚═════╝░╚═╝░░╚═╝╚══════╝╚═════╝░╚═╝╚═════╝░╚═╝░░╚═╝',
-].join('\n');
-
-function buildBredishFrames(frameCount = null) {
-  const lines = BREDISH_ART.split('\n').map((line) => Array.from(line));
-  const symbols = lines.flatMap((line, lineIndex) => line.map((symbol, columnIndex) => ({ symbol, lineIndex, columnIndex })))
-    .filter(({ symbol }) => symbol !== ' ');
-  const requestedFrameCount = frameCount === null ? symbols.length : Math.floor(Number(frameCount));
-  const safeFrameCount = Math.max(2, Math.min(symbols.length, requestedFrameCount || symbols.length));
-  const width = Math.max(...lines.map((line) => line.length));
-
-  return Array.from({ length: safeFrameCount }, (_, frameIndex) => {
-    const visibleSymbols = Math.floor((symbols.length - 1) * frameIndex / (safeFrameCount - 1)) + 1;
-    const visible = new Set(symbols.slice(0, visibleSymbols).map(({ lineIndex, columnIndex }) => `${lineIndex}:${columnIndex}`));
-    return lines
-      .map((line, lineIndex) => line.map((symbol, columnIndex) => (
-        visible.has(`${lineIndex}:${columnIndex}`) ? symbol : ' '
-      )).join(''))
-      .join('\n');
-  });
-}
-
-async function bredishCommand(ctx) {
-  const frames = buildBredishFrames();
-  const message = await ctx.reply(`<pre>${frames[0]}</pre>`, { parse_mode: 'HTML' });
-  const chatId = ctx.chat?.id;
-  const messageId = message?.message_id;
-
-  if (!chatId || !messageId) {
-    return message;
-  }
-
-  for (const frame of frames.slice(1)) {
-    await new Promise((resolve) => setTimeout(resolve, BREDISH_FRAME_DELAY_MS));
-    await ctx.telegram.editMessageText(chatId, messageId, undefined, `<pre>${frame}</pre>`, { parse_mode: 'HTML' });
-  }
-
-  return message;
-}
-
 function normalizeUrlPattern(value) {
   return String(value || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '');
 }
@@ -7879,10 +7832,6 @@ function createBot() {
     ctx.reply(`Ваш Telegram ID: ${ctx.from.id}`);
   });
 
-  bot.command('bredish', async (ctx) => {
-    await bredishCommand(ctx);
-  });
-
   bot.command(['about', 'информация'], (ctx) => {
     ctx.reply(`${config.botName}\nПолноценный бот на Node.js.`);
   });
@@ -8986,7 +8935,6 @@ module.exports = {
   handleAgreementDecision,
   isPollAnswerForTarget,
   buildReloadStatusMessage,
-  buildBredishFrames,
 };
 
 2
