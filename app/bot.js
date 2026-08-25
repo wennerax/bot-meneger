@@ -3734,7 +3734,11 @@ function createBot() {
   }
 
   function getPendingMenuAction(ctx) {
-    return pendingMenuActions.get(`${getMenuKey(ctx.chat.id)}:${ctx.from.id}`);
+    const userId = ctx.from?.id;
+    if (!Number.isFinite(Number(userId))) {
+      return null;
+    }
+    return pendingMenuActions.get(`${getMenuKey(ctx.chat.id)}:${userId}`);
   }
 
   function setPendingMenuAction(ctx, action) {
@@ -3746,7 +3750,11 @@ function createBot() {
   }
 
   function getPendingSettingsAction(ctx) {
-    return pendingSettingsActions.get(`${ctx.from.id}:${ctx.chat.id}`);
+    const userId = ctx.from?.id;
+    if (!Number.isFinite(Number(userId))) {
+      return null;
+    }
+    return pendingSettingsActions.get(`${userId}:${ctx.chat.id}`);
   }
 
   function setPendingSettingsAction(ctx, action, groupId = null) {
@@ -4474,7 +4482,9 @@ function createBot() {
     }
 
     try {
-      await ctx.telegram.unpinChatMessage(ctx.chat.id, ctx.message.message_id);
+      if (sentMessage?.message_id) {
+        await ctx.telegram.unpinChatMessage(ctx.chat.id, sentMessage.message_id);
+      }
     } catch (error) {
       console.warn('unpinChatMessage failed:', error?.response?.description || error?.message || error);
     }
