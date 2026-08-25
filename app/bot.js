@@ -29,6 +29,17 @@ function normalizeUrlPattern(value) {
   return String(value || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '');
 }
 
+function isValidTelegramButtonUrl(value) {
+  try {
+    const url = new URL(String(value || '').trim());
+    return (url.protocol === 'http:' || url.protocol === 'https:')
+      && Boolean(url.hostname)
+      && (url.hostname.includes('.') || url.hostname === 'localhost' || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(url.hostname));
+  } catch (error) {
+    return false;
+  }
+}
+
 function getLinkCandidates(text) {
   return Array.from(String(text || '').matchAll(/(?:https?:\/\/|www\.)\S+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/\S*)?/ig), (match) => {
     const raw = match[0].replace(/[.,;:!?)+\]}>'"`]+$/g, '');
@@ -4421,9 +4432,13 @@ function createBot() {
     const menuTextPayload = moderationService.getMenuTextPayload(chatId);
     const buttons = moderationService.getMenuButtons(chatId);
     const menuMedia = moderationService.getMenuMedia(chatId);
-    const keyboard = buttons.length ? { inline_keyboard: buttons
+    const keyboardRows = buttons.length ? buttons
       .filter((row) => Array.isArray(row) && row.length)
-      .map((row) => row.map((item) => ({ text: item.text, url: item.url }))) } : null;
+      .map((row) => row
+        .filter((item) => isValidTelegramButtonUrl(item.url))
+        .map((item) => ({ text: item.text, url: item.url })))
+      .filter((row) => row.length) : [];
+    const keyboard = keyboardRows.length ? { inline_keyboard: keyboardRows } : null;
     const { text: formattedText, entities } = moderationService.formatTextWithLinks(menuTextPayload);
     
     // Для первого комментария в topic используем message_thread_id, иначе reply_to_message_id
@@ -4477,18 +4492,22 @@ function createBot() {
       console.warn('sendMenuReplyForChannelPost media failed:', error?.message || error);
     }
 
-    if (!sentMessage) {
-      sentMessage = await ctx.reply(formattedText, { ...replyOptions, entities: entities.length ? entities : undefined });
-    }
-
     try {
-      if (sentMessage?.message_id) {
-        await ctx.telegram.unpinChatMessage(ctx.chat.id, sentMessage.message_id);
+      if (!sentMessage) {
+        sentMessage = await ctx.reply(formattedText, { ...replyOptions, entities: entities.length ? entities : undefined });
       }
+      return sentMessage;
     } catch (error) {
-      console.warn('unpinChatMessage failed:', error?.response?.description || error?.message || error);
+      throw error;
+    } finally {
+      try {
+        if (ctx.message?.message_id) {
+          await ctx.telegram.unpinChatMessage(ctx.chat.id, ctx.message.message_id);
+        }
+      } catch (error) {
+        console.warn('unpinChatMessage failed:', error?.response?.description || error?.message || error);
+      }
     }
-    return sentMessage;
   }
 
   async function processPendingSettingsAction(ctx) {
