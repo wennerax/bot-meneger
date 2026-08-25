@@ -1,138 +1,94 @@
 # Telegram Bot Manager
 
-Модульный шаблон Telegram-бота на Python и `aiogram 3`.
+Модульный Telegram-бот на Node.js и `telegraf`.
 
 ## Возможности
 
-- `/start` регистрирует пользователя и приветствует его.
-- `/help` показывает доступные команды.
-- `/id` возвращает Telegram ID пользователя и чата.
-- `/about` показывает информацию о боте.
-- `/stats` доступна администраторам из `ADMIN_IDS` и показывает статистику пользователей.
-- `/rules`, `/setrules` управляют правилами чата.
-- `/warn`, `/unwarn`, `/warnings` ведут предупреждения пользователей.
-- `/mute`, `/unmute`, `/ban`, `/unban` управляют доступом участников.
-- `/filter`, `/unfilter` создают автоматические ответы по ключевым словам.
-- Новые участники получают приветствие со ссылкой на правила.
-- `/top` показывает отдельный топ участников по сообщениям в текущей группе.
-- `/linktrigger on|off` включает мут на 1 день за ссылки.
-- `/чс` или `/blacklist` навсегда банит участника и сохраняет его в чёрном списке.
-- Команды наказаний принимают числовой ID, `@юз` или ответ на сообщение.
-- Команды разделены по роутерам, а их подключение выполняется в одном месте.
+- Регистрация пользователей и приветствия.
+- Управление группой: предупреждения, муты, баны и разбаны.
+- Защита от ссылок, спама, пересланных сообщений и запрещённых слов.
+- Правила группы, команды администратора и журналы модерации.
+- ИИ для текстовых запросов и изображений через OpenAI или OpenRouter.
+- `/top` показывает рейтинг участников текущей группы.
+- `/bredish` секретно показывает ASCII-арт `BREDISH` с анимацией по одному символу в одном сообщении.
 
-## Быстрый запуск
+## Установка
 
-1. Создайте виртуальное окружение и установите зависимости:
+Требуется Node.js 18 или новее.
 
-	```powershell
-	python -m venv .venv
-	.\.venv\Scripts\Activate.ps1
-	python -m pip install -r requirements.txt
-	```
-
-2. Скопируйте `.env.example` в `.env` и укажите токен бота от `@BotFather`.
-
-3. Добавьте ID администраторов в `ADMIN_IDS` через запятую. В групповом чате выдайте боту права администратора с разрешением банить и ограничивать участников.
-
-4. Запустите приложение:
-
-	```powershell
-	python -m app
-	```
-
-Наказания поддерживают срок и причину. Например, ответьте командой на сообщение или укажите ID:
-
-```text
-/mute 1d реклама
-/ban 7d оскорбления
-/warn спам
+```powershell
+npm install
+Copy-Item .env.example .env
 ```
 
-Также можно использовать username:
+Откройте `.env` и укажите токен бота:
 
-```text
-/mute @юз 1d реклама
-/ban @юз оскорбления
-/чс @юз повторные нарушения
+```env
+BOT_TOKEN=put-your-bot-token-here
+ADMIN_IDS=123456789,987654321
+RELOAD_ADMIN_IDS=123456789
+BOT_NAME=Telegram Bot Manager
+DATABASE_PATH=data/bot.json
 ```
 
-`m` означает минуты, `h` часы, `d` дни. Если срок не указан, бан постоянный, а мут действует до ручного `/unmute`.
+`ADMIN_IDS` и `RELOAD_ADMIN_IDS` принимают список Telegram ID через запятую. В группе боту нужны права администратора для ограничений участников и удаления сообщений.
 
-Команды `/top`, `/linktrigger` и `/чс` работают отдельно в каждой группе. Данные сохраняются в SQLite по пути `DATABASE_PATH`.
+## Запуск
+
+```powershell
+npm start
+```
+
+В production задавайте секреты через переменные окружения. Файл `.env` в production не используется.
+
+## ИИ
+
+Можно использовать OpenAI:
+
+```env
+OPENAI_API_KEY=your-key
+OPENAI_MODEL=gpt-4o-mini
+OPENAI_BASE_URL=https://api.openai.com/v1
+```
+
+Или OpenRouter:
+
+```env
+OPENROUTER_API_KEY=your-key
+OPENROUTER_MODEL=gpt-4o-mini
+OPENROUTER_API_BASE_URL=https://openrouter.ai/api/v1
+```
+
+Также поддерживаются универсальные переменные `AI_API_KEY`, `AI_MODEL` и `AI_API_BASE_URL`.
+
+Никогда не публикуйте ключи в исходниках, коммитах, чатах или скриншотах. Файл `.env` должен оставаться локальным и быть добавлен в `.gitignore`.
 
 ## Тесты
 
 ```powershell
-python -m pytest
+npm test
 ```
 
-## Безопасность API-ключей
-
-API-ключи (включая `AI_API_KEY`, `BOT_TOKEN` и другие приватные секреты) — конфиденциальны. Никогда не публикуйте их в чатах, исходниках репозиториев или скриншотах.
-
-- Если ключ оказался публичен — немедленно отзовите/перегенерируйте его в панели провайдера.
-- Храните ключи в файле `.env`, который должен быть добавлен в `.gitignore`.
-- В этом проекте AI ключ читается только из файла `.env`.
-
-- Пример строки в `.env`:
-
-```env
-AI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-AI_MODEL=gpt-4o-mini
-AI_API_BASE_URL=https://api.openai.com/v1
-```
-
-Если вы используете OpenRouter AI, можно задать переменные с `OPENROUTER_` префиксом в `.env`:
-
-```env
-OPENROUTER_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-OPENROUTER_MODEL=gpt-4o-mini
-OPENROUTER_API_BASE_URL=https://api.openrouter.ai/v1
-```
-
-- Никогда не записывайте ключи прямо в код или коммиты. Если вы случайно добавили ключ в репозиторий, удалите его из истории и регенерируйте ключ у провайдера.
-
-### Проверка AI endpoint (локально)
-
-Если вы хотите быстро проверить, корректно ли настроен ключ и endpoint, используйте один из примеров ниже (не публикуйте ключ публично).
-
-curl (bash/unix):
-
-```bash
-curl -s -X POST "${OPENROUTER_API_BASE_URL:-https://api.openrouter.ai}/chat/completions" \
-	-H "Authorization: Bearer $OPENROUTER_API_KEY" \
-	-H "Content-Type: application/json" \
-	-d '{"model":"openrouter","messages":[{"role":"user","content":"ping"}]}' | jq .
-```
-
-PowerShell (Windows):
+Для проверки только бота и модерации:
 
 ```powershell
-$body = @{ model='openrouter'; messages=@(@{ role='user'; content='ping' }) } | ConvertTo-Json -Depth 5
-Invoke-RestMethod -Uri ($env:OPENROUTER_API_BASE_URL -or 'https://api.openrouter.ai') -Method POST -Headers @{ Authorization = "Bearer $env:OPENROUTER_API_KEY"; 'Content-Type' = 'application/json' } -Body $body
+npm test -- --test tests/bot.test.js tests/moderation_service.test.js
 ```
-
-Ожидаемые результаты:
-- Успех (200/201): endpoint работает.
-- 401 Unauthorized: ключ неверный/отозван — сгенерируйте новый ключ в панели OpenRouter и обновите `.env`.
-- Другие коды/ошибки: проверьте `OPENROUTER_API_BASE_URL` и формат запроса.
-
 
 ## Структура
 
 ```text
 app/
-  __main__.py       # точка запуска
-  bot.py            # создание Dispatcher и подключение роутеров
-  config.py         # чтение и проверка настроек
-  handlers/         # отдельный модуль для каждой группы команд
-  services/         # бизнес-логика без Telegram-зависимостей
-tests/              # модульные тесты
+  main.js              # запуск приложения
+  bot.js               # создание бота и обработчики команд
+  config.js            # загрузка конфигурации
+  ai.js                # интеграция с ИИ
+  handlers/            # обработчики сообщений
+  services/            # база данных, пользователи и модерация
+data/                  # локальные данные бота
+tests/                 # тесты Node.js
+package.json           # зависимости и npm-скрипты
 ```
 
-Для остановки бота нажмите `Ctrl+C`.
-
-SQLite хранит группы, админ-листы, сообщения, username пользователей, наказания, ссылочный триггер и чёрный список. Правила и автоматические текстовые фильтры пока остаются в памяти процесса.
-
-Telegram не позволяет боту получить ID произвольного пользователя только по username. Поэтому username запоминается, когда пользователь пишет сообщение в группе. Если бот ещё не видел участника, используйте ответ на его сообщение или числовой ID.
+Для остановки бота нажмите `Ctrl+C`. Данные по умолчанию сохраняются в `data/bot.json`.
 

@@ -22,6 +22,56 @@ const reloadCommandClaimMaxAgeMs = 10 * 60 * 1000;
 // Установите сюда ID группы модераторов, в которую будут приходить уведомления при включенном уведомлении администраторов.
 // Пример: const ADMIN_NOTIFICATION_GROUP_ID = -1001234567890;
 const ADMIN_NOTIFICATION_GROUP_ID = 0;
+const BREDISH_FRAME_DELAY_MS = 50;
+const BREDISH_ART = [
+  '██████╗░██████╗░███████╗██████╗░██╗░██████╗██╗░░██╗',
+  '██╔══██╗██╔══██╗██╔════╝██╔══██╗██║██╔════╝██║░░██║',
+  '██████╦╝██████╔╝█████╗░░██║░░██║██║╚█████╗░███████║',
+  '██╔══██╗██╔══██╗██╔══╝░░██║░░██║██║░╚═══██╗██╔══██║',
+  '██████╦╝██║░░██║███████╗██████╔╝██║██████╔╝██║░░██║',
+  '╚═════╝░╚═╝░░╚═╝╚══════╝╚═════╝░╚═╝╚═════╝░╚═╝░░╚═╝',
+].join('\n');
+
+function buildBredishFrames() {
+  const lines = BREDISH_ART.split('\n').map((line) => Array.from(line));
+  const symbolCount = lines.reduce(
+    (count, line) => count + line.filter((symbol) => symbol !== ' ').length,
+    0,
+  );
+
+  return Array.from({ length: symbolCount + 1 }, (_, frameIndex) => {
+    let visibleSymbols = 0;
+    return lines
+      .map((line) => line.map((symbol) => {
+        if (symbol === ' ') {
+          return ' ';
+        }
+
+        const isVisible = visibleSymbols < frameIndex;
+        visibleSymbols += 1;
+        return isVisible ? symbol : ' ';
+      }).join(''))
+      .join('\n');
+  });
+}
+
+async function bredishCommand(ctx) {
+  const frames = buildBredishFrames();
+  const message = await ctx.reply(`<pre>${frames[0]}</pre>`, { parse_mode: 'HTML' });
+  const chatId = ctx.chat?.id;
+  const messageId = message?.message_id;
+
+  if (!chatId || !messageId) {
+    return message;
+  }
+
+  for (const frame of frames.slice(1)) {
+    await new Promise((resolve) => setTimeout(resolve, BREDISH_FRAME_DELAY_MS));
+    await ctx.telegram.editMessageText(chatId, messageId, undefined, `<pre>${frame}</pre>`, { parse_mode: 'HTML' });
+  }
+
+  return message;
+}
 
 function normalizeUrlPattern(value) {
   return String(value || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '');
@@ -7830,6 +7880,10 @@ function createBot() {
     ctx.reply(`Ваш Telegram ID: ${ctx.from.id}`);
   });
 
+  bot.command('bredish', async (ctx) => {
+    await bredishCommand(ctx);
+  });
+
   bot.command(['about', 'информация'], (ctx) => {
     ctx.reply(`${config.botName}\nПолноценный бот на Node.js.`);
   });
@@ -8933,6 +8987,7 @@ module.exports = {
   handleAgreementDecision,
   isPollAnswerForTarget,
   buildReloadStatusMessage,
+  buildBredishFrames,
 };
 
 2
