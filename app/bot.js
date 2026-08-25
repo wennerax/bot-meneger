@@ -23,7 +23,7 @@ const reloadCommandClaimMaxAgeMs = 10 * 60 * 1000;
 // Пример: const ADMIN_NOTIFICATION_GROUP_ID = -1001234567890;
 const ADMIN_NOTIFICATION_GROUP_ID = 0;
 const BREDISH_FRAME_DELAY_MS = 1000;
-const BREDISH_ANIMATION_FRAME_COUNT = 6;
+const BREDISH_ANIMATION_FRAME_COUNT = 28;
 const BREDISH_ART = [
   '██████╗░██████╗░███████╗██████╗░██╗░██████╗██╗░░██╗',
   '██╔══██╗██╔══██╗██╔════╝██╔══██╗██║██╔════╝██║░░██║',
@@ -35,26 +35,14 @@ const BREDISH_ART = [
 
 function buildBredishFrames(frameCount = null) {
   const lines = BREDISH_ART.split('\n').map((line) => Array.from(line));
-  const symbolCount = lines.reduce(
-    (count, line) => count + line.filter((symbol) => symbol !== ' ').length,
-    0,
-  );
-  const requestedFrameCount = frameCount === null ? symbolCount : Math.floor(Number(frameCount));
-  const safeFrameCount = Math.max(2, Math.min(symbolCount, requestedFrameCount || symbolCount));
+  const width = Math.max(...lines.map((line) => line.length));
+  const requestedFrameCount = frameCount === null ? width : Math.floor(Number(frameCount));
+  const safeFrameCount = Math.max(2, Math.min(width, requestedFrameCount || width));
 
   return Array.from({ length: safeFrameCount }, (_, frameIndex) => {
-    const visibleSymbolLimit = Math.floor((symbolCount - 1) * frameIndex / (safeFrameCount - 1)) + 1;
-    let visibleSymbols = 0;
+    const visibleWidth = Math.min(width, Math.floor((width * (frameIndex + 1)) / safeFrameCount));
     return lines
-      .map((line) => line.map((symbol) => {
-        if (symbol === ' ') {
-          return ' ';
-        }
-
-        const isVisible = visibleSymbols < visibleSymbolLimit;
-        visibleSymbols += 1;
-        return isVisible ? symbol : ' ';
-      }).join(''))
+      .map((line) => `${line.slice(0, visibleWidth).join('')}${' '.repeat(width - visibleWidth)}`)
       .join('\n');
   });
 }
