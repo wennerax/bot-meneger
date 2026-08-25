@@ -22,7 +22,8 @@ const reloadCommandClaimMaxAgeMs = 10 * 60 * 1000;
 // Установите сюда ID группы модераторов, в которую будут приходить уведомления при включенном уведомлении администраторов.
 // Пример: const ADMIN_NOTIFICATION_GROUP_ID = -1001234567890;
 const ADMIN_NOTIFICATION_GROUP_ID = 0;
-const BREDISH_FRAME_DELAY_MS = 50;
+const BREDISH_FRAME_DELAY_MS = 1100;
+const BREDISH_ANIMATION_FRAME_COUNT = 8;
 const BREDISH_ART = [
   '██████╗░██████╗░███████╗██████╗░██╗░██████╗██╗░░██╗',
   '██╔══██╗██╔══██╗██╔════╝██╔══██╗██║██╔════╝██║░░██║',
@@ -32,14 +33,17 @@ const BREDISH_ART = [
   '╚═════╝░╚═╝░░╚═╝╚══════╝╚═════╝░╚═╝╚═════╝░╚═╝░░╚═╝',
 ].join('\n');
 
-function buildBredishFrames() {
+function buildBredishFrames(frameCount = null) {
   const lines = BREDISH_ART.split('\n').map((line) => Array.from(line));
   const symbolCount = lines.reduce(
     (count, line) => count + line.filter((symbol) => symbol !== ' ').length,
     0,
   );
+  const requestedFrameCount = frameCount === null ? symbolCount : Math.floor(Number(frameCount));
+  const safeFrameCount = Math.max(2, Math.min(symbolCount, requestedFrameCount || symbolCount));
 
-  return Array.from({ length: symbolCount }, (_, frameIndex) => {
+  return Array.from({ length: safeFrameCount }, (_, frameIndex) => {
+    const visibleSymbolLimit = Math.floor((symbolCount - 1) * frameIndex / (safeFrameCount - 1)) + 1;
     let visibleSymbols = 0;
     return lines
       .map((line) => line.map((symbol) => {
@@ -47,7 +51,7 @@ function buildBredishFrames() {
           return ' ';
         }
 
-        const isVisible = visibleSymbols <= frameIndex;
+        const isVisible = visibleSymbols < visibleSymbolLimit;
         visibleSymbols += 1;
         return isVisible ? symbol : ' ';
       }).join(''))
@@ -56,7 +60,7 @@ function buildBredishFrames() {
 }
 
 async function bredishCommand(ctx) {
-  const frames = buildBredishFrames();
+  const frames = buildBredishFrames(BREDISH_ANIMATION_FRAME_COUNT);
   const message = await ctx.reply(`<pre>${frames[0]}</pre>`, { parse_mode: 'HTML' });
   const chatId = ctx.chat?.id;
   const messageId = message?.message_id;
@@ -67,7 +71,15 @@ async function bredishCommand(ctx) {
 
   for (const frame of frames.slice(1)) {
     await new Promise((resolve) => setTimeout(resolve, BREDISH_FRAME_DELAY_MS));
-    await ctx.telegram.editMessageText(chatId, messageId, undefined, `<pre>${frame}</pre>`, { parse_mode: 'HTML' });
+    try {
+      await ctx.telegram.editMessageText(chatId, messageId, undefined, `<pre>${frame}</pre>`, { parse_mode: 'HTML' });
+    } catch (error) {
+      if (Number(error?.response?.parameters?.retry_after) > 0) {
+        console.warn('BREDISH animation stopped by Telegram rate limit.');
+        break;
+      }
+      throw error;
+    }
   }
 
   return message;

@@ -19,6 +19,12 @@ test('bredish animation ends with the requested six-line art', () => {
   assert.ok(frames.length > 1);
   assert.match(frames[0], /[^ ]/);
   assert.equal(new Set(frames.map((frame) => frame.split('\n').map((line) => line.length).join(','))).size, 1);
+
+  const fastFrames = buildBredishFrames(8);
+  assert.equal(fastFrames.length, 8);
+  assert.equal(fastFrames.at(-1), expectedArt);
+  const visibleSymbolCount = (frame) => [...frame].filter((symbol) => symbol !== ' ' && symbol !== '\n').length;
+  assert.ok(fastFrames.every((frame, index) => index === 0 || visibleSymbolCount(frame) > visibleSymbolCount(fastFrames[index - 1])));
 });
 
 test('parsePunishmentDetails extracts duration and reason', () => {
