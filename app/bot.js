@@ -2,6 +2,9 @@
 const fs = require('node:fs');
 const { Telegraf } = require('telegraf');
 const GIFEncoder = require('gif-encoder-2');
+if (!process.env.FONTCONFIG_FILE) {
+  process.env.FONTCONFIG_FILE = path.join(__dirname, 'fontconfig.conf');
+}
 const sharp = require('sharp');
 const { loadConfig, getMiniAppPort, detectPublicMiniAppUrl } = require('./config');
 const UserService = require('./services/user_service');
