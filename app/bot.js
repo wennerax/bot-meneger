@@ -660,8 +660,16 @@ function formatModerationLogsText(chatId, limit = 10) {
     }) : '—';
 
     const action = String(log.action || 'action').toUpperCase();
-    const actor = Number.isFinite(Number(log.actorId)) ? `админ ${log.actorId}` : 'система';
-    const target = Number.isFinite(Number(log.targetId)) ? `участник ${log.targetId}` : '—';
+    const actorProfile = Number.isFinite(Number(log.actorId))
+      ? activeDatabase?.getUserProfile?.(chatId, log.actorId)
+      : null;
+    const targetProfile = Number.isFinite(Number(log.targetId))
+      ? activeDatabase?.getUserProfile?.(chatId, log.targetId)
+      : null;
+    const actorName = actorProfile?.username || (Number.isFinite(Number(log.actorId)) ? log.actorId : 'система');
+    const targetName = targetProfile?.username || (Number.isFinite(Number(log.targetId)) ? log.targetId : '—');
+    const actor = `админ ${actorName}`;
+    const target = `участник ${targetName}`;
     const reason = log.reason ? ` | причина: ${log.reason}` : '';
     const duration = log.duration ? ` | срок: ${log.duration}` : '';
     const details = log.details ? ` | ${log.details}` : '';
