@@ -17,6 +17,7 @@ test('bredish animation ends with the requested six-line art', () => {
 
   assert.equal(frames.at(-1), expectedArt);
   assert.ok(frames.length > 1);
+  assert.match(frames[0], /[^ ]/);
   assert.equal(new Set(frames.map((frame) => frame.split('\n').map((line) => line.length).join(','))).size, 1);
 });
 

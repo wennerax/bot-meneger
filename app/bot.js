@@ -39,7 +39,7 @@ function buildBredishFrames() {
     0,
   );
 
-  return Array.from({ length: symbolCount + 1 }, (_, frameIndex) => {
+  return Array.from({ length: symbolCount }, (_, frameIndex) => {
     let visibleSymbols = 0;
     return lines
       .map((line) => line.map((symbol) => {
@@ -47,7 +47,7 @@ function buildBredishFrames() {
           return ' ';
         }
 
-        const isVisible = visibleSymbols < frameIndex;
+        const isVisible = visibleSymbols <= frameIndex;
         visibleSymbols += 1;
         return isVisible ? symbol : ' ';
       }).join(''))
