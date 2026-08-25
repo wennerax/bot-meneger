@@ -20,8 +20,8 @@ test('bredish animation ends with the requested six-line art', () => {
   assert.match(frames[0], /[^ ]/);
   assert.equal(new Set(frames.map((frame) => frame.split('\n').map((line) => line.length).join(','))).size, 1);
 
-  const fastFrames = buildBredishFrames(28);
-  assert.equal(fastFrames.length, 28);
+  const fastFrames = buildBredishFrames(10);
+  assert.equal(fastFrames.length, 10);
   assert.equal(fastFrames.at(-1), expectedArt);
   const visibleSymbolCount = (frame) => [...frame].filter((symbol) => symbol !== ' ' && symbol !== '\n').length;
   assert.ok(fastFrames.every((frame, index) => index === 0 || visibleSymbolCount(frame) > visibleSymbolCount(fastFrames[index - 1])));

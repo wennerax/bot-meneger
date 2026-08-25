@@ -22,8 +22,8 @@ const reloadCommandClaimMaxAgeMs = 10 * 60 * 1000;
 // Установите сюда ID группы модераторов, в которую будут приходить уведомления при включенном уведомлении администраторов.
 // Пример: const ADMIN_NOTIFICATION_GROUP_ID = -1001234567890;
 const ADMIN_NOTIFICATION_GROUP_ID = 0;
-const BREDISH_FRAME_DELAY_MS = 1000;
-const BREDISH_ANIMATION_FRAME_COUNT = 28;
+const BREDISH_FRAME_DELAY_MS = 3200;
+const BREDISH_ANIMATION_FRAME_COUNT = 10;
 const BREDISH_ART = [
   '██████╗░██████╗░███████╗██████╗░██╗░██████╗██╗░░██╗',
   '██╔══██╗██╔══██╗██╔════╝██╔══██╗██║██╔════╝██║░░██║',
@@ -59,15 +59,7 @@ async function bredishCommand(ctx) {
 
   for (const frame of frames.slice(1)) {
     await new Promise((resolve) => setTimeout(resolve, BREDISH_FRAME_DELAY_MS));
-    try {
-      await ctx.telegram.editMessageText(chatId, messageId, undefined, `<pre>${frame}</pre>`, { parse_mode: 'HTML' });
-    } catch (error) {
-      if (Number(error?.response?.parameters?.retry_after) > 0) {
-        console.warn('BREDISH animation stopped by Telegram rate limit.');
-        break;
-      }
-      throw error;
-    }
+    await ctx.telegram.editMessageText(chatId, messageId, undefined, `<pre>${frame}</pre>`, { parse_mode: 'HTML' });
   }
 
   return message;
