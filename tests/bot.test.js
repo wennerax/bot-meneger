@@ -163,9 +163,10 @@ test('buildSettingsMainKeyboard returns a grouped layout with section buttons', 
   assert.equal(keyboard[9][0].callback_data, 'settings:page:42:1');
 
   const secondPage = buildSettingsMainKeyboard(42, 1);
-  assert.deepEqual(secondPage[0].map((button) => button.text), ['🛡️ Модерация']);
+  assert.deepEqual(secondPage[0].map((button) => button.text), ['🛡️ Модерация', '🎞️ GIF Команды']);
   assert.deepEqual(secondPage[1].map((button) => button.text), ['⬅️ Назад']);
   assert.equal(secondPage[0][0].callback_data, 'settings:section:moderation:42');
+  assert.equal(secondPage[0][1].callback_data, 'settings:section:gif_commands:42');
   assert.equal(secondPage[1][0].callback_data, 'settings:page:42:0');
 });
 

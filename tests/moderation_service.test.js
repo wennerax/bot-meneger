@@ -14,6 +14,16 @@ test('warnings are stored per chat and user', () => {
   assert.equal(service.getWarnings(200, 7), 0);
 });
 
+test('GIF commands are normalized, persisted and removable per chat', () => {
+  const service = new ModerationService();
+
+  assert.equal(service.setGifCommand(100, '/Dance', { type: 'animation', fileId: 'gif-1' }), true);
+  assert.deepEqual(service.getGifCommand(100, '!dance'), { type: 'animation', fileId: 'gif-1' });
+  assert.equal(service.getGifCommand(200, 'dance'), null);
+  assert.equal(service.removeGifCommand(100, 'dance'), true);
+  assert.equal(service.getGifCommand(100, 'dance'), null);
+});
+
 test('moderation logs store recent actions and can be cleared', () => {
   const service = new ModerationService();
 

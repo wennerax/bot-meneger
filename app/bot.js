@@ -584,6 +584,7 @@ function buildSettingsMainKeyboard(chatId, page = 0) {
     [
     [
       { text: '🛡️ Модерация', callback_data: `settings:section:moderation:${chatId}` },
+      { text: '🎞️ GIF Команды', callback_data: `settings:section:gif_commands:${chatId}` },
     ],
     ],
   ];
@@ -1163,6 +1164,33 @@ function buildSettingsCommandRightsKeyboard(chatId, pageIndex = 0) {
       [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
     ],
   };
+}
+
+function buildSettingsGifCommandsKeyboard(chatId) {
+  const service = activeModerationService || defaultModerationService;
+  const commands = Object.keys(service.getGifCommands(chatId));
+  const rows = [
+    [{ text: '➕ Добавить GIF-команду', callback_data: `settings:gif_command_add:${chatId}` }],
+    [{ text: '➖ Удалить GIF-команду', callback_data: `settings:gif_command_remove:${chatId}` }],
+  ];
+  if (commands.length) {
+    rows.push([{ text: `📋 Команды: ${commands.map((command) => `/${command}`).join(', ')}`, callback_data: 'settings:none' }]);
+  }
+  rows.push([{ text: 'Назад', callback_data: `settings:page:${chatId}:1` }]);
+  return { inline_keyboard: rows };
+}
+
+async function showSettingsGifCommandsMenu(ctx, chatId) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+  const service = activeModerationService || defaultModerationService;
+  const commands = Object.keys(service.getGifCommands(chatId));
+  const list = commands.length ? commands.map((command) => `• /${command}`).join('\n') : 'Пока нет добавленных команд.';
+  await safeEditMessageText(ctx, `🎞️ Настройки GIF-команд\n\n${list}\n\nДобавьте команду, затем отправьте GIF.`, {
+    reply_markup: buildSettingsGifCommandsKeyboard(chatId),
+  });
 }
 
 async function showSettingsCommandRightsMenu(ctx, chatId, pageIndex = 0) {
@@ -3459,7 +3487,7 @@ function createBot() {
     }
 
     return next();
-  }
+  } 
 
   bot.use(enforceDisabledCommand);
 
@@ -4526,6 +4554,53 @@ function createBot() {
     }
 
     const groupId = Number(pending.groupId || ctx.chat.id);
+
+    if (pending.action === 'settings_gif_command_name' && ctx.message.text) {
+      const command = String(ctx.message.text).trim().split(/\s+/)[0];
+      if (!/^[/!]?[a-zа-яё0-9_]{1,32}$/i.test(command)) {
+        await replyWithAutoDelete(ctx, '⚠️ Команда должна содержать только буквы, цифры и символ _ без пробелов.');
+        return true;
+      }
+      const promptMessage = await ctx.reply('Теперь отправьте GIF для этой команды.');
+      setPendingSettingsAction(ctx, {
+        action: 'settings_gif_media',
+        groupId,
+        command,
+        promptMessageId: promptMessage?.message_id,
+      });
+      await deleteMessageSafely(ctx, ctx.message.message_id);
+      await deleteMessageSafely(ctx, pending.promptMessageId);
+      return true;
+    }
+
+    if (pending.action === 'settings_gif_media') {
+      const payload = getMediaPayloadFromMessage(ctx);
+      if (!payload || payload.type !== 'animation') {
+        await replyWithAutoDelete(ctx, '⚠️ Отправьте именно GIF-анимацию.');
+        return true;
+      }
+      const service = activeModerationService || defaultModerationService;
+      if (!service.setGifCommand(groupId, pending.command, payload)) {
+        await replyWithAutoDelete(ctx, '⚠️ Не удалось сохранить GIF-команду.');
+        return true;
+      }
+      await deleteMessageSafely(ctx, ctx.message.message_id);
+      await deleteMessageSafely(ctx, pending.promptMessageId);
+      await ctx.reply(`✅ GIF-команда /${String(pending.command).replace(/^[/!]/, '')} сохранена.`);
+      clearPendingSettingsAction(ctx);
+      return true;
+    }
+
+    if (pending.action === 'settings_gif_command_remove' && ctx.message.text) {
+      const command = String(ctx.message.text).trim().split(/\s+/)[0];
+      const service = activeModerationService || defaultModerationService;
+      const removed = service.removeGifCommand(groupId, command);
+      await deleteMessageSafely(ctx, ctx.message.message_id);
+      await deleteMessageSafely(ctx, pending.promptMessageId);
+      await replyWithAutoDelete(ctx, removed ? `✅ GIF-команда ${command} удалена.` : '⚠️ Такой GIF-команды нет.');
+      clearPendingSettingsAction(ctx);
+      return true;
+    }
 
     if (pending.action.startsWith('moderation_') && ctx.message.text) {
       if (pending.action === 'moderation_warn' && !moderationService.areModeratorWarningsEnabled(groupId)) {
@@ -6790,6 +6865,8 @@ function createBot() {
       } else if (parsed.section === 'commands') {
         // Open interactive command rights UI from settings menu
         await showMenuCommandRightsMenu(ctx, chatId, 0, `settings:main:${chatId}`, 'settings');
+      } else if (parsed.section === 'gif_commands') {
+        await showSettingsGifCommandsMenu(ctx, chatId);
       } else if (parsed.section === 'moderation') {
         await showSettingsModerationMenu(ctx, chatId);
       } else if (parsed.section === 'logs') {
@@ -7244,6 +7321,26 @@ function createBot() {
     if (parsed.target === 'command_rights') {
       const pageIndex = Number(parsed.value || 0);
       await showSettingsCommandRightsMenu(ctx, chatId, Number.isFinite(pageIndex) ? pageIndex : 0);
+      return;
+    }
+
+    if (parsed.target === 'gif_command_add') {
+      const promptMessage = await ctx.reply('Отправьте название команды без пробелов, например: /dance или !dance');
+      setPendingSettingsAction(ctx, {
+        action: 'settings_gif_command_name',
+        groupId: chatId,
+        promptMessageId: promptMessage?.message_id,
+      });
+      return;
+    }
+
+    if (parsed.target === 'gif_command_remove') {
+      const promptMessage = await ctx.reply('Отправьте команду, которую нужно удалить, например: /dance');
+      setPendingSettingsAction(ctx, {
+        action: 'settings_gif_command_remove',
+        groupId: chatId,
+        promptMessageId: promptMessage?.message_id,
+      });
       return;
     }
 
@@ -8961,6 +9058,19 @@ function createBot() {
       }
     }
 
+    if (isGroupChat(ctx) && ctx.message?.text) {
+      const commandMatch = String(ctx.message.text).trim().match(/^[/!]([a-zа-яё0-9_]{1,32})(?:@[a-z0-9_]+)?(?:\s|$)/i);
+      if (commandMatch) {
+        const service = activeModerationService || defaultModerationService;
+        const gif = service.getGifCommand(ctx.chat.id, commandMatch[1]);
+        if (gif) {
+          await ctx.replyWithAnimation(gif.fileId);
+          await deleteMessageSafely(ctx, ctx.message.message_id);
+          return;
+        }
+      }
+    }
+
     if (isAllowedAnonymousChannel(ctx)) {
       await sendMenuReplyForChannelPost(ctx);
       return;
@@ -9020,6 +9130,7 @@ module.exports = {
   canSelfClearPunishmentHistory,
   buildSettingsWarnsKeyboard,
   buildSettingsCommandRightsKeyboard,
+  buildSettingsGifCommandsKeyboard,
   buildSettingsFirstMessageKeyboard,
   buildSettingsRulesMenuText,
   buildSettingsAdminRulesMenuText,

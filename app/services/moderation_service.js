@@ -284,6 +284,14 @@ class ModerationService {
           ? { ...chat.menu.media }
           : null,
       },
+      gifCommands: (() => {
+        if (!chat.gifCommands || typeof chat.gifCommands !== 'object' || Array.isArray(chat.gifCommands)) {
+          return {};
+        }
+        return Object.fromEntries(Object.entries(chat.gifCommands)
+          .map(([command, media]) => [String(command).trim().toLowerCase().replace(/^[/!]/, ''), media])
+          .filter(([command, media]) => command && media && media.type === 'animation' && media.fileId));
+      })(),
       agreement: {
         enabled: Boolean(chat.agreement && typeof chat.agreement.enabled === 'boolean' ? chat.agreement.enabled : false),
         text: normalizeTextPayload((chat.agreement && typeof chat.agreement.text !== 'undefined')
@@ -1394,6 +1402,40 @@ class ModerationService {
 
   clearMenuMedia(chatId) {
     this._getChat(chatId).menu.media = null;
+    this._save();
+    return true;
+  }
+
+  getGifCommands(chatId) {
+    return Object.fromEntries(Object.entries(this._getChat(chatId).gifCommands || {})
+      .map(([command, media]) => [command, { ...media }]));
+  }
+
+  getGifCommand(chatId, command) {
+    const normalizedCommand = String(command || '').trim().toLowerCase().replace(/^[/!]/, '');
+    const media = this._getChat(chatId).gifCommands?.[normalizedCommand];
+    return media ? { ...media } : null;
+  }
+
+  setGifCommand(chatId, command, media) {
+    const normalizedCommand = String(command || '').trim().toLowerCase().replace(/^[/!]/, '');
+    if (!/^[a-zа-яё0-9_]{1,32}$/i.test(normalizedCommand)
+      || !media || media.type !== 'animation' || !media.fileId) {
+      return false;
+    }
+    const chat = this._getChat(chatId);
+    chat.gifCommands[normalizedCommand] = { type: 'animation', fileId: String(media.fileId) };
+    this._save();
+    return true;
+  }
+
+  removeGifCommand(chatId, command) {
+    const normalizedCommand = String(command || '').trim().toLowerCase().replace(/^[/!]/, '');
+    const chat = this._getChat(chatId);
+    if (!chat.gifCommands?.[normalizedCommand]) {
+      return false;
+    }
+    delete chat.gifCommands[normalizedCommand];
     this._save();
     return true;
   }
