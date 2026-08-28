@@ -1174,7 +1174,7 @@ function buildSettingsGifCommandsKeyboard(chatId) {
     [{ text: '➖ Удалить GIF-команду', callback_data: `settings:gif_command_remove:${chatId}` }],
   ];
   if (commands.length) {
-    rows.push([{ text: `📋 Команды: ${commands.map((command) => `/${command}`).join(', ')}`, callback_data: 'settings:none' }]);
+    rows.push(...commands.map((command) => [{ text: `🎞️ /${command}`, callback_data: 'settings:none' }]));
   }
   rows.push([{ text: 'Назад', callback_data: `settings:page:${chatId}:1` }]);
   return { inline_keyboard: rows };
@@ -4559,6 +4559,14 @@ function createBot() {
       const command = String(ctx.message.text).trim().split(/\s+/)[0];
       if (!/^[/!]?[a-zа-яё0-9_]{1,32}$/i.test(command)) {
         await replyWithAutoDelete(ctx, '⚠️ Команда должна содержать только буквы, цифры и символ _ без пробелов.');
+        return true;
+      }
+      const normalizedCommand = command.replace(/^[/!]/, '').toLowerCase();
+      const service = activeModerationService || defaultModerationService;
+      const isExistingBotCommand = getCommandsList().some(({ cmd }) => String(cmd).replace(/^[/!]/, '').toLowerCase() === normalizedCommand);
+      if (service.getGifCommand(groupId, normalizedCommand) || isExistingBotCommand) {
+        await replyWithAutoDelete(ctx, `⚠️ Команда /${normalizedCommand} уже существует. Выберите другое название.`);
+        clearPendingSettingsAction(ctx);
         return true;
       }
       const promptMessage = await ctx.reply('Теперь отправьте GIF для этой команды.');

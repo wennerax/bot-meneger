@@ -1424,6 +1424,9 @@ class ModerationService {
       return false;
     }
     const chat = this._getChat(chatId);
+    if (chat.gifCommands[normalizedCommand]) {
+      return false;
+    }
     chat.gifCommands[normalizedCommand] = { type: 'animation', fileId: String(media.fileId) };
     this._save();
     return true;
