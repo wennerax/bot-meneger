@@ -1174,7 +1174,10 @@ function buildSettingsGifCommandsKeyboard(chatId) {
     [{ text: '➖ Удалить GIF-команду', callback_data: `settings:gif_command_remove:${chatId}` }],
   ];
   if (commands.length) {
-    rows.push(...commands.map((command) => [{ text: `🎞️ /${command}`, callback_data: 'settings:none' }]));
+    rows.push(...commands.map((command) => [{
+      text: `🎞️ /${command}`,
+      callback_data: `settings:gif_command_run:${chatId}:${command}`,
+    }]));
   }
   rows.push([{ text: 'Назад', callback_data: `settings:page:${chatId}:1` }]);
   return { inline_keyboard: rows };
@@ -6818,6 +6821,19 @@ function createBot() {
 
     if (!await canManageGroupSettings(ctx, chatId)) {
       await ctx.reply('У вас нет прав менять настройки этой группы.');
+      return;
+    }
+
+    if (parsed.target === 'gif_command_run') {
+      const command = String(parsed.extra || parsed.value || '').trim();
+      const gif = (activeModerationService || defaultModerationService).getGifCommand(chatId, command);
+      if (!gif) {
+        await safeAnswerCbQuery(ctx, '⚠️ GIF-команда больше не существует.');
+        await showSettingsGifCommandsMenu(ctx, chatId);
+        return;
+      }
+      await safeAnswerCbQuery(ctx);
+      await ctx.replyWithAnimation(gif.fileId);
       return;
     }
 
