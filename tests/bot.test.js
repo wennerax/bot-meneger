@@ -49,6 +49,45 @@ test('id command is recognized as a restricted helper command', () => {
   assert.equal(isKnownCommandText('/айди'), true);
 });
 
+test('id command defaults to caller and resolves explicit reply or username targets', async () => {
+  const { resolveIdCommandTarget } = require('../app/bot');
+  const database = {
+    resolveUsername(chatId, rawUsername) {
+      if (String(rawUsername).toLowerCase() === '@alice') {
+        return { userId: 42, displayName: 'Alice' };
+      }
+      return null;
+    },
+  };
+
+  const selfCtx = {
+    chat: { id: -1001, type: 'supergroup' },
+    from: { id: 11, first_name: 'Bob', username: 'bob' },
+    message: { text: '/id' },
+  };
+
+  assert.equal((await resolveIdCommandTarget(selfCtx, database)).id, 11);
+
+  const usernameCtx = {
+    chat: { id: -1001, type: 'supergroup' },
+    from: { id: 11, first_name: 'Bob', username: 'bob' },
+    message: { text: '/id @alice' },
+  };
+
+  assert.equal((await resolveIdCommandTarget(usernameCtx, database)).id, 42);
+
+  const replyCtx = {
+    chat: { id: -1001, type: 'supergroup' },
+    from: { id: 11, first_name: 'Bob', username: 'bob' },
+    message: {
+      text: '/id',
+      reply_to_message: { from: { id: 99, first_name: 'Carol', username: 'carol' } },
+    },
+  };
+
+  assert.equal((await resolveIdCommandTarget(replyCtx, database)).id, 99);
+});
+
 test('!дел is mapped to delete-only action instead of warning', () => {
   assert.equal(parseBotCommandKey('!дел'), 'delete_message');
   assert.equal(parseBotCommandKey('!дел @alice'), 'delete_message');

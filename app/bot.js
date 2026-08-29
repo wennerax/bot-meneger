@@ -2742,6 +2742,32 @@ function parseBotCommandKey(text) {
   return translationMap[rawCommand] || rawCommand;
 }
 
+async function resolveIdCommandTarget(ctx, database = null) {
+  const message = ctx?.message || {};
+  if (message.reply_to_message?.from) {
+    return message.reply_to_message.from;
+  }
+
+  const text = String(message.text || message.caption || '').trim();
+  const match = text.match(/^\/(?:id|айди)(?:@[\w_]+)?\s*(.*)$/i);
+  const rawTarget = match && match[1] ? match[1].trim() : '';
+
+  if (!rawTarget) {
+    return ctx?.from || null;
+  }
+
+  if (rawTarget.startsWith('@') && database) {
+    const resolved = await resolveUsernameTarget(ctx, rawTarget, 'ID или @username', database);
+    return resolved?.target || ctx?.from || null;
+  }
+
+  if (/^-?\d+$/.test(rawTarget)) {
+    return { id: Number(rawTarget) };
+  }
+
+  return ctx?.from || null;
+}
+
 function createBot() {
   const config = loadConfig();
   const bot = new Telegraf(config.botToken || '');
@@ -5462,7 +5488,11 @@ function createBot() {
       return;
     }
 
-    await ctx.reply(`Ваш Telegram ID: ${ctx.from.id}\nID чата: ${ctx.chat.id}`);
+    const target = await resolveIdCommandTarget(ctx, database);
+    const targetLabel = target?.username ? `@${String(target.username).replace(/^@+/, '')}` : (target?.first_name || target?.displayName || 'Пользователь');
+    const targetId = Number(target?.id ?? ctx.from.id);
+
+    await ctx.reply(`Telegram ID ${targetLabel}: ${targetId}\nID чата: ${ctx.chat.id}`);
   }
 
   async function adminPunishmentCommandsCommand(ctx) {
@@ -9266,6 +9296,7 @@ module.exports = {
   buildReloadStatusMessage,
   parseBotCommandKey,
   isKnownCommandText,
+  resolveIdCommandTarget,
 };
 
 2
