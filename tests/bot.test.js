@@ -205,6 +205,7 @@ test('buildBotAdminListMessage separates primary and auxiliary admins', () => {
 
 test('stats premium emoji ids are available for the required profile fields', () => {
   const required = {
+    stats_id: '4963246297243976827',
     stats_name: '4988062248913076964',
     stats_description: '4988187872411518074',
     stats_message_count: '4965642377894036415',

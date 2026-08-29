@@ -5910,6 +5910,7 @@ function createBot() {
     const statsTitleEmoji = premiumEmojis.getCustomEmojiFallback('trophy_premium');
     const customEmojiPlaceholders = {
       trophy_premium: '%%TROPHY_EMOJI%%',
+      stats_id: '%%STATS_ID_EMOJI%%',
       stats_name: '%%STATS_NAME_EMOJI%%',
       stats_chat_status: '%%STATS_CHAT_STATUS_EMOJI%%',
       stats_bot_status: '%%STATS_BOT_STATUS_EMOJI%%',
@@ -5921,7 +5922,7 @@ function createBot() {
     };
     const captionLines = [
       `${customEmojiPlaceholders.trophy_premium} Анкета пользователя ${escapeCaptionText(username)}`,
-      `${customEmojiPlaceholders.stats_name} Имя: ${escapeCaptionText(profile.displayName || targetUser.first_name || targetUser.username || targetUser.id)}`,
+      `${customEmojiPlaceholders.stats_id} Id: ${escapeCaptionText(targetUser.id)}`,
       `${customEmojiPlaceholders.stats_chat_status} Статус в чате: ${escapeCaptionText(chatStatus)}`,
       `${customEmojiPlaceholders.stats_bot_status} Статус в боте: ${escapeCaptionText(botStatus)}`,
       `${customEmojiPlaceholders.stats_description} Описание: ${escapeCaptionText(description)}`,
@@ -5938,6 +5939,7 @@ function createBot() {
 
     const customEmojiMap = {
       trophy_premium: 'trophy_premium',
+      stats_id: 'stats_id',
       stats_name: 'stats_name',
       stats_chat_status: 'stats_chat_status',
       stats_bot_status: 'stats_bot_status',

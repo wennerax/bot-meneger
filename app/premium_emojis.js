@@ -201,6 +201,11 @@ const CUSTOM_EMOJI_IDS = {
   },
 
   // Профиль /stats
+  stats_id: {
+    id: '4963246297243976827',
+    fallback: '🆔',
+    displayName: 'Профиль ID'
+  },
   stats_name: {
     id: '4988062248913076964',
     fallback: '👤',

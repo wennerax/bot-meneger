@@ -353,12 +353,14 @@ class Database {
       this.data.groupUsers[id] = {};
     }
 
+    const createdAt = this.data.groupUsers[id][user]?.createdAt || this._now();
     this.data.groupUsers[id][user] = {
       chatId: id,
       userId: user,
       username: normalizedUsername,
       displayName,
       lastSeenAt: this._now(),
+      createdAt,
     };
 
     if (!this.data.messageCounts[id]) {
@@ -513,6 +515,7 @@ class Database {
       topPosition: topPosition > 0 ? topPosition : null,
       punishments: mergedPunishments,
       lastSeenAt: userData?.lastSeenAt || null,
+      createdAt: userData?.createdAt || null,
     };
   }
 
