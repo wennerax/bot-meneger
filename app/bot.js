@@ -2742,6 +2742,69 @@ function parseBotCommandKey(text) {
   return translationMap[rawCommand] || rawCommand;
 }
 
+function formatMoscowDate(dateValue) {
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) {
+    return 'неизвестно';
+  }
+  return new Intl.DateTimeFormat('ru-RU', {
+    timeZone: 'Europe/Moscow',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
+function getPunishmentActionLabel(action) {
+  const normalizedAction = String(action || 'punishment').toLowerCase();
+  const labels = {
+    warn: 'варн',
+    warning: 'варн',
+    mute: 'мут',
+    ban: 'бан',
+    unban: 'разбан',
+    unmute: 'размут',
+    kick: 'кик',
+    delete: 'удаление',
+    delete_message: 'удаление сообщения',
+    'delete-message': 'удаление сообщения',
+  };
+  return labels[normalizedAction] || normalizedAction;
+}
+
+function buildUserPunishmentHistoryText(profile = { punishments: [] }, targetUser = {}) {
+  const username = targetUser.username ? `@${String(targetUser.username).replace(/^@+/, '')}` : (targetUser.first_name || targetUser.displayName || String(targetUser.id || 'пользователь'));
+  const items = Array.isArray(profile.punishments) ? [...profile.punishments].filter(Boolean) : [];
+  if (!items.length) {
+    return `У пользователя ${username} нет наказаний.`;
+  }
+
+  const sorted = items.sort((left, right) => {
+    const leftTime = new Date(left.createdAt || 0).getTime();
+    const rightTime = new Date(right.createdAt || 0).getTime();
+    return rightTime - leftTime;
+  });
+
+  return sorted.map((item) => {
+    const action = getPunishmentActionLabel(item.action);
+    const reason = item.reason || 'Без причины';
+    const duration = item.untilAt ? ` Срок: ${formatMoscowDate(new Date(Number(item.untilAt) * 1000))}.` : '';
+    const createdAt = item.createdAt ? ` Выдано: ${formatMoscowDate(item.createdAt)} по МСК.` : '';
+    return `• ${action} — ${reason}.${duration}${createdAt}`;
+  }).join('\n');
+}
+
+function buildStatsReplyMarkup(chatId, targetUserId, canResetPunishmentHistory) {
+  const keyboard = [];
+  if (canResetPunishmentHistory) {
+    keyboard.push([{ text: 'Сбросить историю наказаний', callback_data: `stats:clear_history:${chatId}:${targetUserId}` }]);
+  }
+  keyboard.push([{ text: 'Наказания', callback_data: `stats:history:${chatId}:${targetUserId}` }]);
+  return { inline_keyboard: keyboard };
+}
+
 async function resolveIdCommandTarget(ctx, database = null) {
   const message = ctx?.message || {};
   if (message.reply_to_message?.from) {
@@ -5785,9 +5848,6 @@ function createBot() {
     const streaksEnabled = moderationService.isStreaksEnabled(ctx.chat.id);
     const streakLabel = moderationService.getStreaksLabel(ctx.chat.id);
     const username = profile.username || getMentionText(targetUser);
-    const punishments = profile.punishments.length
-      ? profile.punishments.map((item) => `${item.action}${item.reason ? `: ${item.reason}` : ''}`).join(', ')
-      : 'нет';
     const description = profile.description ? profile.description : 'нет';
     const topLabel = profile.topPosition ? `${profile.topPosition} место` : 'не в топе';
     const streakBadgeText = premiumEmojis.getStreakBadge(profile.streak);
@@ -5804,7 +5864,6 @@ function createBot() {
       `📊 Анкета пользователя ${escapeCaptionText(username)}`,
       `Имя: ${escapeCaptionText(profile.displayName || targetUser.first_name || targetUser.username || targetUser.id)}`,
       `Описание: ${escapeCaptionText(description)}`,
-      `Наказания: ${escapeCaptionText(punishments)}`,
       `Сообщений: ${escapeCaptionText(profile.messageCount)}`,
       ...(streakLine ? [streakLine] : []),
       `Место в топе: ${escapeCaptionText(topLabel)}`,
@@ -5814,9 +5873,7 @@ function createBot() {
     ];
     const captionText = captionLines.join('\n');
     const captionEntities = [];
-    const extraReplyMarkup = canResetPunishmentHistory
-      ? { inline_keyboard: [[{ text: 'Сбросить историю наказаний', callback_data: `stats:clear_history:${ctx.chat.id}:${targetUser.id}` }]] }
-      : undefined;
+    const extraReplyMarkup = buildStatsReplyMarkup(ctx.chat.id, targetUser.id, canResetPunishmentHistory);
 
     if (streaksEnabled && streakInfo && streakBadgeText && streakLine) {
       const badgeString = String(streakInfo.fallback);
@@ -7829,6 +7886,21 @@ function createBot() {
     await safeAnswerCbQuery(ctx, 'Эта кнопка уже неактивна.');
   });
 
+  bot.action(/^stats:history:(-?\d+):(\d+)$/, async (ctx) => {
+    const chatId = Number(ctx.match[1]);
+    const targetUserId = Number(ctx.match[2]);
+    await safeAnswerCbQuery(ctx, 'Загружаем наказания...');
+
+    if (!Number.isFinite(chatId) || !Number.isFinite(targetUserId)) {
+      return;
+    }
+
+    const profile = database.getUserProfile(chatId, targetUserId);
+    const targetName = profile.displayName || profile.username || String(targetUserId);
+    const text = buildUserPunishmentHistoryText(profile, { id: targetUserId, username: profile.username ? profile.username.replace(/^@/, '') : null, first_name: targetName, displayName: profile.displayName || null });
+    await ctx.reply(`📜 Наказания пользователя ${targetName}\n\n${text}`);
+  });
+
   bot.action(/^stats:clear_history:(-?\d+):(\d+)$/, async (ctx) => {
     const chatId = Number(ctx.match[1]);
     const targetUserId = Number(ctx.match[2]);
@@ -9256,6 +9328,8 @@ module.exports = {
   buildPunishmentNotification,
   buildModerationAlertMessage,
   buildBulkModerationSummaryMessage,
+  buildUserPunishmentHistoryText,
+  buildStatsReplyMarkup,
   buildFunReply,
   getTicTacToeWinner,
   buildTicTacToeKeyboard,
