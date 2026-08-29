@@ -76,6 +76,14 @@ test('id command defaults to caller and resolves explicit reply or username targ
 
   assert.equal((await resolveIdCommandTarget(usernameCtx, database)).id, 42);
 
+  const bangUsernameCtx = {
+    chat: { id: -1001, type: 'supergroup' },
+    from: { id: 11, first_name: 'Bob', username: 'bob' },
+    message: { text: '!айди @alice' },
+  };
+
+  assert.equal((await resolveIdCommandTarget(bangUsernameCtx, database)).id, 42);
+
   const replyCtx = {
     chat: { id: -1001, type: 'supergroup' },
     from: { id: 11, first_name: 'Bob', username: 'bob' },

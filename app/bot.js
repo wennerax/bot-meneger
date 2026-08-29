@@ -2749,7 +2749,7 @@ async function resolveIdCommandTarget(ctx, database = null) {
   }
 
   const text = String(message.text || message.caption || '').trim();
-  const match = text.match(/^\/(?:id|айди)(?:@[\w_]+)?\s*(.*)$/i);
+  const match = text.match(/^(?:\/|!)(?:id|айди)(?:@[\w_]+)?\s*(.*)$/i);
   const rawTarget = match && match[1] ? match[1].trim() : '';
 
   if (!rawTarget) {
