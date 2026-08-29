@@ -44,6 +44,12 @@ test('short !пред warning command is recognized and mapped to warn', () => {
   assert.equal(isKnownCommandText('!пред @alice причина'), true);
 });
 
+test('!дел is mapped to delete-only action instead of warning', () => {
+  assert.equal(parseBotCommandKey('!дел'), 'delete_message');
+  assert.equal(parseBotCommandKey('!дел @alice'), 'delete_message');
+  assert.equal(isKnownCommandText('!дел @alice'), true);
+});
+
 test('parsePunishmentDetails makes a reply ban permanent without a reason or duration', () => {
   const result = parsePunishmentDetails('', true);
 

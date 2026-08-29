@@ -2735,7 +2735,7 @@ function parseBotCommandKey(text) {
     топ: 'top',
     анпред: 'unwarn',
     говори: 'unmute',
-    дел: 'delwarn',
+    дел: 'delete_message',
     рел: 'reload',
   };
 
@@ -6033,6 +6033,27 @@ function createBot() {
     await replyWithAutoDelete(ctx, `История наказаний пользователя ${targetData.target.first_name || targetData.target.username || targetData.target.id} сброшена.`);
   }
 
+  async function deleteMessageOnlyCommand(ctx) {
+    ensureGroup(ctx);
+    scheduleDeleteForContext(ctx, ctx.message?.message_id);
+    if (!isBotAdmin(ctx)) {
+      await replyWithAutoDelete(ctx, 'Эта команда доступна только администраторам.');
+      return;
+    }
+
+    if (!ctx.message?.reply_to_message) {
+      await replyWithAutoDelete(ctx, 'Ответьте этой командой на сообщение, которое нужно удалить.');
+      return;
+    }
+
+    try {
+      await ctx.telegram.deleteMessage(ctx.chat.id, ctx.message.reply_to_message.message_id);
+      await ctx.deleteMessage();
+    } catch (error) {
+      await replyWithAutoDelete(ctx, 'Не удалось удалить сообщение.');
+    }
+  }
+
   async function warnCommand(ctx, args, deleteTargetMessage = false) {
     ensureGroup(ctx);
     scheduleDeleteForContext(ctx, ctx.message?.message_id);
@@ -6675,8 +6696,10 @@ function createBot() {
         await warnCommand(ctx, args);
         return true;
       case 'delwarn':
-      case 'дел':
         await warnCommand(ctx, args, true);
+        return true;
+      case 'дел':
+        await deleteMessageOnlyCommand(ctx);
         return true;
       case 'варны':
         await warningsCommand(ctx, args);
