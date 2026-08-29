@@ -5862,22 +5862,29 @@ function createBot() {
     const streakLine = streaksEnabled ? `${streakPrefix}${streakBadgeText}` : null;
     
     // Compute first join date and relative time
-    const firstJoinDate = profile.createdAt ? new Date(profile.createdAt) : null;
+    const firstJoinDate = profile.joinedAt || profile.createdAt
+      ? new Date(profile.joinedAt || profile.createdAt)
+      : null;
     const firstJoinLabel = firstJoinDate ? (() => {
       const dateStr = firstJoinDate.toLocaleString('ru-RU');
       const nowMs = Date.now();
       const createdMs = firstJoinDate.getTime();
       const diffMs = nowMs - createdMs;
-      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const diffMinutes = Math.floor(diffMs / (1000 * 60));
+      const diffDays = Math.floor(diffMinutes / (60 * 24));
       let relativeTime = '';
       if (diffDays >= 365) {
         const years = Math.floor(diffDays / 365);
-        relativeTime = `(${years} ${years === 1 ? 'год' : years % 10 === 1 && years % 100 !== 11 ? 'год' : 'лет'} назад)`;
+        relativeTime = `(${years} ${years === 1 ? 'год' : years % 10 >= 2 && years % 10 <= 4 && (years % 100 < 10 || years % 100 >= 20) ? 'года' : 'лет'} назад)`;
       } else if (diffDays >= 30) {
         const months = Math.floor(diffDays / 30);
-        relativeTime = `(${months} ${months === 1 ? 'месяц' : 'месяцев'} назад)`;
+        relativeTime = `(${months} ${months === 1 ? 'месяц' : months % 10 >= 2 && months % 10 <= 4 && (months % 100 < 10 || months % 100 >= 20) ? 'месяца' : 'месяцев'} назад)`;
       } else if (diffDays > 0) {
-        relativeTime = `(${diffDays} ${diffDays === 1 ? 'день' : 'дней'} назад)`;
+        relativeTime = `(${diffDays} ${diffDays === 1 ? 'день' : diffDays % 10 >= 2 && diffDays % 10 <= 4 && (diffDays % 100 < 10 || diffDays % 100 >= 20) ? 'дня' : 'дней'} назад)`;
+      } else if (diffMinutes > 0) {
+        relativeTime = `(${diffMinutes} ${diffMinutes === 1 ? 'минуту' : 'минут'} назад)`;
+      } else {
+        relativeTime = '(только что)';
       }
       return `${dateStr} ${relativeTime}`.trim();
     })() : 'неизвестно';
@@ -5922,6 +5929,7 @@ function createBot() {
     };
     const captionLines = [
       `${customEmojiPlaceholders.trophy_premium} Анкета пользователя ${escapeCaptionText(username)}`,
+      `${customEmojiPlaceholders.stats_name} Имя: ${escapeCaptionText(profile.displayName || targetUser.first_name || targetUser.username || targetUser.id)}`,
       `${customEmojiPlaceholders.stats_id} Id: ${escapeCaptionText(targetUser.id)}`,
       `${customEmojiPlaceholders.stats_chat_status} Статус в чате: ${escapeCaptionText(chatStatus)}`,
       `${customEmojiPlaceholders.stats_bot_status} Статус в боте: ${escapeCaptionText(botStatus)}`,
@@ -8602,6 +8610,11 @@ function createBot() {
       return;
     }
 
+    const joinedStatuses = ['member', 'restricted'];
+    const oldStatus = ctx.chatMember?.old_chat_member?.status;
+    if (joinedStatuses.includes(member.status) && !joinedStatuses.includes(oldStatus)) {
+      database.recordUserJoin(ctx.chat.id, userId, member.user?.first_name || member.user?.username, member.user?.username);
+    }
     await startCaptchaForUser(ctx, userId, member.user);
   });
 
@@ -8619,6 +8632,7 @@ function createBot() {
       if (!Number.isFinite(userId)) {
         continue;
       }
+      database.recordUserJoin(ctx.chat.id, userId, member.first_name || member.username, member.username);
       await startCaptchaForUser(ctx, userId, member);
     }
   });

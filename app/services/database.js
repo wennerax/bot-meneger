@@ -392,6 +392,28 @@ class Database {
     this._save();
   }
 
+  recordUserJoin(chatId, userId, displayName, username = null) {
+    const id = Number(chatId);
+    const user = Number(userId);
+    const normalizedUsername = username ? username.trim().replace(/^@/, '').toLowerCase() : null;
+
+    if (!this.data.groupUsers[id]) {
+      this.data.groupUsers[id] = {};
+    }
+
+    const profile = this.data.groupUsers[id][user] || {};
+    this.data.groupUsers[id][user] = {
+      ...profile,
+      chatId: id,
+      userId: user,
+      username: normalizedUsername || profile.username || null,
+      displayName: displayName || profile.displayName || null,
+      joinedAt: profile.joinedAt || this._now(),
+    };
+
+    this._save();
+  }
+
   resolveUsername(chatId, username) {
     const id = Number(chatId);
     const target = String(username).trim().replace(/^@/, '').toLowerCase();
@@ -516,6 +538,7 @@ class Database {
       punishments: mergedPunishments,
       lastSeenAt: userData?.lastSeenAt || null,
       createdAt: userData?.createdAt || null,
+      joinedAt: userData?.joinedAt || null,
     };
   }
 
