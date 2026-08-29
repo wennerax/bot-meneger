@@ -5876,23 +5876,34 @@ function createBot() {
       : database.getBotAdminLevel(ctx.chat.id, ctx.from.id);
     const canResetPunishmentHistory = Number.isFinite(Number(actorLevel)) && Number(actorLevel) <= 2;
     const statsTitleEmoji = premiumEmojis.getCustomEmojiFallback('trophy_premium');
+    const customEmojiPlaceholders = {
+      trophy_premium: '%%TROPHY_EMOJI%%',
+      stats_name: '%%STATS_NAME_EMOJI%%',
+      stats_chat_status: '%%STATS_CHAT_STATUS_EMOJI%%',
+      stats_description: '%%STATS_DESCRIPTION_EMOJI%%',
+      stats_message_count: '%%STATS_MESSAGE_COUNT_EMOJI%%',
+      stats_streak: '%%STATS_STREAK_EMOJI%%',
+      stats_top: '%%STATS_TOP_EMOJI%%',
+      stats_last_seen: '%%STATS_LAST_SEEN_EMOJI%%',
+    };
     const captionLines = [
-      `${statsTitleEmoji} Анкета пользователя ${escapeCaptionText(username)}`,
-      `${premiumEmojis.getCustomEmojiFallback('stats_name')} Имя: ${escapeCaptionText(profile.displayName || targetUser.first_name || targetUser.username || targetUser.id)}`,
-      `${premiumEmojis.getCustomEmojiFallback('stats_chat_status')} Статус в чате: ${escapeCaptionText(chatStatus)}`,
-      `${premiumEmojis.getCustomEmojiFallback('stats_description')} Описание: ${escapeCaptionText(description)}`,
-      `${premiumEmojis.getCustomEmojiFallback('stats_message_count')} Сообщений: ${escapeCaptionText(profile.messageCount)}`,
-      ...(streakLine ? [`${premiumEmojis.getCustomEmojiFallback('stats_streak')} ${streakLine}`] : []),
-      `${premiumEmojis.getCustomEmojiFallback('stats_top')} Место в топе: ${escapeCaptionText(topLabel)}`,
-      `${premiumEmojis.getCustomEmojiFallback('stats_last_seen')} Последний вход: ${escapeCaptionText(lastSeenLabel)}`,
+      `${customEmojiPlaceholders.trophy_premium} Анкета пользователя ${escapeCaptionText(username)}`,
+      `${customEmojiPlaceholders.stats_name} Имя: ${escapeCaptionText(profile.displayName || targetUser.first_name || targetUser.username || targetUser.id)}`,
+      `${customEmojiPlaceholders.stats_chat_status} Статус в чате: ${escapeCaptionText(chatStatus)}`,
+      `${customEmojiPlaceholders.stats_description} Описание: ${escapeCaptionText(description)}`,
+      `${customEmojiPlaceholders.stats_message_count} Сообщений: ${escapeCaptionText(profile.messageCount)}`,
+      ...(streakLine ? [`${customEmojiPlaceholders.stats_streak} ${streakLine}`] : []),
+      `${customEmojiPlaceholders.stats_top} Место в топе: ${escapeCaptionText(topLabel)}`,
+      `${customEmojiPlaceholders.stats_last_seen} Последний вход: ${escapeCaptionText(lastSeenLabel)}`,
       '',
       'Активность за последние 7 дней',
     ];
-    const captionText = captionLines.join('\n');
+    let captionText = captionLines.join('\n');
     const captionEntities = [];
     const extraReplyMarkup = buildStatsReplyMarkup(ctx.chat.id, targetUser.id, canResetPunishmentHistory);
 
     const customEmojiMap = {
+      trophy_premium: 'trophy_premium',
       stats_name: 'stats_name',
       stats_chat_status: 'stats_chat_status',
       stats_description: 'stats_description',
@@ -5900,23 +5911,24 @@ function createBot() {
       stats_streak: 'stats_streak',
       stats_top: 'stats_top',
       stats_last_seen: 'stats_last_seen',
-      trophy_premium: 'trophy_premium',
     };
 
-    for (const [placeholder, emojiName] of Object.entries(customEmojiMap)) {
+    for (const [placeholderKey, emojiName] of Object.entries(customEmojiMap)) {
       const info = premiumEmojis.getCustomEmojiInfo(emojiName);
       if (!info) continue;
 
-      const emojiText = String(info.fallback);
-      const index = captionText.indexOf(emojiText);
+      const placeholder = customEmojiPlaceholders[placeholderKey];
+      const index = captionText.indexOf(placeholder);
       if (index === -1) continue;
 
+      const emojiText = String(info.fallback);
       captionEntities.push({
         type: 'custom_emoji',
         offset: index,
         length: emojiText.length,
         custom_emoji_id: info.id,
       });
+      captionText = captionText.replace(placeholder, emojiText);
     }
 
     if (streaksEnabled && streakInfo && streakBadgeText && streakLine) {
