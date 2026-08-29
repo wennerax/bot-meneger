@@ -2168,6 +2168,27 @@ function buildSettingsWarnsDurationKeyboard(chatId) {
   };
 }
 
+function buildWarningsListText(chatId, service = activeModerationService || defaultModerationService, databaseInstance = activeDatabase) {
+  const warnings = Array.isArray(service?.getAllWarnings?.(chatId)) ? service.getAllWarnings(chatId) : [];
+  const warnLimit = Number(service?.getWarnLimit?.(chatId)) || 0;
+
+  return warnings.length
+    ? '⚠️ Список предупреждений группы:\n\n' + warnings
+        .map(([userId, count]) => {
+          const numericUserId = Number(userId);
+          const profile = databaseInstance?.getUserProfile?.(chatId, numericUserId);
+          const username = profile?.username ? String(profile.username).replace(/^@/, '') : null;
+          const userLabel = username ? `@${username} (${numericUserId})` : `ID ${numericUserId}`;
+          return `• ${userLabel}: ${count}${warnLimit ? `/${warnLimit}` : ''}`;
+        })
+        .join('\n')
+    : '⚠️ В группе нет активных предупреждений.';
+}
+
+function buildSettingsWarnsListText(chatId, service = activeModerationService || defaultModerationService, databaseInstance = activeDatabase) {
+  return buildWarningsListText(chatId, service, databaseInstance);
+}
+
 async function showSettingsWarnsListMenu(ctx, chatId) {
   if (!(await canManageGroupSettings(ctx, chatId))) {
     await ctx.reply('У вас нет прав менять настройки этой группы.');
@@ -2175,19 +2196,7 @@ async function showSettingsWarnsListMenu(ctx, chatId) {
   }
 
   const service = activeModerationService || defaultModerationService;
-  const warnings = service.getAllWarnings(chatId);
-
-  const listText = warnings.length
-    ? '📋 Предупреждения пользователей\n\n' + warnings
-        .map(([userId, count]) => {
-          const numericUserId = Number(userId);
-          const profile = database.getUserProfile(chatId, numericUserId);
-          const username = profile?.username ? String(profile.username).replace(/^@/, '') : null;
-          const userLabel = username ? `@${username} (${numericUserId})` : `ID ${numericUserId}`;
-          return `• ${userLabel}: ${count}/${service.getWarnLimit(chatId)}`;
-        })
-        .join('\n')
-    : '📋 Предупреждения пользователей\n\nНет предупреждений.';
+  const listText = buildSettingsWarnsListText(chatId, service, activeDatabase);
 
   const backKeyboard = {
     inline_keyboard: [[{ text: 'Назад', callback_data: `settings:warn_menu:${chatId}` }]],
@@ -6097,14 +6106,19 @@ function createBot() {
   async function warningsCommand(ctx, args = '') {
     ensureGroup(ctx);
     scheduleDeleteForContext(ctx, ctx.message?.message_id);
-    let target = ctx.message.reply_to_message?.from || ctx.from;
-    if (args && args.trim()) {
-      const targetData = await resolveCommandTarget(ctx, args, '/warnings @юз');
-      if (!targetData) {
-        return;
-      }
-      target = targetData.target;
+
+    if (!args || !args.trim()) {
+      await warnsListCommand(ctx);
+      return;
     }
+
+    let target = ctx.message.reply_to_message?.from || ctx.from;
+    const targetData = await resolveCommandTarget(ctx, args, '/warnings @юз');
+    if (!targetData) {
+      return;
+    }
+    target = targetData.target;
+
     const warnLimit = moderationService.getWarnLimit(ctx.chat.id);
     await replyWithAutoDelete(ctx, `Предупреждений: ${moderationService.getWarnings(ctx.chat.id, target.id)}/${warnLimit}`);
   }
@@ -6117,25 +6131,8 @@ function createBot() {
       return;
     }
 
-    const warnLimit = moderationService.getWarnLimit(ctx.chat.id);
-    const entries = moderationService.getAllWarnings(ctx.chat.id);
-
-    if (!entries.length) {
-      await replyWithAutoDelete(ctx, '⚠️ В группе нет активных предупреждений.');
-      return;
-    }
-
-    const lines = entries
-      .map(([userId, count]) => {
-        const numericUserId = Number(userId);
-        const profile = database.getUserProfile(ctx.chat.id, numericUserId);
-        const username = profile?.username ? String(profile.username).replace(/^@/, '') : null;
-        const userLabel = username ? `@${username} (${numericUserId})` : `ID ${numericUserId}`;
-        return `• ${userLabel}: ${count}/${warnLimit}`;
-      })
-      .join('\n');
-
-    await replyWithAutoDelete(ctx, `⚠️ Список предупреждений группы:\n\n${lines}`);
+    const messageText = buildWarningsListText(ctx.chat.id, moderationService, database);
+    await replyWithAutoDelete(ctx, messageText);
   }
 
   async function unwarnCommand(ctx, args) {
@@ -9212,6 +9209,8 @@ module.exports = {
   buildMembersManagementKeyboard,
   canSelfClearPunishmentHistory,
   buildSettingsWarnsKeyboard,
+  buildWarningsListText,
+  buildSettingsWarnsListText,
   buildSettingsCommandRightsKeyboard,
   buildSettingsGifCommandsKeyboard,
   buildSettingsFirstMessageKeyboard,
