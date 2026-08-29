@@ -44,6 +44,11 @@ test('short !пред warning command is recognized and mapped to warn', () => {
   assert.equal(isKnownCommandText('!пред @alice причина'), true);
 });
 
+test('id command is recognized as a restricted helper command', () => {
+  assert.equal(isKnownCommandText('/id'), true);
+  assert.equal(isKnownCommandText('/айди'), true);
+});
+
 test('!дел is mapped to delete-only action instead of warning', () => {
   assert.equal(parseBotCommandKey('!дел'), 'delete_message');
   assert.equal(parseBotCommandKey('!дел @alice'), 'delete_message');

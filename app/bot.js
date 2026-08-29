@@ -2675,7 +2675,7 @@ function shouldFailClosedForMedia(payload, errorMessage = '', normalizedAnswer =
 }
 
 function isKnownCommandText(text) {
-  const slashCommand = /^\/(start|help|bot|id|about|whoami|кто_я|stats|rules|arule|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|монетка|dice|кубик|fate|вопрос|compliment|комплимент|insult|инсульт|top|топ|admins|админы|banlist|баны|mutelist|муты|setrules|установить_правила|warn|предупреждение|delwarn|warns|warnings|варны|unwarn|снять_предупреждение|mute|мут|delmute|unmute|размут|ban|бан|delban|unban|разбан|setgreeting|установить_приветствие|addadmin|добавить_админа|removeadmin|снять_админа|promote|повышение|demote|разжалование|clearhistory|сбросистории|сброс_истории|clear_history|miniapp|миниприложение|admincom|ai|modstats|статистика_модерации|ttt|крестики|крестики-нолики)(?:@[\w_]+)?(\s|$)/i;
+  const slashCommand = /^\/(start|help|bot|id|айди|about|whoami|кто_я|stats|rules|arule|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|монетка|dice|кубик|fate|вопрос|compliment|комплимент|insult|инсульт|top|топ|admins|админы|banlist|баны|mutelist|муты|setrules|установить_правила|warn|предупреждение|delwarn|warns|warnings|варны|unwarn|снять_предупреждение|mute|мут|delmute|unmute|размут|ban|бан|delban|unban|разбан|setgreeting|установить_приветствие|addadmin|добавить_админа|removeadmin|снять_админа|promote|повышение|demote|разжалование|clearhistory|сбросистории|сброс_истории|clear_history|miniapp|миниприложение|admincom|ai|modstats|статистика_модерации|ttt|крестики|крестики-нолики)(?:@[\w_]+)?(\s|$)/i;
   const bangCommand = /^!(delban|delmute|delwarn|начало|помощь|айди|информация|кто\s*я|статистика|правила|аправила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|инсульт|пред|предупреждение|варны|мут|размут|бан|разбан|топ|анпред|говори|дел|рел)(\s|$)/i;
   const plusMinusCommand = /^(\+антиспам|\+antispam|\+антифлуд|\+antiflood|\-антиспам|\-antispam|\-антифлуд|\-antiflood|\+ссылки|\+links|\-ссылки|\-links|\+описание|\+description|\+rules(?=\s+\S)|\+правила(?=\s+\S)|\+greeting(?=\s+\S)|\+приветствие(?=\s+\S))(\s|$)/i;
   return slashCommand.test(text) || bangCommand.test(text) || plusMinusCommand.test(text);
@@ -5456,8 +5456,13 @@ function createBot() {
     await ctx.reply(helpPage.text, { reply_markup: helpPage.reply_markup });
   }
 
-  function idCommand(ctx) {
-    ctx.reply(`Ваш Telegram ID: ${ctx.from.id}\nID чата: ${ctx.chat.id}`);
+  async function idCommand(ctx) {
+    if (!(await canUseAdminPunishmentCommands(ctx))) {
+      await ctx.reply('Эта команда доступна только админам группы и модераторам бота.');
+      return;
+    }
+
+    await ctx.reply(`Ваш Telegram ID: ${ctx.from.id}\nID чата: ${ctx.chat.id}`);
   }
 
   async function adminPunishmentCommandsCommand(ctx) {
@@ -6661,7 +6666,7 @@ function createBot() {
         helpCommand(ctx);
         return true;
       case 'айди':
-        idCommand(ctx);
+        await idCommand(ctx);
         return true;
       case 'информация':
         aboutCommand(ctx);
