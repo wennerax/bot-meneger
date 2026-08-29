@@ -210,8 +210,9 @@ test('stats premium emoji ids are available for the required profile fields', ()
     stats_message_count: '4965642377894036415',
     stats_streak: '5076098152084275955',
     stats_top: '5078131028824949643',
-    stats_last_seen: '5402436682131718162',
+    stats_first_joined: '5402436682131718162',
     stats_chat_status: '4983405958903366502',
+    stats_bot_status: '4981404177725916091',
   };
 
   for (const [name, id] of Object.entries(required)) {

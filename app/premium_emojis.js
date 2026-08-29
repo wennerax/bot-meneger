@@ -226,15 +226,20 @@ const CUSTOM_EMOJI_IDS = {
     fallback: '🏆',
     displayName: 'Профиль топ'
   },
-  stats_last_seen: {
+  stats_first_joined: {
     id: '5402436682131718162',
     fallback: '🕒',
-    displayName: 'Профиль последний вход'
+    displayName: 'Профиль первый вход'
   },
   stats_chat_status: {
     id: '4983405958903366502',
     fallback: '👤',
     displayName: 'Статус в чате'
+  },
+  stats_bot_status: {
+    id: '4981404177725916091',
+    fallback: '🤖',
+    displayName: 'Статус в боте'
   },
   
   // Мьют (премиум)

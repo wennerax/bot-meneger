@@ -5563,7 +5563,7 @@ function createBot() {
     const targetLabel = target?.username ? `@${String(target.username).replace(/^@+/, '')}` : (target?.first_name || target?.displayName || 'Пользователь');
     const targetId = Number(target?.id ?? ctx.from.id);
 
-    await ctx.reply(`Telegram ID ${targetLabel}: ${targetId}\nID чата: ${ctx.chat.id}`);
+    await ctx.reply(`Telegram ID ${targetLabel}: ${targetId}`);
   }
 
   async function adminPunishmentCommandsCommand(ctx) {
@@ -5860,7 +5860,28 @@ function createBot() {
     const streakInfo = premiumEmojis.getStreakBadgeInfo(profile.streak);
     const streakPrefix = `${streakLabel}: `;
     const streakLine = streaksEnabled ? `${streakPrefix}${streakBadgeText}` : null;
-    const lastSeenLabel = profile.lastSeenAt ? new Date(profile.lastSeenAt).toLocaleString('ru-RU') : 'неизвестно';
+    
+    // Compute first join date and relative time
+    const firstJoinDate = profile.createdAt ? new Date(profile.createdAt) : null;
+    const firstJoinLabel = firstJoinDate ? (() => {
+      const dateStr = firstJoinDate.toLocaleString('ru-RU');
+      const nowMs = Date.now();
+      const createdMs = firstJoinDate.getTime();
+      const diffMs = nowMs - createdMs;
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      let relativeTime = '';
+      if (diffDays >= 365) {
+        const years = Math.floor(diffDays / 365);
+        relativeTime = `(${years} ${years === 1 ? 'год' : years % 10 === 1 && years % 100 !== 11 ? 'год' : 'лет'} назад)`;
+      } else if (diffDays >= 30) {
+        const months = Math.floor(diffDays / 30);
+        relativeTime = `(${months} ${months === 1 ? 'месяц' : 'месяцев'} назад)`;
+      } else if (diffDays > 0) {
+        relativeTime = `(${diffDays} ${diffDays === 1 ? 'день' : 'дней'} назад)`;
+      }
+      return `${dateStr} ${relativeTime}`.trim();
+    })() : 'неизвестно';
+    
     let chatStatus = 'Участник';
     try {
       const memberInfo = await ctx.telegram.getChatMember(ctx.chat.id, targetUser.id);
@@ -5869,6 +5890,17 @@ function createBot() {
       }
     } catch (error) {
       chatStatus = 'Участник';
+    }
+    
+    // Compute bot status
+    let botStatus = 'Пользователь';
+    const botAdminLevel = database.getBotAdminLevel(ctx.chat.id, targetUser.id);
+    if (database.isPrimaryBotAdmin(ctx.chat.id, targetUser.id)) {
+      botStatus = 'Главный админ';
+    } else if (Number.isFinite(Number(botAdminLevel)) && Number(botAdminLevel) >= 1 && Number(botAdminLevel) <= 5) {
+      const levelNames = ['', 'Главный', 'Ведущий', 'Старший', 'Средний', 'Младший'];
+      const adminType = levelNames[Number(botAdminLevel)] || '';
+      botStatus = `${adminType} админ`;
     }
     const chartSvg = buildActivityChartSvg(activity);
     const actorLevel = database.isPrimaryBotAdmin(ctx.chat.id, ctx.from.id)
@@ -5880,21 +5912,23 @@ function createBot() {
       trophy_premium: '%%TROPHY_EMOJI%%',
       stats_name: '%%STATS_NAME_EMOJI%%',
       stats_chat_status: '%%STATS_CHAT_STATUS_EMOJI%%',
+      stats_bot_status: '%%STATS_BOT_STATUS_EMOJI%%',
       stats_description: '%%STATS_DESCRIPTION_EMOJI%%',
       stats_message_count: '%%STATS_MESSAGE_COUNT_EMOJI%%',
       stats_streak: '%%STATS_STREAK_EMOJI%%',
       stats_top: '%%STATS_TOP_EMOJI%%',
-      stats_last_seen: '%%STATS_LAST_SEEN_EMOJI%%',
+      stats_first_joined: '%%STATS_FIRST_JOINED_EMOJI%%',
     };
     const captionLines = [
       `${customEmojiPlaceholders.trophy_premium} Анкета пользователя ${escapeCaptionText(username)}`,
       `${customEmojiPlaceholders.stats_name} Имя: ${escapeCaptionText(profile.displayName || targetUser.first_name || targetUser.username || targetUser.id)}`,
       `${customEmojiPlaceholders.stats_chat_status} Статус в чате: ${escapeCaptionText(chatStatus)}`,
+      `${customEmojiPlaceholders.stats_bot_status} Статус в боте: ${escapeCaptionText(botStatus)}`,
       `${customEmojiPlaceholders.stats_description} Описание: ${escapeCaptionText(description)}`,
       `${customEmojiPlaceholders.stats_message_count} Сообщений: ${escapeCaptionText(profile.messageCount)}`,
       ...(streakLine ? [`${customEmojiPlaceholders.stats_streak} ${streakLine}`] : []),
       `${customEmojiPlaceholders.stats_top} Место в топе: ${escapeCaptionText(topLabel)}`,
-      `${customEmojiPlaceholders.stats_last_seen} Последний вход: ${escapeCaptionText(lastSeenLabel)}`,
+      `${customEmojiPlaceholders.stats_first_joined} Первый заход: ${escapeCaptionText(firstJoinLabel)}`,
       '',
       'Активность за последние 7 дней',
     ];
@@ -5906,11 +5940,12 @@ function createBot() {
       trophy_premium: 'trophy_premium',
       stats_name: 'stats_name',
       stats_chat_status: 'stats_chat_status',
+      stats_bot_status: 'stats_bot_status',
       stats_description: 'stats_description',
       stats_message_count: 'stats_message_count',
       stats_streak: 'stats_streak',
       stats_top: 'stats_top',
-      stats_last_seen: 'stats_last_seen',
+      stats_first_joined: 'stats_first_joined',
     };
 
     for (const [placeholderKey, emojiName] of Object.entries(customEmojiMap)) {
