@@ -474,6 +474,23 @@ class ModerationService {
     return chat.warnings[id];
   }
 
+  decrementWarning(chatId, userId, amount = 1) {
+    const chat = this._getChat(chatId);
+    const id = Number(userId);
+    const decrementBy = Number.isFinite(Number(amount)) && Number(amount) > 0 ? Number(amount) : 1;
+    const current = Number(chat.warnings[id] || 0);
+    const nextValue = Math.max(0, current - decrementBy);
+
+    if (nextValue > 0) {
+      chat.warnings[id] = nextValue;
+    } else {
+      delete chat.warnings[id];
+    }
+
+    this._save();
+    return nextValue;
+  }
+
   getWarnings(chatId, userId) {
     return this._getChat(chatId).warnings[Number(userId)] || 0;
   }

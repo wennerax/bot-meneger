@@ -2179,7 +2179,13 @@ async function showSettingsWarnsListMenu(ctx, chatId) {
 
   const listText = warnings.length
     ? '📋 Предупреждения пользователей\n\n' + warnings
-        .map(([userId, count]) => `• Пользователь ${userId}: ${count}/${service.getWarnLimit(chatId)}`)
+        .map(([userId, count]) => {
+          const numericUserId = Number(userId);
+          const profile = database.getUserProfile(chatId, numericUserId);
+          const username = profile?.username ? String(profile.username).replace(/^@/, '') : null;
+          const userLabel = username ? `@${username} (${numericUserId})` : `ID ${numericUserId}`;
+          return `• ${userLabel}: ${count}/${service.getWarnLimit(chatId)}`;
+        })
         .join('\n')
     : '📋 Предупреждения пользователей\n\nНет предупреждений.';
 
@@ -2657,6 +2663,74 @@ function shouldFailClosedForMedia(payload, errorMessage = '', normalizedAnswer =
   }
 
   return false;
+}
+
+function isKnownCommandText(text) {
+  const slashCommand = /^\/(start|help|bot|id|about|whoami|кто_я|stats|rules|arule|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|монетка|dice|кубик|fate|вопрос|compliment|комплимент|insult|инсульт|top|топ|admins|админы|banlist|баны|mutelist|муты|setrules|установить_правила|warn|предупреждение|delwarn|warns|warnings|варны|unwarn|снять_предупреждение|mute|мут|delmute|unmute|размут|ban|бан|delban|unban|разбан|setgreeting|установить_приветствие|addadmin|добавить_админа|removeadmin|снять_админа|promote|повышение|demote|разжалование|clearhistory|сбросистории|сброс_истории|clear_history|miniapp|миниприложение|admincom|ai|modstats|статистика_модерации|ttt|крестики|крестики-нолики)(?:@[\w_]+)?(\s|$)/i;
+  const bangCommand = /^!(delban|delmute|delwarn|начало|помощь|айди|информация|кто\s*я|статистика|правила|аправила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|инсульт|пред|предупреждение|варны|мут|размут|бан|разбан|топ|анпред|говори|дел|рел)(\s|$)/i;
+  const plusMinusCommand = /^(\+антиспам|\+antispam|\+антифлуд|\+antiflood|\-антиспам|\-antispam|\-антифлуд|\-antiflood|\+ссылки|\+links|\-ссылки|\-links|\+описание|\+description|\+rules(?=\s+\S)|\+правила(?=\s+\S)|\+greeting(?=\s+\S)|\+приветствие(?=\s+\S))(\s|$)/i;
+  return slashCommand.test(text) || bangCommand.test(text) || plusMinusCommand.test(text);
+}
+
+function parseBotCommandKey(text) {
+  const normalized = String(text || '').trim();
+  const plusMinusMatch = normalized.match(/^[+-](антиспам|antispam|антифлуд|antiflood|ссылки|links)\b/i);
+  if (plusMinusMatch) {
+    const command = plusMinusMatch[1].toLowerCase();
+    if (command === 'антиспам' || command === 'antispam') return 'antispam';
+    if (command === 'антифлуд' || command === 'antiflood') return 'antiflood';
+    return 'antilinks';
+  }
+
+  const slashMatch = normalized.match(/^\/([^\s]+)/);
+  if (slashMatch) {
+    const commandWithBot = slashMatch[1].toLowerCase();
+    return commandWithBot.split('@')[0];
+  }
+
+  const bangMatch = normalized.match(/^!(\S+)/);
+  if (!bangMatch) {
+    return null;
+  }
+
+  const rawCommand = bangMatch[1].toLowerCase();
+  if (/^кто$/.test(rawCommand) && /^!кто\s*я\b/i.test(normalized)) {
+    return 'whoami';
+  }
+
+  const translationMap = {
+    начало: 'start',
+    помощь: 'help',
+    айди: 'id',
+    информация: 'about',
+    статистика: 'stats',
+    правила: 'rules',
+    ['а' + 'правила']: 'admin_rules',
+    обнять: 'hug',
+    поцеловать: 'kiss',
+    шлёпнуть: 'slap',
+    шлепнуть: 'slap',
+    тыкнуть: 'poke',
+    монетка: 'coin',
+    кубик: 'dice',
+    вопрос: 'fate',
+    комплимент: 'compliment',
+    инсульт: 'insult',
+    пред: 'warn',
+    предупреждение: 'warn',
+    варны: 'warnings',
+    мут: 'mute',
+    размут: 'unmute',
+    бан: 'ban',
+    разбан: 'unban',
+    топ: 'top',
+    анпред: 'unwarn',
+    говори: 'unmute',
+    дел: 'delwarn',
+    рел: 'reload',
+  };
+
+  return translationMap[rawCommand] || rawCommand;
 }
 
 function createBot() {
@@ -3409,69 +3483,6 @@ function createBot() {
   function isMediaMessage(ctx) {
     const message = ctx.message || {};
     return Boolean(message.photo || message.video || message.document || message.animation || message.audio || message.voice || message.sticker || message.video_note);
-  }
-
-  function isKnownCommandText(text) {
-    const slashCommand = /^\/(start|help|bot|id|about|whoami|кто_я|stats|rules|arule|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|монетка|dice|кубик|fate|вопрос|compliment|комплимент|insult|инсульт|top|топ|admins|админы|banlist|баны|mutelist|муты|setrules|установить_правила|warn|предупреждение|delwarn|warnings|варны|unwarn|снять_предупреждение|mute|мут|delmute|unmute|размут|ban|бан|delban|unban|разбан|setgreeting|установить_приветствие|addadmin|добавить_админа|removeadmin|снять_админа|promote|повышение|demote|разжалование|clearhistory|сбросистории|сброс_истории|clear_history|miniapp|миниприложение|admincom|ai|modstats|статистика_модерации|ttt|крестики|крестики-нолики)(?:@[\w_]+)?(\s|$)/i;
-    const bangCommand = /^!(delban|delmute|delwarn|начало|помощь|айди|информация|кто\s*я|статистика|правила|аправила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|инсульт|предупреждение|варны|мут|размут|бан|разбан|топ)(\s|$)/i;
-    const plusMinusCommand = /^(\+антиспам|\+antispam|\+антифлуд|\+antiflood|\-антиспам|\-antispam|\-антифлуд|\-antiflood|\+ссылки|\+links|\-ссылки|\-links|\+описание|\+description|\+rules(?=\s+\S)|\+правила(?=\s+\S)|\+greeting(?=\s+\S)|\+приветствие(?=\s+\S))(\s|$)/i;
-    return slashCommand.test(text) || bangCommand.test(text) || plusMinusCommand.test(text);
-  }
-
-  function parseBotCommandKey(text) {
-    const normalized = String(text || '').trim();
-    const plusMinusMatch = normalized.match(/^[+-](антиспам|antispam|антифлуд|antiflood|ссылки|links)\b/i);
-    if (plusMinusMatch) {
-      const command = plusMinusMatch[1].toLowerCase();
-      if (command === 'антиспам' || command === 'antispam') return 'antispam';
-      if (command === 'антифлуд' || command === 'antiflood') return 'antiflood';
-      return 'antilinks';
-    }
-
-    const slashMatch = normalized.match(/^\/([^\s]+)/);
-    if (slashMatch) {
-      const commandWithBot = slashMatch[1].toLowerCase();
-      return commandWithBot.split('@')[0];
-    }
-
-    const bangMatch = normalized.match(/^!(\S+)/);
-    if (!bangMatch) {
-      return null;
-    }
-
-    const rawCommand = bangMatch[1].toLowerCase();
-    if (/^кто$/.test(rawCommand) && /^!кто\s*я\b/i.test(normalized)) {
-      return 'whoami';
-    }
-
-    const translationMap = {
-      начало: 'start',
-      помощь: 'help',
-      айди: 'id',
-      информация: 'about',
-      статистика: 'stats',
-      правила: 'rules',
-      ['а' + 'правила']: 'admin_rules',
-      обнять: 'hug',
-      поцеловать: 'kiss',
-      шлёпнуть: 'slap',
-      шлепнуть: 'slap',
-      тыкнуть: 'poke',
-      монетка: 'coin',
-      кубик: 'dice',
-      вопрос: 'fate',
-      комплимент: 'compliment',
-      инсульт: 'insult',
-      предупреждение: 'warn',
-      варны: 'warnings',
-      мут: 'mute',
-      размут: 'unmute',
-      бан: 'ban',
-      разбан: 'unban',
-      топ: 'top',
-    };
-
-    return translationMap[rawCommand] || rawCommand;
   }
 
   async function enforceDisabledCommand(ctx, next) {
@@ -6098,6 +6109,35 @@ function createBot() {
     await replyWithAutoDelete(ctx, `Предупреждений: ${moderationService.getWarnings(ctx.chat.id, target.id)}/${warnLimit}`);
   }
 
+  async function warnsListCommand(ctx) {
+    ensureGroup(ctx);
+    scheduleDeleteForContext(ctx, ctx.message?.message_id);
+    if (!isBotAdmin(ctx)) {
+      await replyWithAutoDelete(ctx, 'Эта команда доступна только администраторам.');
+      return;
+    }
+
+    const warnLimit = moderationService.getWarnLimit(ctx.chat.id);
+    const entries = moderationService.getAllWarnings(ctx.chat.id);
+
+    if (!entries.length) {
+      await replyWithAutoDelete(ctx, '⚠️ В группе нет активных предупреждений.');
+      return;
+    }
+
+    const lines = entries
+      .map(([userId, count]) => {
+        const numericUserId = Number(userId);
+        const profile = database.getUserProfile(ctx.chat.id, numericUserId);
+        const username = profile?.username ? String(profile.username).replace(/^@/, '') : null;
+        const userLabel = username ? `@${username} (${numericUserId})` : `ID ${numericUserId}`;
+        return `• ${userLabel}: ${count}/${warnLimit}`;
+      })
+      .join('\n');
+
+    await replyWithAutoDelete(ctx, `⚠️ Список предупреждений группы:\n\n${lines}`);
+  }
+
   async function unwarnCommand(ctx, args) {
     ensureGroup(ctx);
     scheduleDeleteForContext(ctx, ctx.message?.message_id);
@@ -6115,15 +6155,21 @@ function createBot() {
       return;
     }
 
-    moderationService.resetWarnings(ctx.chat.id, targetData.target.id);
+    const currentWarnings = moderationService.getWarnings(ctx.chat.id, targetData.target.id);
+    if (currentWarnings <= 0) {
+      await replyWithAutoDelete(ctx, `У пользователя ${targetData.target.first_name || targetData.target.username || targetData.target.id} нет предупреждений.`);
+      return;
+    }
+
+    const nextWarnings = moderationService.decrementWarning(ctx.chat.id, targetData.target.id, 1);
     recordModerationLog(ctx.chat.id, {
       action: 'unwarn',
       actorId: ctx.from.id,
       targetId: targetData.target.id,
-      reason: 'Сброс предупреждений',
-      details: 'Предупреждения пользователя обнулены',
+      reason: 'Снятие одного предупреждения',
+      details: `Предупреждение снижено с ${currentWarnings} до ${nextWarnings}`,
     });
-    await replyWithAutoDelete(ctx, `Предупреждения пользователя ${targetData.target.first_name || targetData.target.username || targetData.target.id} сброшены.`);
+    await replyWithAutoDelete(ctx, `Снято 1 предупреждение у ${targetData.target.first_name || targetData.target.username || targetData.target.id}. Осталось: ${nextWarnings}.`);
   }
 
   async function muteCommand(ctx, args, deleteTargetMessage = false) {
@@ -6627,10 +6673,12 @@ function createBot() {
           return true;
         }
         return false;
+      case 'пред':
       case 'предупреждение':
         await warnCommand(ctx, args);
         return true;
       case 'delwarn':
+      case 'дел':
         await warnCommand(ctx, args, true);
         return true;
       case 'варны':
@@ -6642,6 +6690,9 @@ function createBot() {
           return true;
         }
         return false;
+      case 'анпред':
+        await unwarnCommand(ctx, args);
+        return true;
       case 'мут':
         await muteCommand(ctx, args);
         return true;
@@ -6649,7 +6700,11 @@ function createBot() {
         await muteCommand(ctx, args, true);
         return true;
       case 'размут':
+      case 'говори':
         await unmuteCommand(ctx, args);
+        return true;
+      case 'рел':
+        await reloadCommand(ctx);
         return true;
       case 'бан':
         await banCommand(ctx, args);
@@ -8407,9 +8462,13 @@ function createBot() {
     await warnCommand(ctx, ctx.message.text.replace(/^\/delwarn(?:@[\w_]+)?\s*/i, ''), true);
   });
 
-  bot.command(['warnings', 'варны'], async (ctx) => {
-    const args = ctx.message.text.replace(/^\/(?:warnings|варны)(?:@[\w_]+)?\s*/i, '');
+  bot.command(['warns', 'warnings', 'варны'], async (ctx) => {
+    const args = ctx.message.text.replace(/^\/(?:warns|warnings|варны)(?:@[\w_]+)?\s*/i, '');
     await warningsCommand(ctx, args);
+  });
+
+  bot.command(['warns_list', 'warns-list', 'warnslist'], async (ctx) => {
+    await warnsListCommand(ctx);
   });
 
   bot.command(['unwarn', 'снять_предупреждение'], async (ctx) => {
@@ -9178,6 +9237,8 @@ module.exports = {
   handleAgreementDecision,
   isPollAnswerForTarget,
   buildReloadStatusMessage,
+  parseBotCommandKey,
+  isKnownCommandText,
 };
 
 2

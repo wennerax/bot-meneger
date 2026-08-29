@@ -14,6 +14,22 @@ test('warnings are stored per chat and user', () => {
   assert.equal(service.getWarnings(200, 7), 0);
 });
 
+test('warnings can be decremented by one without resetting the whole counter', () => {
+  const service = new ModerationService();
+
+  service.addWarning(100, 7);
+  service.addWarning(100, 7);
+  service.addWarning(100, 7);
+
+  assert.equal(service.decrementWarning(100, 7), 2);
+  assert.equal(service.getWarnings(100, 7), 2);
+  assert.equal(service.decrementWarning(100, 7), 1);
+  assert.equal(service.getWarnings(100, 7), 1);
+  assert.equal(service.decrementWarning(100, 7), 0);
+  assert.equal(service.getWarnings(100, 7), 0);
+  assert.equal(service.getAllWarnings(100).length, 0);
+});
+
 test('GIF commands are normalized, persisted and removable per chat', () => {
   const service = new ModerationService();
 
