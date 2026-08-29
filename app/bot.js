@@ -5861,32 +5861,6 @@ function createBot() {
     const streakPrefix = `${streakLabel}: `;
     const streakLine = streaksEnabled ? `${streakPrefix}${streakBadgeText}` : null;
     
-    // Compute first join date and relative time
-    const firstJoinDate = profile.joinedAt ? new Date(profile.joinedAt) : null;
-    const firstJoinLabel = firstJoinDate ? (() => {
-      const dateStr = firstJoinDate.toLocaleString('ru-RU');
-      const nowMs = Date.now();
-      const createdMs = firstJoinDate.getTime();
-      const diffMs = nowMs - createdMs;
-      const diffMinutes = Math.floor(diffMs / (1000 * 60));
-      const diffDays = Math.floor(diffMinutes / (60 * 24));
-      let relativeTime = '';
-      if (diffDays >= 365) {
-        const years = Math.floor(diffDays / 365);
-        relativeTime = `(${years} ${years === 1 ? 'год' : years % 10 >= 2 && years % 10 <= 4 && (years % 100 < 10 || years % 100 >= 20) ? 'года' : 'лет'} назад)`;
-      } else if (diffDays >= 30) {
-        const months = Math.floor(diffDays / 30);
-        relativeTime = `(${months} ${months === 1 ? 'месяц' : months % 10 >= 2 && months % 10 <= 4 && (months % 100 < 10 || months % 100 >= 20) ? 'месяца' : 'месяцев'} назад)`;
-      } else if (diffDays > 0) {
-        relativeTime = `(${diffDays} ${diffDays === 1 ? 'день' : diffDays % 10 >= 2 && diffDays % 10 <= 4 && (diffDays % 100 < 10 || diffDays % 100 >= 20) ? 'дня' : 'дней'} назад)`;
-      } else if (diffMinutes > 0) {
-        relativeTime = `(${diffMinutes} ${diffMinutes === 1 ? 'минуту' : 'минут'} назад)`;
-      } else {
-        relativeTime = '(только что)';
-      }
-      return `${dateStr} ${relativeTime}`.trim();
-    })() : 'неизвестно';
-    
     let chatStatus = 'Участник';
     try {
       const memberInfo = await ctx.telegram.getChatMember(ctx.chat.id, targetUser.id);
@@ -5923,7 +5897,6 @@ function createBot() {
       stats_message_count: '%%STATS_MESSAGE_COUNT_EMOJI%%',
       stats_streak: '%%STATS_STREAK_EMOJI%%',
       stats_top: '%%STATS_TOP_EMOJI%%',
-      stats_first_joined: '%%STATS_FIRST_JOINED_EMOJI%%',
     };
     const captionLines = [
       `${customEmojiPlaceholders.trophy_premium} Анкета пользователя ${escapeCaptionText(username)}`,
@@ -5935,7 +5908,6 @@ function createBot() {
       `${customEmojiPlaceholders.stats_message_count} Сообщений: ${escapeCaptionText(profile.messageCount)}`,
       ...(streakLine ? [`${customEmojiPlaceholders.stats_streak} ${streakLine}`] : []),
       `${customEmojiPlaceholders.stats_top} Место в топе: ${escapeCaptionText(topLabel)}`,
-      `${customEmojiPlaceholders.stats_first_joined} Первый заход: ${escapeCaptionText(firstJoinLabel)}`,
       '',
       'Активность за последние 7 дней',
     ];
@@ -5953,7 +5925,6 @@ function createBot() {
       stats_message_count: 'stats_message_count',
       stats_streak: 'stats_streak',
       stats_top: 'stats_top',
-      stats_first_joined: 'stats_first_joined',
     };
 
     for (const [placeholderKey, emojiName] of Object.entries(customEmojiMap)) {
