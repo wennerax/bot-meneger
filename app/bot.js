@@ -8166,8 +8166,8 @@ function createBot() {
     }
   });
 
-  bot.command(['id', 'айди'], (ctx) => {
-    ctx.reply(`Ваш Telegram ID: ${ctx.from.id}`);
+  bot.command(['id', 'айди'], async (ctx) => {
+    await idCommand(ctx);
   });
 
   bot.command(['about', 'информация'], (ctx) => {
