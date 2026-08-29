@@ -5862,9 +5862,7 @@ function createBot() {
     const streakLine = streaksEnabled ? `${streakPrefix}${streakBadgeText}` : null;
     
     // Compute first join date and relative time
-    const firstJoinDate = profile.joinedAt || profile.createdAt
-      ? new Date(profile.joinedAt || profile.createdAt)
-      : null;
+    const firstJoinDate = profile.joinedAt ? new Date(profile.joinedAt) : null;
     const firstJoinLabel = firstJoinDate ? (() => {
       const dateStr = firstJoinDate.toLocaleString('ru-RU');
       const nowMs = Date.now();

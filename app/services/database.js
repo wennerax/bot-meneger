@@ -139,6 +139,16 @@ class Database {
     if (ownerId !== null) {
       this.addAdmin(id, Number(ownerId));
       this.addBotAdmin(id, Number(ownerId), 1);
+      if (!this.data.groupUsers[id]) {
+        this.data.groupUsers[id] = {};
+      }
+      const owner = this.data.groupUsers[id][Number(ownerId)] || {};
+      this.data.groupUsers[id][Number(ownerId)] = {
+        ...owner,
+        chatId: id,
+        userId: Number(ownerId),
+        joinedAt: owner.joinedAt || this.data.groups[id].createdAt,
+      };
     }
 
     this._save();
@@ -538,7 +548,9 @@ class Database {
       punishments: mergedPunishments,
       lastSeenAt: userData?.lastSeenAt || null,
       createdAt: userData?.createdAt || null,
-      joinedAt: userData?.joinedAt || null,
+      joinedAt: userData?.joinedAt || (
+        this.data.groups[id]?.ownerId === user ? this.data.groups[id].createdAt : null
+      ),
     };
   }
 
