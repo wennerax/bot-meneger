@@ -102,6 +102,12 @@ test('!дел is mapped to delete-only action instead of warning', () => {
   assert.equal(isKnownCommandText('!дел @alice'), true);
 });
 
+test('/del is recognized as the delete-message command', () => {
+  assert.equal(parseBotCommandKey('/del'), 'delete_message');
+  assert.equal(parseBotCommandKey('/del @alice'), 'delete_message');
+  assert.equal(isKnownCommandText('/del'), true);
+});
+
 test('parsePunishmentDetails makes a reply ban permanent without a reason or duration', () => {
   const result = parsePunishmentDetails('', true);
 
@@ -205,6 +211,7 @@ test('stats premium emoji ids are available for the required profile fields', ()
     stats_streak: '5076098152084275955',
     stats_top: '5078131028824949643',
     stats_last_seen: '5402436682131718162',
+    stats_chat_status: '4983405958903366502',
   };
 
   for (const [name, id] of Object.entries(required)) {

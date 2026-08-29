@@ -2675,7 +2675,7 @@ function shouldFailClosedForMedia(payload, errorMessage = '', normalizedAnswer =
 }
 
 function isKnownCommandText(text) {
-  const slashCommand = /^\/(start|help|bot|id|айди|about|whoami|кто_я|stats|rules|arule|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|монетка|dice|кубик|fate|вопрос|compliment|комплимент|insult|инсульт|top|топ|admins|админы|banlist|баны|mutelist|муты|setrules|установить_правила|warn|предупреждение|delwarn|warns|warnings|варны|unwarn|снять_предупреждение|mute|мут|delmute|unmute|размут|ban|бан|delban|unban|разбан|setgreeting|установить_приветствие|addadmin|добавить_админа|removeadmin|снять_админа|promote|повышение|demote|разжалование|clearhistory|сбросистории|сброс_истории|clear_history|miniapp|миниприложение|admincom|ai|modstats|статистика_модерации|ttt|крестики|крестики-нолики)(?:@[\w_]+)?(\s|$)/i;
+  const slashCommand = /^(?:\/(start|help|bot|id|айди|about|whoami|кто_я|stats|rules|arule|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|монетка|dice|кубик|fate|вопрос|compliment|комплимент|insult|инсульт|top|топ|admins|админы|banlist|баны|mutelist|муты|setrules|установить_правила|warn|предупреждение|delwarn|warns|warnings|варны|unwarn|снять_предупреждение|mute|мут|delmute|unmute|размут|ban|бан|delban|unban|разбан|del|delete|setgreeting|установить_приветствие|addadmin|добавить_админа|removeadmin|снять_админа|promote|повышение|demote|разжалование|clearhistory|сбросистории|сброс_истории|clear_history|miniapp|миниприложение|admincom|ai|modstats|статистика_модерации|ttt|крестики|крестики-нолики))(?:@[\w_]+)?(\s|$)/i;
   const bangCommand = /^!(delban|delmute|delwarn|начало|помощь|айди|информация|кто\s*я|статистика|правила|аправила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|инсульт|пред|предупреждение|варны|мут|размут|бан|разбан|топ|анпред|говори|дел|рел)(\s|$)/i;
   const plusMinusCommand = /^(\+антиспам|\+antispam|\+антифлуд|\+antiflood|\-антиспам|\-antispam|\-антифлуд|\-antiflood|\+ссылки|\+links|\-ссылки|\-links|\+описание|\+description|\+rules(?=\s+\S)|\+правила(?=\s+\S)|\+greeting(?=\s+\S)|\+приветствие(?=\s+\S))(\s|$)/i;
   return slashCommand.test(text) || bangCommand.test(text) || plusMinusCommand.test(text);
@@ -2694,7 +2694,11 @@ function parseBotCommandKey(text) {
   const slashMatch = normalized.match(/^\/([^\s]+)/);
   if (slashMatch) {
     const commandWithBot = slashMatch[1].toLowerCase();
-    return commandWithBot.split('@')[0];
+    const command = commandWithBot.split('@')[0];
+    if (command === 'del' || command === 'delete') {
+      return 'delete_message';
+    }
+    return command;
   }
 
   const bangMatch = normalized.match(/^!(\S+)/);
@@ -2737,6 +2741,8 @@ function parseBotCommandKey(text) {
     говори: 'unmute',
     дел: 'delete_message',
     рел: 'reload',
+    del: 'delete_message',
+    delete: 'delete_message',
   };
 
   return translationMap[rawCommand] || rawCommand;
@@ -4153,7 +4159,7 @@ function createBot() {
           { cmd: 'setgreeting', label: '/setgreeting' }, { cmd: 'antispam', label: '+антиспам' },
           { cmd: 'antiflood', label: '+антифлуд' }, { cmd: 'antilinks', label: '+ссылки' },
           { cmd: 'warn', label: '/warn' }, { cmd: 'warnings', label: '/warnings' },
-          { cmd: 'delwarn', label: '/delwarn' },
+          { cmd: 'delwarn', label: '/delwarn' }, { cmd: 'del', label: '/del' },
           { cmd: 'unwarn', label: '/unwarn' }, { cmd: 'mute', label: '/mute' },
           { cmd: 'delmute', label: '/delmute' },
           { cmd: 'unmute', label: '/unmute' }, { cmd: 'ban', label: '/ban' },
@@ -5855,6 +5861,15 @@ function createBot() {
     const streakPrefix = `${streakLabel}: `;
     const streakLine = streaksEnabled ? `${streakPrefix}${streakBadgeText}` : null;
     const lastSeenLabel = profile.lastSeenAt ? new Date(profile.lastSeenAt).toLocaleString('ru-RU') : 'неизвестно';
+    let chatStatus = 'Участник';
+    try {
+      const memberInfo = await ctx.telegram.getChatMember(ctx.chat.id, targetUser.id);
+      if (memberInfo?.status === 'creator' || memberInfo?.status === 'administrator') {
+        chatStatus = 'Админ';
+      }
+    } catch (error) {
+      chatStatus = 'Участник';
+    }
     const chartSvg = buildActivityChartSvg(activity);
     const actorLevel = database.isPrimaryBotAdmin(ctx.chat.id, ctx.from.id)
       ? 1
@@ -5864,6 +5879,7 @@ function createBot() {
     const captionLines = [
       `${statsTitleEmoji} Анкета пользователя ${escapeCaptionText(username)}`,
       `${premiumEmojis.getCustomEmojiFallback('stats_name')} Имя: ${escapeCaptionText(profile.displayName || targetUser.first_name || targetUser.username || targetUser.id)}`,
+      `${premiumEmojis.getCustomEmojiFallback('stats_chat_status')} Статус в чате: ${escapeCaptionText(chatStatus)}`,
       `${premiumEmojis.getCustomEmojiFallback('stats_description')} Описание: ${escapeCaptionText(description)}`,
       `${premiumEmojis.getCustomEmojiFallback('stats_message_count')} Сообщений: ${escapeCaptionText(profile.messageCount)}`,
       ...(streakLine ? [`${premiumEmojis.getCustomEmojiFallback('stats_streak')} ${streakLine}`] : []),
@@ -5878,6 +5894,7 @@ function createBot() {
 
     const customEmojiMap = {
       stats_name: 'stats_name',
+      stats_chat_status: 'stats_chat_status',
       stats_description: 'stats_description',
       stats_message_count: 'stats_message_count',
       stats_streak: 'stats_streak',
@@ -8612,6 +8629,22 @@ function createBot() {
 
   bot.command(['warn', 'предупреждение'], async (ctx) => {
     await warnCommand(ctx, ctx.message.text.replace(/^\/(?:warn|предупреждение)\s*/i, ''));
+  });
+
+  bot.command(['del', 'delete'], async (ctx) => {
+    ensureGroup(ctx);
+    scheduleDeleteForContext(ctx, ctx.message?.message_id);
+    if (!isBotAdmin(ctx)) {
+      await replyWithAutoDelete(ctx, 'Эта команда доступна только администраторам.');
+      return;
+    }
+
+    if (!ctx.message?.reply_to_message) {
+      await replyWithAutoDelete(ctx, 'Ответьте этой командой на сообщение, которое нужно удалить.');
+      return;
+    }
+
+    await deleteMessageSafely(ctx, ctx.message.reply_to_message.message_id);
   });
 
   bot.command('delwarn', async (ctx) => {

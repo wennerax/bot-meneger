@@ -231,6 +231,11 @@ const CUSTOM_EMOJI_IDS = {
     fallback: '🕒',
     displayName: 'Профиль последний вход'
   },
+  stats_chat_status: {
+    id: '4983405958903366502',
+    fallback: '👤',
+    displayName: 'Статус в чате'
+  },
   
   // Мьют (премиум)
   mute_lock: {
