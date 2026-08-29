@@ -2756,8 +2756,10 @@ async function resolveIdCommandTarget(ctx, database = null) {
     return ctx?.from || null;
   }
 
-  if (rawTarget.startsWith('@') && database) {
-    const resolved = await resolveUsernameTarget(ctx, rawTarget, 'ID или @username', database);
+  const candidate = rawTarget.startsWith('@') ? rawTarget : `@${rawTarget}`;
+
+  if (database && /^@?[\w_]+$/.test(rawTarget.trim())) {
+    const resolved = await resolveUsernameTarget(ctx, candidate, 'ID или @username', database);
     return resolved?.target || ctx?.from || null;
   }
 
