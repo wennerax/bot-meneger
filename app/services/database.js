@@ -472,6 +472,25 @@ class Database {
     const counts = this.data.messageCounts[id]?.[user] || null;
     const punishments = this.data.punishments.filter((item) => item.chatId === id && item.userId === user);
     const activePunishments = this.data.activePunishments.filter((item) => item.chatId === id && item.userId === user);
+    const mergedPunishments = [...punishments, ...activePunishments].filter((item, index, items) => {
+      const signature = [
+        Number(item.chatId),
+        Number(item.userId),
+        String(item.action || ''),
+        String(item.reason || ''),
+        Number(item.untilAt || 0),
+      ].join('|');
+      return items.findIndex((candidate) => {
+        const candidateSignature = [
+          Number(candidate.chatId),
+          Number(candidate.userId),
+          String(candidate.action || ''),
+          String(candidate.reason || ''),
+          Number(candidate.untilAt || 0),
+        ].join('|');
+        return candidateSignature === signature;
+      }) === index;
+    });
     const sorted = Object.entries(this.data.messageCounts[id] || {})
       .map(([entryUserId, item]) => ({
         userId: Number(entryUserId),
@@ -492,7 +511,7 @@ class Database {
       streak,
       streakBadge: premiumEmojis.getStreakBadge(streak),
       topPosition: topPosition > 0 ? topPosition : null,
-      punishments: [...punishments, ...activePunishments],
+      punishments: mergedPunishments,
       lastSeenAt: userData?.lastSeenAt || null,
     };
   }

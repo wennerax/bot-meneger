@@ -138,6 +138,23 @@ test('profile descriptions and stats are stored per chat user', () => {
   db.close();
 });
 
+test('same active punishment is not duplicated in history and profile', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-meneger-'));
+  const db = new Database(path.join(dir, 'bot.json'));
+
+  db.ensureGroup(505, 'Duplicate punishments', 1);
+  db.addPunishment(505, 2, 'mute', 'тест', 1700000000);
+  db.addActivePunishment(505, 2, 'mute', 'тест', 1700000000);
+
+  const profile = db.getUserProfile(505, 2);
+
+  assert.equal(profile.punishments.length, 1);
+  assert.equal(db.data.punishments.length, 1);
+  assert.equal(db.data.activePunishments.length, 1);
+
+  db.close();
+});
+
 test('daily activity history is tracked per chat user', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-meneger-'));
   const db = new Database(path.join(dir, 'bot.json'));

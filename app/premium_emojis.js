@@ -199,6 +199,38 @@ const CUSTOM_EMOJI_IDS = {
     fallback: '⚠️',
     displayName: 'Премиум предупреждение'
   },
+
+  // Профиль /stats
+  stats_name: {
+    id: '4988062248913076964',
+    fallback: '👤',
+    displayName: 'Профиль имя'
+  },
+  stats_description: {
+    id: '4988187872411518074',
+    fallback: '📝',
+    displayName: 'Профиль описание'
+  },
+  stats_message_count: {
+    id: '4965642377894036415',
+    fallback: '💬',
+    displayName: 'Профиль сообщения'
+  },
+  stats_streak: {
+    id: '5076098152084275955',
+    fallback: '🔥',
+    displayName: 'Профиль серия'
+  },
+  stats_top: {
+    id: '5078131028824949643',
+    fallback: '🏆',
+    displayName: 'Профиль топ'
+  },
+  stats_last_seen: {
+    id: '5402436682131718162',
+    fallback: '🕒',
+    displayName: 'Профиль последний вход'
+  },
   
   // Мьют (премиум)
   mute_lock: {

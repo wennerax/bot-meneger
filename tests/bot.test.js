@@ -197,6 +197,23 @@ test('buildBotAdminListMessage separates primary and auxiliary admins', () => {
   assert.match(message, /2\. @carol/);
 });
 
+test('stats premium emoji ids are available for the required profile fields', () => {
+  const required = {
+    stats_name: '4988062248913076964',
+    stats_description: '4988187872411518074',
+    stats_message_count: '4965642377894036415',
+    stats_streak: '5076098152084275955',
+    stats_top: '5078131028824949643',
+    stats_last_seen: '5402436682131718162',
+  };
+
+  for (const [name, id] of Object.entries(required)) {
+    const info = premiumEmojis.getCustomEmojiInfo(name);
+    assert.ok(info, `Expected premium emoji metadata for ${name}`);
+    assert.equal(info.id, id, `Expected ${name} to map to ${id}`);
+  }
+});
+
 test('buildSettingsMainKeyboard returns a grouped layout with section buttons', () => {
   const keyboard = buildSettingsMainKeyboard(42);
 

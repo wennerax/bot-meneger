@@ -5860,20 +5860,47 @@ function createBot() {
       ? 1
       : database.getBotAdminLevel(ctx.chat.id, ctx.from.id);
     const canResetPunishmentHistory = Number.isFinite(Number(actorLevel)) && Number(actorLevel) <= 2;
+    const statsTitleEmoji = premiumEmojis.getCustomEmojiFallback('trophy_premium');
     const captionLines = [
-      `📊 Анкета пользователя ${escapeCaptionText(username)}`,
-      `Имя: ${escapeCaptionText(profile.displayName || targetUser.first_name || targetUser.username || targetUser.id)}`,
-      `Описание: ${escapeCaptionText(description)}`,
-      `Сообщений: ${escapeCaptionText(profile.messageCount)}`,
-      ...(streakLine ? [streakLine] : []),
-      `Место в топе: ${escapeCaptionText(topLabel)}`,
-      `Последний вход: ${escapeCaptionText(lastSeenLabel)}`,
+      `${statsTitleEmoji} Анкета пользователя ${escapeCaptionText(username)}`,
+      `${premiumEmojis.getCustomEmojiFallback('stats_name')} Имя: ${escapeCaptionText(profile.displayName || targetUser.first_name || targetUser.username || targetUser.id)}`,
+      `${premiumEmojis.getCustomEmojiFallback('stats_description')} Описание: ${escapeCaptionText(description)}`,
+      `${premiumEmojis.getCustomEmojiFallback('stats_message_count')} Сообщений: ${escapeCaptionText(profile.messageCount)}`,
+      ...(streakLine ? [`${premiumEmojis.getCustomEmojiFallback('stats_streak')} ${streakLine}`] : []),
+      `${premiumEmojis.getCustomEmojiFallback('stats_top')} Место в топе: ${escapeCaptionText(topLabel)}`,
+      `${premiumEmojis.getCustomEmojiFallback('stats_last_seen')} Последний вход: ${escapeCaptionText(lastSeenLabel)}`,
       '',
       'Активность за последние 7 дней',
     ];
     const captionText = captionLines.join('\n');
     const captionEntities = [];
     const extraReplyMarkup = buildStatsReplyMarkup(ctx.chat.id, targetUser.id, canResetPunishmentHistory);
+
+    const customEmojiMap = {
+      stats_name: 'stats_name',
+      stats_description: 'stats_description',
+      stats_message_count: 'stats_message_count',
+      stats_streak: 'stats_streak',
+      stats_top: 'stats_top',
+      stats_last_seen: 'stats_last_seen',
+      trophy_premium: 'trophy_premium',
+    };
+
+    for (const [placeholder, emojiName] of Object.entries(customEmojiMap)) {
+      const info = premiumEmojis.getCustomEmojiInfo(emojiName);
+      if (!info) continue;
+
+      const emojiText = String(info.fallback);
+      const index = captionText.indexOf(emojiText);
+      if (index === -1) continue;
+
+      captionEntities.push({
+        type: 'custom_emoji',
+        offset: index,
+        length: emojiText.length,
+        custom_emoji_id: info.id,
+      });
+    }
 
     if (streaksEnabled && streakInfo && streakBadgeText && streakLine) {
       const badgeString = String(streakInfo.fallback);
