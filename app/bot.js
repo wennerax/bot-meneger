@@ -2501,6 +2501,79 @@ function buildWarnCancelKeyboard(chatId, userId) {
   };
 }
 
+async function applyWarnLimitPunishment(ctx, userId, reason, warningCount = null, service = defaultModerationService, databaseInstance = null) {
+  const targetUserId = Number(userId);
+  const chatId = Number(ctx?.chat?.id);
+  const effectiveService = service || defaultModerationService;
+  const effectiveDatabase = databaseInstance || null;
+  const currentCount = Number.isFinite(Number(warningCount)) ? Number(warningCount) : Number(effectiveService?.getWarnings?.(chatId, targetUserId) || 0);
+  const warnLimit = Number(effectiveService?.getWarnLimit?.(chatId)) || 0;
+  const mode = String(effectiveService?.getWarnPunishmentMode?.(chatId) || 'off').toLowerCase();
+
+  if (!chatId || !Number.isFinite(targetUserId) || !warnLimit || currentCount < warnLimit || !['off', 'warn', 'mute', 'ban', 'kick'].includes(mode)) {
+    return false;
+  }
+
+  const userLabel = getMentionText(ctx?.from || { id: targetUserId });
+  const blockDuration = Number(effectiveService?.getWarnBlockDuration?.(chatId)) || 24;
+  const canReply = Boolean(ctx && typeof ctx.reply === 'function');
+
+  if (mode === 'mute') {
+    const muteCtx = ctx;
+    await muteCtx.telegram.restrictChatMember(muteCtx.chat.id, targetUserId, buildMutePermissions(false), Math.floor(Date.now() / 1000) + Math.round(blockDuration * 3600));
+    if (effectiveDatabase?.addPunishment) {
+      effectiveDatabase.addPunishment(chatId, targetUserId, 'mute', `Автобан после ${warnLimit} предупреждений. Последнее: ${reason}`, Math.floor(Date.now() / 1000) + Math.round(blockDuration * 3600));
+    }
+    if (canReply) {
+      const sentMsg = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} ${userLabel}: Получил ${warnLimit}-е предупреждение и замучен на ${blockDuration}ч. Причина: ${reason}`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
+      if (typeof scheduleDeleteForContext === 'function') {
+        scheduleDeleteForContext(ctx, sentMsg?.message_id, 5000);
+      }
+    }
+    return true;
+  }
+
+  if (mode === 'kick') {
+    try {
+      await ctx.telegram.unbanChatMember(chatId, targetUserId);
+      await ctx.telegram.kickChatMember(chatId, targetUserId);
+    } catch (error) {
+      return false;
+    }
+    effectiveDatabase?.addPunishment?.(chatId, targetUserId, 'kick', `Автобан после ${warnLimit} предупреждений. Последнее: ${reason}`, null);
+    if (canReply) {
+      const sentMsg = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} ${userLabel}: Получил ${warnLimit}-е предупреждение и исключён из чата. Причина: ${reason}`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
+      if (typeof scheduleDeleteForContext === 'function') {
+        scheduleDeleteForContext(ctx, sentMsg?.message_id, 5000);
+      }
+    }
+    return true;
+  }
+
+  if (mode === 'ban') {
+    const untilDate = Math.floor(Date.now() / 1000) + Math.round(blockDuration * 3600);
+    try {
+      await ctx.telegram.banChatMember(chatId, targetUserId, untilDate);
+    } catch (error) {
+      return false;
+    }
+    effectiveDatabase?.addPunishment?.(chatId, targetUserId, 'ban', `Автобан после ${warnLimit} предупреждений. Последнее: ${reason}`, untilDate);
+    effectiveDatabase?.addActivePunishment?.(chatId, targetUserId, 'ban', `Автобан после ${warnLimit} предупреждений. Последнее: ${reason}`, untilDate);
+    if (typeof schedulePunishmentExpiry === 'function') {
+      schedulePunishmentExpiry({ chatId, userId: targetUserId, action: 'ban', untilAt: untilDate });
+    }
+    if (canReply) {
+      const sentMsg = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} ${userLabel}: Получил ${warnLimit}-е предупреждение и забанен на ${blockDuration}ч. Причина: ${reason}`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
+      if (typeof scheduleDeleteForContext === 'function') {
+        scheduleDeleteForContext(ctx, sentMsg?.message_id, 5000);
+      }
+    }
+    return true;
+  }
+
+  return false;
+}
+
 function buildBulkModerationSummaryMessage(userLabel, reasons = []) {
   const uniqueReasons = Array.from(new Set((Array.isArray(reasons) ? reasons : [reasons])
     .map((reason) => String(reason || '').trim())
@@ -6394,26 +6467,12 @@ function createBot() {
     const reasonEscaped = details.reason;
     
     if (warningCount >= warnLimit) {
-      // Auto-ban after reaching limit
-      const blockDuration = moderationService.getWarnBlockDuration(ctx.chat.id);
-      const untilDate = Math.floor(Date.now() / 1000) + Math.round(blockDuration * 3600);
-      try {
-        await ctx.telegram.banChatMember(ctx.chat.id, targetData.target.id, untilDate);
-      } catch (error) {
-        const sentMsg3 = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} Не удалось выполнить автобан для ${userName} после ${warnLimit} предупреждений.`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
+      const applied = await applyWarnLimitPunishment(ctx, targetData.target.id, details.reason, warningCount, moderationService, database);
+      if (!applied) {
+        const sentMsg3 = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} Не удалось выполнить наказание для ${userName} после ${warnLimit} предупреждений.`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
         scheduleDeleteForContext(ctx, sentMsg3?.message_id, 5000);
         return;
       }
-      database.addPunishment(ctx.chat.id, targetData.target.id, 'ban', `Автобан после ${warnLimit} предупреждений. Последнее: ${details.reason}`, untilDate);
-      database.addActivePunishment(ctx.chat.id, targetData.target.id, 'ban', `Автобан после ${warnLimit} предупреждений. Последнее: ${details.reason}`, untilDate);
-      schedulePunishmentExpiry({
-        chatId: ctx.chat.id,
-        userId: targetData.target.id,
-        action: 'ban',
-        untilAt: untilDate,
-      });
-      const sentMsg4 = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} ${userName}: Получил ${warnLimit}-е предупреждение и забанен на ${blockDuration}ч. Причина: ${reasonEscaped}`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
-      scheduleDeleteForContext(ctx, sentMsg4?.message_id, 5000);
     } else {
       const sentMsg5 = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} Предупреждение для ${userName}: ${warningCount}/${warnLimit}. Причина: ${reasonEscaped}`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML', reply_markup: buildWarnCancelKeyboard(ctx.chat.id, targetData.target.id) });
       scheduleDeleteForContext(ctx, sentMsg5?.message_id, 5000);
@@ -8152,10 +8211,18 @@ function createBot() {
 
     const profile = database.getUserProfile(chatId, userId);
     const userLabel = formatUserLabel(profile, userId);
-    const messageText = formatWarnStatusMessage(userLabel, nextWarnings, moderationService.getWarnLimit(chatId));
+    const warnLimit = moderationService.getWarnLimit(chatId);
+    const appliedLimitPunishment = nextWarnings >= warnLimit && delta > 0 ? await applyWarnLimitPunishment(ctx, userId, 'Изменение через кнопку предупреждений', nextWarnings, moderationService, database) : false;
+
+    const messageText = formatWarnStatusMessage(userLabel, Math.max(0, nextWarnings), warnLimit);
 
     await safeAnswerCbQuery(ctx, delta > 0 ? 'Добавлено +1 предупреждение.' : 'Снято -1 предупреждение.');
-    await safeEditMessageText(ctx, messageText, { reply_markup: buildWarnStatusKeyboard(chatId, userId, moderationService) });
+    if (!appliedLimitPunishment) {
+      await safeEditMessageText(ctx, messageText, { reply_markup: buildWarnStatusKeyboard(chatId, userId, moderationService) });
+      return;
+    }
+
+    await safeEditMessageText(ctx, messageText, { reply_markup: { inline_keyboard: [] } });
   });
 
   bot.action(/^warn:reset:(-?\d+):(\d+)$/, async (ctx) => {
@@ -9697,6 +9764,7 @@ module.exports = {
   buildWarnCancelKeyboard,
   buildWarnStatusKeyboard,
   formatWarnStatusMessage,
+  applyWarnLimitPunishment,
   buildBulkModerationSummaryMessage,
   buildUserPunishmentHistoryText,
   buildStatsReplyMarkup,

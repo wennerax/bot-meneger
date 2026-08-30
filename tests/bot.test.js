@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildBulkModerationSummaryMessage, buildFunReply, getTicTacToeWinner, buildTicTacToeKeyboard, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildModerationLogsKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildWarningsListText, buildSettingsWarnsListText, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage, shouldFailClosedForMedia, cleanupAgreementMessages, handleAgreementDecision, isPollAnswerForTarget, buildBotMediaSend, buildReloadStatusMessage, parseBotCommandKey, isKnownCommandText, formatAdminReportText, formatUserIdentityText, buildActivityChartSvg } = require('../app/bot');
+const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildBulkModerationSummaryMessage, buildFunReply, getTicTacToeWinner, buildTicTacToeKeyboard, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildModerationLogsKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildWarningsListText, buildSettingsWarnsListText, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage, shouldFailClosedForMedia, cleanupAgreementMessages, handleAgreementDecision, isPollAnswerForTarget, buildBotMediaSend, buildReloadStatusMessage, parseBotCommandKey, isKnownCommandText, formatAdminReportText, formatUserIdentityText, buildActivityChartSvg, applyWarnLimitPunishment } = require('../app/bot');
 const { buildAiRequestPayload, normalizeMultimodalInputForResponses } = require('../app/ai');
 const premiumEmojis = require('../app/premium_emojis');
 
@@ -151,6 +151,44 @@ test('warn status keyboard offers +1, -1 and reset actions for a user with warni
       [{ text: 'Сброс предупреждений', callback_data: 'warn:reset:-1001:42' }],
     ],
   });
+});
+
+test('applyWarnLimitPunishment bans when the configured warn mode is ban and the limit is reached', async () => {
+  const calls = [];
+  const ctx = {
+    chat: { id: -1001 },
+    from: { id: 7, username: 'mod' },
+    reply: async () => ({ message_id: 1 }),
+    telegram: {
+      banChatMember: async (...args) => {
+        calls.push(['banChatMember', ...args]);
+      },
+      kickChatMember: async (...args) => {
+        calls.push(['kickChatMember', ...args]);
+      },
+      restrictChatMember: async (...args) => {
+        calls.push(['restrictChatMember', ...args]);
+      },
+      unbanChatMember: async (...args) => {
+        calls.push(['unbanChatMember', ...args]);
+      },
+    },
+  };
+
+  const service = {
+    getWarnPunishmentMode: () => 'ban',
+    getWarnLimit: () => 3,
+    getWarnBlockDuration: () => 24,
+  };
+
+  const result = await applyWarnLimitPunishment(ctx, 42, 'spam', 3, service);
+
+  assert.equal(result, true);
+  assert.equal(calls[0][0], 'banChatMember');
+  assert.equal(calls[0][1], -1001);
+  assert.equal(calls[0][2], 42);
+  assert.equal(typeof calls[0][3], 'number');
+  assert.ok(calls[0][3] > 0);
 });
 
 test('buildBulkModerationSummaryMessage groups multiple reasons into one compact alert', () => {
