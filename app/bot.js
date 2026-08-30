@@ -2239,17 +2239,25 @@ function buildWarningsListText(chatId, service = activeModerationService || defa
     : '⚠️ В группе нет активных предупреждений.';
 }
 
+function formatWarnStatusMessage(userLabel, currentWarnings, warnLimit = 0) {
+  const count = Number(currentWarnings) || 0;
+  const limit = Number(warnLimit) || 0;
+
+  if (count <= 0) {
+    return `⚠️ У пользователя ${userLabel} нет предупреждений.`;
+  }
+
+  const countText = limit > 0 ? `${count}/${limit}` : String(count);
+  return `⚠️ Пользователь ${userLabel} получил(а) предупреждение (${countText})`;
+}
+
 function buildWarnStatusText(chatId, userId, service = activeModerationService || defaultModerationService, databaseInstance = activeDatabase) {
   const warnLimit = Number(service?.getWarnLimit?.(chatId)) || 0;
   const profile = databaseInstance?.getUserProfile?.(chatId, Number(userId)) || {};
   const userLabel = formatUserLabel(profile, 'Пользователь');
   const currentWarnings = Number(service?.getWarnings?.(chatId, userId) || 0);
 
-  if (currentWarnings <= 0) {
-    return `⚠️ У пользователя ${userLabel} нет предупреждений.`;
-  }
-
-  return `⚠️ Пользователь ${userLabel} получил(а) предупреждение (из ${warnLimit || currentWarnings})`;
+  return formatWarnStatusMessage(userLabel, currentWarnings, warnLimit);
 }
 
 function buildWarnStatusKeyboard(chatId, userId, service = activeModerationService || defaultModerationService) {
@@ -6435,9 +6443,7 @@ function createBot() {
     const warnLimit = moderationService.getWarnLimit(ctx.chat.id);
     const currentWarnings = moderationService.getWarnings(ctx.chat.id, target.id);
     const userLabel = formatUserLabel(database.getUserProfile(ctx.chat.id, target.id) || {}, target.first_name || target.username || String(target.id));
-    const messageText = currentWarnings > 0
-      ? `⚠️ Пользователь ${userLabel} получил(а) предупреждение (из ${warnLimit || currentWarnings})`
-      : `⚠️ У пользователя ${userLabel} нет предупреждений.`;
+    const messageText = formatWarnStatusMessage(userLabel, currentWarnings, warnLimit);
 
     await ctx.reply(messageText, {
       reply_markup: buildWarnStatusKeyboard(ctx.chat.id, target.id, moderationService),
@@ -8146,9 +8152,7 @@ function createBot() {
 
     const profile = database.getUserProfile(chatId, userId);
     const userLabel = formatUserLabel(profile, userId);
-    const messageText = nextWarnings > 0
-      ? `⚠️ Пользователь ${userLabel} получил(а) предупреждение (из ${moderationService.getWarnLimit(chatId) || nextWarnings})`
-      : `⚠️ У пользователя ${userLabel} нет предупреждений.`;
+    const messageText = formatWarnStatusMessage(userLabel, nextWarnings, moderationService.getWarnLimit(chatId));
 
     await safeAnswerCbQuery(ctx, delta > 0 ? 'Добавлено +1 предупреждение.' : 'Снято -1 предупреждение.');
     await safeEditMessageText(ctx, messageText, { reply_markup: buildWarnStatusKeyboard(chatId, userId, moderationService) });
@@ -8185,8 +8189,9 @@ function createBot() {
 
     const profile = database.getUserProfile(chatId, userId);
     const userLabel = formatUserLabel(profile, userId);
+    const messageText = formatWarnStatusMessage(userLabel, 0, moderationService.getWarnLimit(chatId));
     await safeAnswerCbQuery(ctx, 'Предупреждения сброшены.');
-    await safeEditMessageText(ctx, `⚠️ У пользователя ${userLabel} нет предупреждений.`, { reply_markup: buildWarnStatusKeyboard(chatId, userId, moderationService) });
+    await safeEditMessageText(ctx, messageText, { reply_markup: buildWarnStatusKeyboard(chatId, userId, moderationService) });
   });
 
   bot.action(/^ttt:accept:(-?\d+)$/, async (ctx) => {
@@ -9691,6 +9696,7 @@ module.exports = {
   buildModerationAlertMessage,
   buildWarnCancelKeyboard,
   buildWarnStatusKeyboard,
+  formatWarnStatusMessage,
   buildBulkModerationSummaryMessage,
   buildUserPunishmentHistoryText,
   buildStatsReplyMarkup,
