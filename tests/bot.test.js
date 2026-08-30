@@ -181,7 +181,11 @@ test('applyWarnLimitPunishment bans when the configured warn mode is ban and the
     getWarnBlockDuration: () => 24,
   };
 
-  const result = await applyWarnLimitPunishment(ctx, 42, 'spam', 3, service);
+  const database = {
+    getUserProfile: () => ({ username: '@alice', displayName: 'Alice' }),
+  };
+
+  const result = await applyWarnLimitPunishment(ctx, 42, 'spam', 3, service, database);
 
   assert.equal(result, true);
   assert.equal(calls[0][0], 'banChatMember');
@@ -189,6 +193,46 @@ test('applyWarnLimitPunishment bans when the configured warn mode is ban and the
   assert.equal(calls[0][2], 42);
   assert.equal(typeof calls[0][3], 'number');
   assert.ok(calls[0][3] > 0);
+});
+
+test('applyWarnLimitPunishment uses target user label instead of moderator name in the limit notification', async () => {
+  let sentText = '';
+  const ctx = {
+    chat: { id: -1001 },
+    from: { id: 7, username: 'mod' },
+    reply: async (text) => {
+      sentText = text;
+      return { message_id: 1 };
+    },
+    telegram: {
+      banChatMember: async () => {},
+      kickChatMember: async () => {},
+      restrictChatMember: async () => {},
+      unbanChatMember: async () => {},
+    },
+  };
+
+  const service = {
+    getWarnPunishmentMode: () => 'ban',
+    getWarnLimit: () => 3,
+    getWarnBlockDuration: () => 24,
+  };
+
+  const database = {
+    getUserProfile: () => ({ username: '@alice', displayName: 'Alice' }),
+    addPunishment: () => {},
+    addActivePunishment: () => {},
+  };
+
+  premiumEmojis.replyWithCustomEmoji = async (_ctx, text) => {
+    sentText = text;
+    return { message_id: 1 };
+  };
+
+  await applyWarnLimitPunishment(ctx, 42, 'spam', 3, service, database);
+
+  assert.ok(sentText.includes('@alice'));
+  assert.ok(!sentText.includes('@mod'));
 });
 
 test('buildBulkModerationSummaryMessage groups multiple reasons into one compact alert', () => {

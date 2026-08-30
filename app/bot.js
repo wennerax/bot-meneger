@@ -2514,7 +2514,15 @@ async function applyWarnLimitPunishment(ctx, userId, reason, warningCount = null
     return false;
   }
 
-  const userLabel = getMentionText(ctx?.from || { id: targetUserId });
+  const targetProfile = effectiveDatabase?.getUserProfile?.(chatId, targetUserId) || {};
+  const targetNameFromProfile = targetProfile?.username || targetProfile?.displayName || targetProfile?.first_name || targetProfile?.full_name;
+  const targetUserStub = {
+    id: targetUserId,
+    username: targetNameFromProfile && String(targetNameFromProfile).startsWith('@') ? String(targetNameFromProfile).replace(/^@+/, '') : (targetProfile?.username ? String(targetProfile.username).replace(/^@+/, '') : undefined),
+    first_name: targetProfile?.displayName || targetProfile?.first_name || targetProfile?.full_name || undefined,
+    displayName: targetProfile?.displayName || targetProfile?.first_name || targetProfile?.full_name || undefined,
+  };
+  const userLabel = formatUserLabel(targetUserStub, 'Пользователь');
   const blockDuration = Number(effectiveService?.getWarnBlockDuration?.(chatId)) || 24;
   const canReply = Boolean(ctx && typeof ctx.reply === 'function');
 
