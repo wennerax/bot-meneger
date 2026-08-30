@@ -5889,14 +5889,14 @@ function createBot() {
       const tickLabel = index === tickCount ? '0' : String(Math.round(value));
       return `
         <line x1="${margin.left}" y1="${y}" x2="${width - margin.right}" y2="${y}" stroke="#dfe3e8" stroke-width="1" />
-        <text x="${width - 10}" y="${y + 4}" text-anchor="end" font-size="12" fill="#4b5563" font-family="Arial, sans-serif">${tickLabel}</text>
+        <text x="${width - 10}" y="${y + 4}" text-anchor="end" font-size="12" fill="#4b5563" font-family="DejaVu Sans, Arial, sans-serif">${tickLabel}</text>
       `;
     }).join('');
 
     const labels = safeActivity.map((item, index) => {
       const x = margin.left + xStep * index + xStep / 2;
       const label = getDateLabel(item.day);
-      return `<text x="${x.toFixed(1)}" y="${height - 18}" font-size="11" text-anchor="middle" fill="#5a6474" font-family="Arial, sans-serif">${label}</text>`;
+      return `<text x="${x.toFixed(1)}" y="${height - 18}" font-size="11" text-anchor="middle" fill="#5a6474" font-family="DejaVu Sans, Arial, sans-serif">${label}</text>`;
     }).join('');
 
     const bars = safeActivity.map((item, index) => {
@@ -5908,10 +5908,10 @@ function createBot() {
     }).join('');
 
     const noDataText = safeActivity.length === 0 || !hasPositiveValues
-      ? '<text x="50%" y="46%" text-anchor="middle" font-size="16" fill="#64748b" font-family="Arial, sans-serif">Нет данных</text>'
+      ? '<text x="50%" y="46%" text-anchor="middle" font-size="16" fill="#64748b" font-family="DejaVu Sans, Arial, sans-serif">Нет данных</text>'
       : '';
 
-    return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">\n  <rect x="0" y="0" width="${width}" height="${height}" fill="#f3f4f6" />\n  <text x="${width / 2}" y="28" text-anchor="middle" font-size="20" font-family="Arial, sans-serif" fill="#1f2a37" font-weight="500">Активность пользователя</text>\n  <g stroke="#cbd5e1">\n    ${grid}\n  </g>\n  <line x1="${margin.left}" y1="${margin.top + chartHeight}" x2="${width - margin.right}" y2="${margin.top + chartHeight}" stroke="#9aa5b1" stroke-width="1" />\n  <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + chartHeight}" stroke="#9aa5b1" stroke-width="1" />\n  <text x="${width - 18}" y="${margin.top + chartHeight / 2}" text-anchor="middle" font-size="14" fill="#3b4754" font-family="Arial, sans-serif" transform="rotate(90 ${width - 18} ${margin.top + chartHeight / 2})">Сообщения</text>\n  ${bars}\n  ${labels}\n  ${noDataText}\n</svg>`;
+    return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">\n  <rect x="0" y="0" width="${width}" height="${height}" fill="#f3f4f6" />\n  <text x="${width / 2}" y="28" text-anchor="middle" font-size="20" font-family="DejaVu Sans, Arial, sans-serif" fill="#1f2a37" font-weight="500">Активность пользователя</text>\n  <g stroke="#cbd5e1">\n    ${grid}\n  </g>\n  <line x1="${margin.left}" y1="${margin.top + chartHeight}" x2="${width - margin.right}" y2="${margin.top + chartHeight}" stroke="#9aa5b1" stroke-width="1" />\n  <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + chartHeight}" stroke="#9aa5b1" stroke-width="1" />\n  <text x="${width - 18}" y="${margin.top + chartHeight / 2}" text-anchor="middle" font-size="14" fill="#3b4754" font-family="DejaVu Sans, Arial, sans-serif" transform="rotate(90 ${width - 18} ${margin.top + chartHeight / 2})">Сообщения</text>\n  ${bars}\n  ${labels}\n  ${noDataText}\n</svg>`;
   }
 
   async function buildActivityChartPng(activity = []) {
