@@ -6054,8 +6054,7 @@ function createBot() {
       }
     }
 
-    await ctx.replyWithMessage({
-      text: captionText,
+    await ctx.reply(captionText, {
       entities: captionEntities.length ? captionEntities : undefined,
       reply_markup: extraReplyMarkup,
     });
