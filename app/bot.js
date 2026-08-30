@@ -1469,7 +1469,9 @@ async function showSettingsMainMenu(ctx, chatId, page = 0) {
   }
 
   const title = getGroupDisplayName(chatId, String(chatId));
-  const text = `⚙️ Панель управления группой\n\n🏘️ ${title}\n\nВыберите раздел настроек ниже:`;
+  const settingsPanelEmoji = premiumEmojis.getCustomEmojiInfo('group_settings_panel');
+  const panelEmoji = settingsPanelEmoji ? String(settingsPanelEmoji.fallback) : '⚙️';
+  const text = `${panelEmoji} Панель управления группой\n\n🏘️ ${title}\n\nВыберите раздел настроек ниже:`;
   const replyMarkup = { inline_keyboard: buildSettingsMainKeyboard(chatId, page) };
   if (ctx.callbackQuery) {
     await safeEditMessageText(ctx, text, { reply_markup: replyMarkup });

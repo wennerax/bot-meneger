@@ -242,15 +242,16 @@ test('buildBotAdminListMessage separates primary and auxiliary admins', () => {
 
 test('stats premium emoji ids are available for the required profile fields', () => {
   const required = {
-    stats_id: '4963246297243976827',
-    stats_name: '4988062248913076964',
-    stats_description: '4988187872411518074',
-    stats_message_count: '4965642377894036415',
-    stats_streak: '5076098152084275955',
-    stats_top: '5078131028824949643',
+    trophy_premium: '5415778465460816497',
+    stats_id: '5415898307933278471',
+    stats_name: '5413681653836976155',
+    stats_description: '5415770085979622601',
+    stats_message_count: '5415686961182576304',
+    stats_streak: '5415985341150564555',
+    stats_top: '5287641324525220384',
     stats_first_joined: '5402436682131718162',
-    stats_chat_status: '4983405958903366502',
-    stats_bot_status: '4981404177725916091',
+    stats_chat_status: '5415984722675273004',
+    stats_bot_status: '5416024803310080992',
   };
 
   for (const [name, id] of Object.entries(required)) {

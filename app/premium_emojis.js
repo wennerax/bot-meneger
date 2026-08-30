@@ -150,7 +150,7 @@ const CUSTOM_EMOJI_IDS = {
   
   // Трофей (премиум)
   trophy_premium: {
-    id: '5413396833080718242',
+    id: '5415778465460816497',
     fallback: '🏆',
     displayName: 'Премиум трофей'
   },
@@ -200,34 +200,41 @@ const CUSTOM_EMOJI_IDS = {
     displayName: 'Премиум предупреждение'
   },
 
+  // Панель управления группой
+  group_settings_panel: {
+    id: '5413768867442889274',
+    fallback: '⚙️',
+    displayName: 'Панель управления группой'
+  },
+
   // Профиль /stats
   stats_id: {
-    id: '4963246297243976827',
+    id: '5415898307933278471',
     fallback: '🆔',
     displayName: 'Профиль ID'
   },
   stats_name: {
-    id: '4988062248913076964',
+    id: '5413681653836976155',
     fallback: '👤',
     displayName: 'Профиль имя'
   },
   stats_description: {
-    id: '4988187872411518074',
+    id: '5415770085979622601',
     fallback: '📝',
     displayName: 'Профиль описание'
   },
   stats_message_count: {
-    id: '4965642377894036415',
+    id: '5415686961182576304',
     fallback: '💬',
     displayName: 'Профиль сообщения'
   },
   stats_streak: {
-    id: '5076098152084275955',
+    id: '5415985341150564555',
     fallback: '🔥',
     displayName: 'Профиль серия'
   },
   stats_top: {
-    id: '5078131028824949643',
+    id: '5287641324525220384',
     fallback: '🏆',
     displayName: 'Профиль топ'
   },
@@ -237,12 +244,12 @@ const CUSTOM_EMOJI_IDS = {
     displayName: 'Профиль первый вход'
   },
   stats_chat_status: {
-    id: '4983405958903366502',
+    id: '5415984722675273004',
     fallback: '👤',
     displayName: 'Статус в чате'
   },
   stats_bot_status: {
-    id: '4981404177725916091',
+    id: '5416024803310080992',
     fallback: '🤖',
     displayName: 'Статус в боте'
   },
