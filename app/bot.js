@@ -2918,55 +2918,25 @@ function buildActivityChartSvg(activity = []) {
   const safeActivity = Array.isArray(activity) && activity.length ? activity : [];
   const width = 760;
   const height = 420;
-  const margin = { top: 38, right: 80, bottom: 52, left: 24 };
+  const margin = { top: 20, right: 20, bottom: 20, left: 24 };
   const chartWidth = width - margin.left - margin.right;
   const chartHeight = height - margin.top - margin.bottom;
   const values = safeActivity.map((item) => Number(item.count || 0));
   const hasPositiveValues = values.some((value) => value > 0);
   const maxValue = Math.max(1, ...values);
   const roundedMax = Math.max(5, Math.ceil(maxValue / 5) * 5);
-  const tickCount = 6;
   const xStep = safeActivity.length > 1 ? chartWidth / safeActivity.length : chartWidth;
   const barWidth = Math.max(8, xStep * 0.6);
 
-  const getDateLabel = (dayString) => {
-    if (!dayString) return '';
-    const date = new Date(`${dayString}T00:00:00`);
-    if (Number.isNaN(date.getTime())) return '';
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    return `${day}.${month}`;
-  };
-
-  const grid = Array.from({ length: tickCount + 1 }, (_, index) => {
-    const value = (roundedMax / tickCount) * index;
-    const y = margin.top + chartHeight - (value / roundedMax) * chartHeight;
-    const tickLabel = index === tickCount ? '0' : String(Math.round(value));
-    return `
-      <line x1="${margin.left}" y1="${y}" x2="${width - margin.right}" y2="${y}" stroke="#dfe3e8" stroke-width="1" />
-      <text x="${width - 10}" y="${y + 4}" text-anchor="end" font-size="12" fill="#4b5563" font-family="Arial, sans-serif">${tickLabel}</text>
-    `;
-  }).join('');
-
-  const labels = safeActivity.map((item, index) => {
-    const x = margin.left + xStep * index + xStep / 2;
-    const label = getDateLabel(item.day);
-    return `<text x="${x.toFixed(1)}" y="${height - 18}" font-size="11" text-anchor="middle" fill="#5a6474" font-family="Arial, sans-serif">${label}</text>`;
-  }).join('');
-
-  const bars = safeActivity.map((item, index) => {
+  const bars = safeActivity.map((item) => {
     const value = Number(item.count || 0);
-    const x = margin.left + xStep * index + (xStep - barWidth) / 2;
+    const x = margin.left + xStep * safeActivity.indexOf(item) + (xStep - barWidth) / 2;
     const barHeight = hasPositiveValues ? Math.max(0, (value / roundedMax) * chartHeight) : 0;
     const y = margin.top + chartHeight - barHeight;
     return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="2" fill="#a7db5a" opacity="${value > 0 ? 0.9 : 0.15}" />`;
   }).join('');
 
-  const noDataText = safeActivity.length === 0 || !hasPositiveValues
-    ? '<text x="50%" y="46%" text-anchor="middle" font-size="16" fill="#64748b" font-family="Arial, sans-serif">Нет данных</text>'
-    : '';
-
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">\n  <defs>\n    <style><![CDATA[\n      @font-face {\n        font-family: "ChartCyrillic";\n        src: url("file:///C:/Windows/Fonts/arial.ttf") format("truetype");\n      }\n      text { font-family: "ChartCyrillic", Arial, sans-serif; }\n    ]]></style>\n  </defs>\n  <rect x="0" y="0" width="${width}" height="${height}" fill="#f3f4f6" />\n  <text x="${width / 2}" y="28" text-anchor="middle" font-size="20" fill="#1f2a37" font-weight="500">Активность пользователя</text>\n  <g stroke="#cbd5e1">\n    ${grid}\n  </g>\n  <line x1="${margin.left}" y1="${margin.top + chartHeight}" x2="${width - margin.right}" y2="${margin.top + chartHeight}" stroke="#9aa5b1" stroke-width="1" />\n  <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + chartHeight}" stroke="#9aa5b1" stroke-width="1" />\n  <text x="${width - 18}" y="${margin.top + chartHeight / 2}" text-anchor="middle" font-size="14" fill="#3b4754" transform="rotate(90 ${width - 18} ${margin.top + chartHeight / 2})">Сообщения</text>\n  ${bars}\n  ${labels}\n  ${noDataText}\n</svg>`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">\n  <rect x="0" y="0" width="${width}" height="${height}" fill="#f3f4f6" />\n  ${bars}\n</svg>`;
 }
 
 async function buildActivityChartPng(activity = []) {
