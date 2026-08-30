@@ -1473,10 +1473,21 @@ async function showSettingsMainMenu(ctx, chatId, page = 0) {
   const panelEmoji = settingsPanelEmoji ? String(settingsPanelEmoji.fallback) : '⚙️';
   const text = `${panelEmoji} Панель управления группой\n\n🏘️ ${title}\n\nВыберите раздел настроек ниже:`;
   const replyMarkup = { inline_keyboard: buildSettingsMainKeyboard(chatId, page) };
+  const messageOptions = { reply_markup: replyMarkup };
+
+  if (settingsPanelEmoji?.id) {
+    messageOptions.entities = [{
+      type: 'custom_emoji',
+      offset: 0,
+      length: Array.from(panelEmoji).length,
+      custom_emoji_id: settingsPanelEmoji.id,
+    }];
+  }
+
   if (ctx.callbackQuery) {
-    await safeEditMessageText(ctx, text, { reply_markup: replyMarkup });
+    await safeEditMessageText(ctx, text, messageOptions);
   } else {
-    await ctx.reply(text, { reply_markup: replyMarkup });
+    await ctx.reply(text, messageOptions);
   }
 }
 
