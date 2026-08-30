@@ -2918,7 +2918,7 @@ function buildActivityChartSvg(activity = []) {
   const safeActivity = Array.isArray(activity) && activity.length ? activity : [];
   const width = 760;
   const height = 420;
-  const margin = { top: 20, right: 20, bottom: 20, left: 24 };
+  const margin = { top: 44, right: 70, bottom: 58, left: 40 };
   const chartWidth = width - margin.left - margin.right;
   const chartHeight = height - margin.top - margin.bottom;
   const values = safeActivity.map((item) => Number(item.count || 0));
@@ -2926,22 +2926,56 @@ function buildActivityChartSvg(activity = []) {
   const maxValue = Math.max(1, ...values);
   const roundedMax = Math.max(5, Math.ceil(maxValue / 5) * 5);
   const xStep = safeActivity.length > 1 ? chartWidth / safeActivity.length : chartWidth;
-  const barWidth = Math.max(8, xStep * 0.6);
+  const barWidth = Math.max(12, xStep * 0.62);
+  const tickCount = 5;
 
-  const bars = safeActivity.map((item) => {
-    const value = Number(item.count || 0);
-    const x = margin.left + xStep * safeActivity.indexOf(item) + (xStep - barWidth) / 2;
-    const barHeight = hasPositiveValues ? Math.max(0, (value / roundedMax) * chartHeight) : 0;
-    const y = margin.top + chartHeight - barHeight;
-    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="2" fill="#a7db5a" opacity="${value > 0 ? 0.9 : 0.15}" />`;
+  const grid = Array.from({ length: tickCount + 1 }, (_, index) => {
+    const value = (roundedMax / tickCount) * index;
+    const y = margin.top + chartHeight - (value / roundedMax) * chartHeight;
+    const tickLabel = Math.round(roundedMax - value);
+    return `
+      <line x1="${margin.left}" y1="${y}" x2="${width - margin.right}" y2="${y}" stroke="#dfe6ee" stroke-width="1" />
+      <text x="${margin.left - 8}" y="${y + 4}" text-anchor="end" font-size="12" fill="#5b6473" font-family="DejaVu Sans, Segoe UI, Arial, sans-serif">${tickLabel}</text>
+    `;
   }).join('');
 
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">\n  <rect x="0" y="0" width="${width}" height="${height}" fill="#f3f4f6" />\n  ${bars}\n</svg>`;
+  const getDateLabel = (dayString) => {
+    if (!dayString) return '';
+    const date = new Date(`${dayString}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return '';
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    return `${day}.${month}`;
+  };
+
+  const labels = safeActivity.map((item, index) => {
+    const x = margin.left + xStep * index + xStep / 2;
+    const label = getDateLabel(item.day);
+    return `<text x="${x.toFixed(1)}" y="${height - 18}" text-anchor="middle" font-size="11" fill="#5a6474" font-family="DejaVu Sans, Segoe UI, Arial, sans-serif">${label}</text>`;
+  }).join('');
+
+  const bars = safeActivity.map((item, index) => {
+    const value = Number(item.count || 0);
+    const x = margin.left + xStep * index + (xStep - barWidth) / 2;
+    const barHeight = hasPositiveValues ? Math.max(0, (value / roundedMax) * chartHeight) : 0;
+    const y = margin.top + chartHeight - barHeight;
+    return `
+      <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="3" fill="#b9e35d" opacity="${value > 0 ? 0.95 : 0.22}" />
+    `;
+  }).join('');
+
+  const noData = safeActivity.length === 0 || !hasPositiveValues
+    ? '<text x="50%" y="50%" text-anchor="middle" font-size="22" fill="#667085" font-family="DejaVu Sans, Segoe UI, Arial, sans-serif">Нет данных</text>'
+    : '';
+
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">\n  <rect x="0" y="0" width="${width}" height="${height}" fill="#f5f7fb" />\n  <text x="${width / 2}" y="28" text-anchor="middle" font-size="20" font-weight="700" fill="#1f2a37" font-family="DejaVu Sans, Segoe UI, Arial, sans-serif">Активность пользователя</text>\n  <g>\n    ${grid}\n  </g>\n  <line x1="${margin.left}" y1="${margin.top + chartHeight}" x2="${width - margin.right}" y2="${margin.top + chartHeight}" stroke="#9aa5b1" stroke-width="1.2" />\n  <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + chartHeight}" stroke="#9aa5b1" stroke-width="1.2" />\n  <text x="${margin.left + chartWidth / 2}" y="${height - 2}" text-anchor="middle" font-size="12" fill="#4b5563" font-family="DejaVu Sans, Segoe UI, Arial, sans-serif">Даты</text>\n  <text x="${width - 18}" y="${margin.top + chartHeight / 2}" text-anchor="middle" font-size="14" fill="#3b4754" transform="rotate(90 ${width - 18} ${margin.top + chartHeight / 2})" font-family="DejaVu Sans, Segoe UI, Arial, sans-serif">Сообщения</text>\n  ${bars}\n  ${labels}\n  ${noData}\n</svg>`;
 }
 
 async function buildActivityChartPng(activity = []) {
   const svg = buildActivityChartSvg(activity);
-  return sharp(Buffer.from(svg, 'utf8')).png().toBuffer();
+  return sharp(Buffer.from(svg, 'utf8'))
+    .png({ compressionLevel: 9, adaptiveFiltering: true })
+    .toBuffer();
 }
 
 function createBot() {

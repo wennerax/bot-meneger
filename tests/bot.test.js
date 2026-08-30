@@ -261,14 +261,16 @@ test('stats premium emoji ids are available for the required profile fields', ()
   }
 });
 
-test('activity chart stays text-free to avoid Telegram SVG glyph corruption', () => {
+test('activity chart keeps title and labels in the SVG before PNG rasterization', () => {
   const svg = require('../app/bot').buildActivityChartSvg([
     { day: '2025-01-01', count: 4 },
     { day: '2025-01-02', count: 8 },
     { day: '2025-01-03', count: 6 },
   ]);
 
-  assert.doesNotMatch(svg, /<text/i);
+  assert.match(svg, /Активность пользователя/);
+  assert.match(svg, /Сообщения/);
+  assert.match(svg, /<text/i);
   assert.match(svg, /<rect/);
 });
 
