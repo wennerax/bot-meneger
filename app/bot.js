@@ -2239,6 +2239,39 @@ function buildWarningsListText(chatId, service = activeModerationService || defa
     : '⚠️ В группе нет активных предупреждений.';
 }
 
+function buildWarnStatusText(chatId, userId, service = activeModerationService || defaultModerationService, databaseInstance = activeDatabase) {
+  const warnLimit = Number(service?.getWarnLimit?.(chatId)) || 0;
+  const profile = databaseInstance?.getUserProfile?.(chatId, Number(userId)) || {};
+  const userLabel = formatUserLabel(profile, 'Пользователь');
+  const currentWarnings = Number(service?.getWarnings?.(chatId, userId) || 0);
+
+  if (currentWarnings <= 0) {
+    return `⚠️ У пользователя ${userLabel} нет предупреждений.`;
+  }
+
+  return `⚠️ Пользователь ${userLabel} получил(а) предупреждение (из ${warnLimit || currentWarnings})`;
+}
+
+function buildWarnStatusKeyboard(chatId, userId, service = activeModerationService || defaultModerationService) {
+  const currentWarnings = Number(service?.getWarnings?.(chatId, userId) || 0);
+
+  if (currentWarnings > 0) {
+    return {
+      inline_keyboard: [
+        [
+          { text: '-1', callback_data: `warn:adjust:${chatId}:${userId}:-1` },
+          { text: '+1', callback_data: `warn:adjust:${chatId}:${userId}:1` },
+        ],
+        [{ text: 'Сброс предупреждений', callback_data: `warn:reset:${chatId}:${userId}` }],
+      ],
+    };
+  }
+
+  return {
+    inline_keyboard: [[{ text: '+1', callback_data: `warn:adjust:${chatId}:${userId}:1` }]],
+  };
+}
+
 function buildSettingsWarnsListText(chatId, service = activeModerationService || defaultModerationService, databaseInstance = activeDatabase) {
   return buildWarningsListText(chatId, service, databaseInstance);
 }
@@ -2447,6 +2480,17 @@ function buildPunishmentNotification(action, chatTitle, reason, durationHours) {
 function buildModerationAlertMessage(userLabel, durationHours, reason) {
   const durationLabel = formatDurationLabel(durationHours);
   return `⚠️ Пользователь ${userLabel} замучен на ${durationLabel} по причине: ${reason}.`;
+}
+
+function buildWarnCancelKeyboard(chatId, userId) {
+  const safeChatId = Number(chatId);
+  const safeUserId = Number(userId);
+  return {
+    inline_keyboard: [[{
+      text: '❌ Отменить',
+      callback_data: `warn:undo:${Number.isFinite(safeChatId) ? safeChatId : 0}:${Number.isFinite(safeUserId) ? safeUserId : 0}`,
+    }]],
+  };
 }
 
 function buildBulkModerationSummaryMessage(userLabel, reasons = []) {
@@ -6363,7 +6407,7 @@ function createBot() {
       const sentMsg4 = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} ${userName}: Получил ${warnLimit}-е предупреждение и забанен на ${blockDuration}ч. Причина: ${reasonEscaped}`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
       scheduleDeleteForContext(ctx, sentMsg4?.message_id, 5000);
     } else {
-      const sentMsg5 = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} Предупреждение для ${userName}: ${warningCount}/${warnLimit}. Причина: ${reasonEscaped}`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
+      const sentMsg5 = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} Предупреждение для ${userName}: ${warningCount}/${warnLimit}. Причина: ${reasonEscaped}`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML', reply_markup: buildWarnCancelKeyboard(ctx.chat.id, targetData.target.id) });
       scheduleDeleteForContext(ctx, sentMsg5?.message_id, 5000);
     }
 
@@ -6389,7 +6433,15 @@ function createBot() {
     target = targetData.target;
 
     const warnLimit = moderationService.getWarnLimit(ctx.chat.id);
-    await replyWithAutoDelete(ctx, `Предупреждений: ${moderationService.getWarnings(ctx.chat.id, target.id)}/${warnLimit}`);
+    const currentWarnings = moderationService.getWarnings(ctx.chat.id, target.id);
+    const userLabel = formatUserLabel(database.getUserProfile(ctx.chat.id, target.id) || {}, target.first_name || target.username || String(target.id));
+    const messageText = currentWarnings > 0
+      ? `⚠️ Пользователь ${userLabel} получил(а) предупреждение (из ${warnLimit || currentWarnings})`
+      : `⚠️ У пользователя ${userLabel} нет предупреждений.`;
+
+    await ctx.reply(messageText, {
+      reply_markup: buildWarnStatusKeyboard(ctx.chat.id, target.id, moderationService),
+    });
   }
 
   async function warnsListCommand(ctx) {
@@ -8011,6 +8063,132 @@ function createBot() {
     return;
   });
 
+  bot.action(/^warn:undo:(-?\d+):(\d+)$/, async (ctx) => {
+    const chatId = Number(ctx.match[1]);
+    const userId = Number(ctx.match[2]);
+
+    if (!Number.isFinite(chatId) || !Number.isFinite(userId)) {
+      await safeAnswerCbQuery(ctx, 'Некорректный запрос отмены.');
+      return;
+    }
+
+    if (!isGroupChat(ctx) || Number(ctx.chat?.id) !== chatId) {
+      await safeAnswerCbQuery(ctx, 'Нельзя отменить предупреждение вне исходного чата.');
+      return;
+    }
+
+    if (!isBotAdmin(ctx)) {
+      await safeAnswerCbQuery(ctx, 'Отменить предупреждение могут только администраторы.');
+      return;
+    }
+
+    const currentWarnings = moderationService.getWarnings(chatId, userId);
+    if (currentWarnings <= 0) {
+      await safeAnswerCbQuery(ctx, 'У пользователя уже нет предупреждений.');
+      return;
+    }
+
+    const nextWarnings = moderationService.decrementWarning(chatId, userId, 1);
+    recordModerationLog(chatId, {
+      action: 'unwarn',
+      actorId: ctx.from.id,
+      targetId: userId,
+      reason: 'Отмена выдачи предупреждения через кнопку',
+      details: `Предупреждение отменено: ${currentWarnings} → ${nextWarnings}`,
+    });
+
+    const profile = database.getUserProfile(chatId, userId);
+    const targetLabel = profile.displayName || profile.username || userId;
+    await safeAnswerCbQuery(ctx, `Предупреждение отменено. Осталось: ${nextWarnings}.`);
+    await safeEditMessageText(ctx, `⚠️ Предупреждение отменено для ${targetLabel}. Осталось: ${nextWarnings}.`);
+  });
+
+  bot.action(/^warn:adjust:(-?\d+):(\d+):(-?\d+)$/, async (ctx) => {
+    const chatId = Number(ctx.match[1]);
+    const userId = Number(ctx.match[2]);
+    const delta = Number(ctx.match[3]);
+
+    if (!Number.isFinite(chatId) || !Number.isFinite(userId) || !Number.isFinite(delta)) {
+      await safeAnswerCbQuery(ctx, 'Некорректный параметр предупреждения.');
+      return;
+    }
+
+    if (!isGroupChat(ctx) || Number(ctx.chat?.id) !== chatId) {
+      await safeAnswerCbQuery(ctx, 'Не удалось обновить предупреждение.');
+      return;
+    }
+
+    if (!isBotAdmin(ctx)) {
+      await safeAnswerCbQuery(ctx, 'Только администратор может менять предупреждения.');
+      return;
+    }
+
+    const currentWarnings = moderationService.getWarnings(chatId, userId);
+    const nextWarnings = delta > 0 ? moderationService.addWarning(chatId, userId) : Math.max(0, moderationService.decrementWarning(chatId, userId, 1));
+
+    if (delta > 0) {
+      recordModerationLog(chatId, {
+        action: 'warn',
+        actorId: ctx.from.id,
+        targetId: userId,
+        reason: 'Увеличение предупреждения через кнопку',
+        details: `Предупреждение увеличено с ${currentWarnings} до ${nextWarnings}`,
+      });
+    } else {
+      recordModerationLog(chatId, {
+        action: 'unwarn',
+        actorId: ctx.from.id,
+        targetId: userId,
+        reason: 'Снятие предупреждения через кнопку',
+        details: `Предупреждение уменьшено с ${currentWarnings} до ${nextWarnings}`,
+      });
+    }
+
+    const profile = database.getUserProfile(chatId, userId);
+    const userLabel = formatUserLabel(profile, userId);
+    const messageText = nextWarnings > 0
+      ? `⚠️ Пользователь ${userLabel} получил(а) предупреждение (из ${moderationService.getWarnLimit(chatId) || nextWarnings})`
+      : `⚠️ У пользователя ${userLabel} нет предупреждений.`;
+
+    await safeAnswerCbQuery(ctx, delta > 0 ? 'Добавлено +1 предупреждение.' : 'Снято -1 предупреждение.');
+    await safeEditMessageText(ctx, messageText, { reply_markup: buildWarnStatusKeyboard(chatId, userId, moderationService) });
+  });
+
+  bot.action(/^warn:reset:(-?\d+):(\d+)$/, async (ctx) => {
+    const chatId = Number(ctx.match[1]);
+    const userId = Number(ctx.match[2]);
+
+    if (!isGroupChat(ctx) || Number(ctx.chat?.id) !== chatId) {
+      await safeAnswerCbQuery(ctx, 'Не удалось сбросить предупреждения.');
+      return;
+    }
+
+    if (!isBotAdmin(ctx)) {
+      await safeAnswerCbQuery(ctx, 'Только администратор может сбрасывать предупреждения.');
+      return;
+    }
+
+    const currentWarnings = moderationService.getWarnings(chatId, userId);
+    if (currentWarnings <= 0) {
+      await safeAnswerCbQuery(ctx, 'У пользователя уже нет предупреждений.');
+      return;
+    }
+
+    moderationService.resetWarnings(chatId, userId);
+    recordModerationLog(chatId, {
+      action: 'unwarn',
+      actorId: ctx.from.id,
+      targetId: userId,
+      reason: 'Сброс всех предупреждений',
+      details: `Предупреждения сброшены: ${currentWarnings} → 0`,
+    });
+
+    const profile = database.getUserProfile(chatId, userId);
+    const userLabel = formatUserLabel(profile, userId);
+    await safeAnswerCbQuery(ctx, 'Предупреждения сброшены.');
+    await safeEditMessageText(ctx, `⚠️ У пользователя ${userLabel} нет предупреждений.`, { reply_markup: buildWarnStatusKeyboard(chatId, userId, moderationService) });
+  });
+
   bot.action(/^ttt:accept:(-?\d+)$/, async (ctx) => {
     await handleTicTacToeAccept(ctx, Number(ctx.match[1]));
   });
@@ -9511,6 +9689,8 @@ module.exports = {
   parsePunishmentDetails,
   buildPunishmentNotification,
   buildModerationAlertMessage,
+  buildWarnCancelKeyboard,
+  buildWarnStatusKeyboard,
   buildBulkModerationSummaryMessage,
   buildUserPunishmentHistoryText,
   buildStatsReplyMarkup,

@@ -139,6 +139,20 @@ test('buildModerationAlertMessage includes duration and reason', () => {
   assert.equal(message, '⚠️ Пользователь @alice замучен на 1д по причине: Спам.');
 });
 
+test('warn status keyboard offers +1, -1 and reset actions for a user with warnings', () => {
+  const keyboard = require('../app/bot').buildWarnStatusKeyboard(-1001, 42, {
+    getWarnings: () => 2,
+    getWarnLimit: () => 3,
+  });
+
+  assert.deepEqual(keyboard, {
+    inline_keyboard: [
+      [{ text: '-1', callback_data: 'warn:adjust:-1001:42:-1' }, { text: '+1', callback_data: 'warn:adjust:-1001:42:1' }],
+      [{ text: 'Сброс предупреждений', callback_data: 'warn:reset:-1001:42' }],
+    ],
+  });
+});
+
 test('buildBulkModerationSummaryMessage groups multiple reasons into one compact alert', () => {
   const message = buildBulkModerationSummaryMessage('@alice', ['Антифлуд', 'Ссылка', 'Пересланное сообщение из канала']);
 
@@ -261,15 +275,15 @@ test('stats premium emoji ids are available for the required profile fields', ()
   }
 });
 
-test('activity chart keeps title and labels in the SVG before PNG rasterization', () => {
+test('activity chart keeps the modeled title and bars in the SVG', () => {
   const svg = require('../app/bot').buildActivityChartSvg([
     { day: '2025-01-01', count: 4 },
     { day: '2025-01-02', count: 8 },
     { day: '2025-01-03', count: 6 },
   ]);
 
-  assert.match(svg, /Активность пользователя/);
-  assert.match(svg, /Сообщения/);
+  assert.match(svg, /Статистика активности/);
+  assert.match(svg, /Сообщений/);
   assert.match(svg, /<text/i);
   assert.match(svg, /<rect/);
 });
