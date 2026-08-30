@@ -2501,6 +2501,23 @@ function buildWarnCancelKeyboard(chatId, userId) {
   };
 }
 
+function buildPunishmentUserLabel(ctx, userId, databaseInstance = database) {
+  const targetUserId = Number(userId);
+  const chatId = Number(ctx?.chat?.id);
+  const profile = (chatId && Number.isFinite(targetUserId) && databaseInstance?.getUserProfile)
+    ? databaseInstance.getUserProfile(chatId, targetUserId)
+    : null;
+  const username = profile?.username ? String(profile.username).replace(/^@+/, '') : undefined;
+  const displayName = profile?.displayName || profile?.first_name || profile?.full_name || undefined;
+
+  return formatUserLabel({
+    id: targetUserId,
+    username,
+    first_name: displayName,
+    displayName,
+  }, `Пользователь ${targetUserId}`);
+}
+
 async function applyWarnLimitPunishment(ctx, userId, reason, warningCount = null, service = defaultModerationService, databaseInstance = null) {
   const targetUserId = Number(userId);
   const chatId = Number(ctx?.chat?.id);
@@ -2514,15 +2531,7 @@ async function applyWarnLimitPunishment(ctx, userId, reason, warningCount = null
     return false;
   }
 
-  const targetProfile = effectiveDatabase?.getUserProfile?.(chatId, targetUserId) || {};
-  const targetNameFromProfile = targetProfile?.username || targetProfile?.displayName || targetProfile?.first_name || targetProfile?.full_name;
-  const targetUserStub = {
-    id: targetUserId,
-    username: targetNameFromProfile && String(targetNameFromProfile).startsWith('@') ? String(targetNameFromProfile).replace(/^@+/, '') : (targetProfile?.username ? String(targetProfile.username).replace(/^@+/, '') : undefined),
-    first_name: targetProfile?.displayName || targetProfile?.first_name || targetProfile?.full_name || undefined,
-    displayName: targetProfile?.displayName || targetProfile?.first_name || targetProfile?.full_name || undefined,
-  };
-  const userLabel = formatUserLabel(targetUserStub, 'Пользователь');
+  const userLabel = buildPunishmentUserLabel(ctx, targetUserId, effectiveDatabase || database);
   const blockDuration = Number(effectiveService?.getWarnBlockDuration?.(chatId)) || 24;
   const canReply = Boolean(ctx && typeof ctx.reply === 'function');
 
@@ -3992,7 +4001,7 @@ function createBot() {
     });
 
     if (isGroupChat(ctx)) {
-      const userLabel = getMentionText(ctx.from || { id: userId });
+      const userLabel = buildPunishmentUserLabel(ctx, userId, database);
       await replyWithAutoDelete(ctx, buildModerationAlertMessage(userLabel, durationHours, reason));
     }
 
@@ -4021,7 +4030,7 @@ function createBot() {
       database.addPunishment(ctx.chat.id, userId, 'warn', reason, null);
       const warningCount = moderationService.getWarnings(ctx.chat.id, userId);
       const warnLimit = moderationService.getWarnLimit(ctx.chat.id);
-      const userLabel = getMentionText(ctx.from || { id: userId });
+      const userLabel = buildPunishmentUserLabel(ctx, userId, database);
       
       if (warningCount >= warnLimit) {
         // Auto-ban after reaching limit

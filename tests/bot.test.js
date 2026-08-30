@@ -219,7 +219,12 @@ test('applyWarnLimitPunishment uses target user label instead of moderator name 
   };
 
   const database = {
-    getUserProfile: () => ({ username: '@alice', displayName: 'Alice' }),
+    getUserProfile: (chatId, userId) => ({
+      chatId,
+      userId,
+      username: '@alice',
+      displayName: 'Alice',
+    }),
     addPunishment: () => {},
     addActivePunishment: () => {},
   };
@@ -233,6 +238,7 @@ test('applyWarnLimitPunishment uses target user label instead of moderator name 
 
   assert.ok(sentText.includes('@alice'));
   assert.ok(!sentText.includes('@mod'));
+  assert.ok(!sentText.includes('Пользователь 42'));
 });
 
 test('buildBulkModerationSummaryMessage groups multiple reasons into one compact alert', () => {
