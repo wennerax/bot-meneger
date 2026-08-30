@@ -5861,38 +5861,44 @@ function createBot() {
 
   function buildActivityChartSvg(activity = []) {
     const safeActivity = Array.isArray(activity) && activity.length ? activity : [];
-    const width = 360;
-    const height = 140;
-    const paddingX = 24;
-    const paddingY = 18;
-    const chartWidth = width - paddingX * 2;
-    const chartHeight = height - paddingY * 2;
-    const maxValue = Math.max(1, ...safeActivity.map((item) => Number(item.count || 0)));
+    const width = 760;
+    const height = 420;
+    const margin = { top: 48, right: 54, bottom: 52, left: 26 };
+    const chartWidth = width - margin.left - margin.right;
+    const chartHeight = height - margin.top - margin.bottom;
+    const values = safeActivity.map((item) => Number(item.count || 0));
+    const maxValue = Math.max(1, ...values);
+    const roundedMax = Math.max(5, Math.ceil(maxValue / 5) * 5);
+    const tickCount = 6;
+    const xStep = safeActivity.length > 1 ? chartWidth / safeActivity.length : chartWidth;
+    const barWidth = Math.max(8, xStep * 0.58);
 
-    const points = safeActivity.map((item, index) => {
-      const x = paddingX + (chartWidth / Math.max(1, safeActivity.length - 1)) * index;
-      const value = Number(item.count || 0);
-      const y = paddingY + chartHeight - (value / maxValue) * chartHeight;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    });
+    const grid = Array.from({ length: tickCount + 1 }, (_, index) => {
+      const value = (roundedMax / tickCount) * index;
+      const y = margin.top + chartHeight - (value / roundedMax) * chartHeight;
+      const label = Number(value.toFixed(0));
+      return `
+        <line x1="${margin.left}" y1="${y}" x2="${width - margin.right}" y2="${y}" stroke="#dfe3e8" stroke-width="1" />
+        <text x="${width - 10}" y="${y + 4}" text-anchor="end" font-size="12" fill="#4b5563">${label}</text>
+      `;
+    }).join('');
 
-    const polyline = points.length ? `M ${points.join(' L ')}` : '';
     const labels = safeActivity.map((item, index) => {
-      const label = item.day ? item.day.slice(5) : `${index + 1}`;
-      const x = paddingX + (chartWidth / Math.max(1, safeActivity.length - 1)) * index;
-      return `<text x="${x.toFixed(1)}" y="${height - 4}" font-size="10" text-anchor="middle" fill="#6b7280">${label}</text>`;
+      const label = item.day ? item.day.slice(5).replace('-', '.') : `${index + 1}`;
+      const x = margin.left + xStep * index + xStep / 2;
+      return `<text x="${x.toFixed(1)}" y="${height - 18}" font-size="11" text-anchor="middle" fill="#5a6474">${label}</text>`;
     }).join('');
 
     const bars = safeActivity.map((item, index) => {
       const value = Number(item.count || 0);
-      const x = paddingX + 8 + (chartWidth / Math.max(1, safeActivity.length)) * index;
-      const barWidth = Math.max(10, (chartWidth / Math.max(1, safeActivity.length)) - 10);
-      const heightValue = (value / maxValue) * (chartHeight * 0.7);
-      const y = paddingY + chartHeight - heightValue;
-      return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${heightValue.toFixed(1)}" rx="3" fill="#3b82f6" />`;
+      const x = margin.left + xStep * index + (xStep - barWidth) / 2;
+      const barHeight = Math.max(0, (value / roundedMax) * chartHeight);
+      const y = margin.top + chartHeight - barHeight;
+      const opacity = value > 0 ? 0.9 : 0.35;
+      return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="2" fill="#9adf57" opacity="${opacity}" />`;
     }).join('');
 
-    return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">\n  <rect x="0" y="0" width="${width}" height="${height}" rx="12" fill="#0f172a" />\n  <line x1="${paddingX}" y1="${height - paddingY}" x2="${width - paddingX}" y2="${height - paddingY}" stroke="#475569" stroke-width="1" />\n  <line x1="${paddingX}" y1="${paddingY}" x2="${paddingX}" y2="${height - paddingY}" stroke="#475569" stroke-width="1" />\n  ${polyline ? `<path d="${polyline}" fill="none" stroke="#60a5fa" stroke-width="2.5" />` : ''}\n  ${bars}\n  ${labels}\n</svg>`;
+    return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">\n  <rect x="0" y="0" width="${width}" height="${height}" fill="#f3f4f6" />\n  <text x="${width / 2}" y="28" text-anchor="middle" font-size="20" font-family="Arial, sans-serif" fill="#1f2a37" font-weight="500">Статистика активности</text>\n  <g stroke="#cbd5e1">\n    ${grid}\n  </g>\n  <line x1="${margin.left}" y1="${margin.top + chartHeight}" x2="${width - margin.right}" y2="${margin.top + chartHeight}" stroke="#9aa5b1" stroke-width="1" />\n  <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + chartHeight}" stroke="#9aa5b1" stroke-width="1" />\n  ${bars}\n  ${labels}\n</svg>`;
   }
 
   async function buildActivityChartPng(activity = []) {
