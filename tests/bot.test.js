@@ -261,17 +261,16 @@ test('stats premium emoji ids are available for the required profile fields', ()
   }
 });
 
-test('activity chart binds the actual Arial font file for Cyrillic text', () => {
+test('activity chart avoids inline SVG text because Telegram can render Cyrillic as boxes', () => {
   const svg = require('../app/bot').buildActivityChartSvg([
     { day: '2025-01-01', count: 4 },
     { day: '2025-01-02', count: 8 },
     { day: '2025-01-03', count: 6 },
   ]);
 
-  assert.match(svg, /@font-face/i);
-  assert.match(svg, /ChartCyrillic/i);
-  assert.match(svg, /Активность пользователя/);
-  assert.match(svg, /Сообщения/);
+  assert.doesNotMatch(svg, /<text/i);
+  assert.match(svg, /<rect/);
+  assert.doesNotMatch(svg, /Активность пользователя/);
 });
 
 test('buildSettingsMainKeyboard returns a grouped layout with section buttons', () => {
