@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildBulkModerationSummaryMessage, buildFunReply, getTicTacToeWinner, buildTicTacToeKeyboard, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildModerationLogsKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildWarningsListText, buildSettingsWarnsListText, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage, shouldFailClosedForMedia, cleanupAgreementMessages, handleAgreementDecision, isPollAnswerForTarget, buildBotMediaSend, buildReloadStatusMessage, parseBotCommandKey, isKnownCommandText } = require('../app/bot');
+const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildBulkModerationSummaryMessage, buildFunReply, getTicTacToeWinner, buildTicTacToeKeyboard, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildModerationLogsKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildWarningsListText, buildSettingsWarnsListText, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage, shouldFailClosedForMedia, cleanupAgreementMessages, handleAgreementDecision, isPollAnswerForTarget, buildBotMediaSend, buildReloadStatusMessage, parseBotCommandKey, isKnownCommandText, formatAdminReportText } = require('../app/bot');
 const { buildAiRequestPayload, normalizeMultimodalInputForResponses } = require('../app/ai');
 const premiumEmojis = require('../app/premium_emojis');
 
@@ -145,6 +145,35 @@ test('buildBulkModerationSummaryMessage groups multiple reasons into one compact
   assert.equal(message, '⚠️ Автопроверка: пользователь @alice удалил сообщения по причине: Антифлуд, Ссылка, Пересланное сообщение из канала.');
 });
 
+test('admin reports use mentions without raw numeric ids', () => {
+  const reportText = formatAdminReportText({
+    reporter: { id: 12, username: 'alice' },
+    target: { user: { id: 34, username: 'bob' } },
+    groupTitle: 'Test Group',
+    chatId: -1001,
+  }, { id: 56, username: 'moderator' });
+
+  assert.match(reportText, /@alice/);
+  assert.match(reportText, /@bob/);
+  assert.match(reportText, /@moderator/);
+  assert.doesNotMatch(reportText, /\b(?:12|34|56)\b/);
+});
+
+test('warning list prefers usernames and omits visible numeric ids', () => {
+  const message = buildWarningsListText(-1001, { getAllWarnings: () => [[123, 2], [456, 1]] }, {
+    getUserProfile: (chatId, userId) => {
+      if (Number(userId) === 123) return { username: '@alice' };
+      if (Number(userId) === 456) return { displayName: 'Bob' };
+      return {};
+    },
+  });
+
+  assert.match(message, /@alice/);
+  assert.match(message, /Bob/);
+  assert.doesNotMatch(message, /\b123\b/);
+  assert.doesNotMatch(message, /\b456\b/);
+});
+
 test('buildFunReply returns a valid coin result', () => {
   const result = buildFunReply('coin');
 
@@ -179,7 +208,7 @@ test('parsePageNumber defaults to page 1 and accepts explicit pages', () => {
   assert.equal(parsePageNumber('abc'), 1);
 });
 
-test('buildPunishmentListMessage paginates active bans and mutes', () => {
+test('buildPunishmentListMessage paginates active bans and mutes without showing raw ids', () => {
   const punishments = Array.from({ length: 12 }, (_, index) => ({
     userId: index + 1,
     reason: `reason-${index + 1}`,
@@ -190,9 +219,11 @@ test('buildPunishmentListMessage paginates active bans and mutes', () => {
   const pageTwo = buildPunishmentListMessage('mute', punishments, 2, 5);
 
   assert.match(pageOne, /Баны \(страница 1\/3\)/);
-  assert.match(pageOne, /1\. User 1/);
+  assert.match(pageOne, /1\. Пользователь/);
+  assert.doesNotMatch(pageOne, /User\s*1/);
   assert.match(pageTwo, /Муты \(страница 2\/3\)/);
-  assert.match(pageTwo, /6\. User 6/);
+  assert.match(pageTwo, /6\. Пользователь/);
+  assert.doesNotMatch(pageTwo, /User\s*6/);
 });
 
 test('buildBotAdminListMessage separates primary and auxiliary admins', () => {
@@ -309,7 +340,7 @@ test('buildSettingsWarnsKeyboard includes amnesty with confirmation flow', () =>
   assert.ok(keyboard.inline_keyboard.some((row) => row.some((button) => button.callback_data === 'settings:warn_amnesty:42')));
 });
 
-test('buildWarningsListText shows every group member with warnings and usernames before ids', () => {
+test('buildWarningsListText shows usernames without exposing numeric ids', () => {
   const fakeService = {
     getAllWarnings: () => [[123, 2], [456, 1]],
     getWarnLimit: () => 3,
@@ -324,8 +355,10 @@ test('buildWarningsListText shows every group member with warnings and usernames
 
   const text = buildWarningsListText(-1001, fakeService, fakeDatabase);
 
-  assert.match(text, /@alice \(123\): 2\/3/);
-  assert.match(text, /@bob \(456\): 1\/3/);
+  assert.match(text, /@alice: 2\/3/);
+  assert.match(text, /@bob: 1\/3/);
+  assert.doesNotMatch(text, /\b123\b/);
+  assert.doesNotMatch(text, /\b456\b/);
   assert.match(text, /Список предупреждений группы/);
 });
 

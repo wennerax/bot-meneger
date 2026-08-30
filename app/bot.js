@@ -361,18 +361,42 @@ function getMessageLink(chatId, messageId) {
   return `https://t.me/${id}/${msgId}`;
 }
 
+function formatUserLabel(user, fallback = 'Пользователь') {
+  if (!user || typeof user !== 'object') {
+    return fallback;
+  }
+
+  if (user.username) {
+    return `@${String(user.username).replace(/^@+/, '')}`;
+  }
+
+  if (user.displayName) {
+    return user.displayName;
+  }
+
+  if (user.first_name) {
+    return user.first_name;
+  }
+
+  if (user.full_name) {
+    return user.full_name;
+  }
+
+  return fallback;
+}
+
 function formatAdminReportText(report, acceptedBy = null) {
   const reporter = report.reporter;
   const target = report.target;
   const acceptedText = acceptedBy
-    ? `\n\n✅ Жалобу принял модератор ${getMentionText(acceptedBy)} [${acceptedBy.id}]`
+    ? `\n\n✅ Жалобу принял модератор ${getMentionText(acceptedBy)}`
     : '';
   return [
     '⚠️ ВНИМАНИЕ!',
-    `${getMentionText(reporter)} [${reporter.id}] требует действия администратора в группе:`,
+    `${getMentionText(reporter)} требует действия администратора в группе:`,
     `"${report.groupTitle || getGroupDisplayName(report.chatId)}"`,
     '',
-    `На кого: ${getMentionText(target.user)} [${target.user.id}]`,
+    `На кого: ${getMentionText(target.user)}`,
     '',
     acceptedText,
   ].filter(Boolean).join('\n');
@@ -2176,9 +2200,8 @@ function buildWarningsListText(chatId, service = activeModerationService || defa
     ? '⚠️ Список предупреждений группы:\n\n' + warnings
         .map(([userId, count]) => {
           const numericUserId = Number(userId);
-          const profile = databaseInstance?.getUserProfile?.(chatId, numericUserId);
-          const username = profile?.username ? String(profile.username).replace(/^@/, '') : null;
-          const userLabel = username ? `@${username} (${numericUserId})` : `ID ${numericUserId}`;
+          const profile = databaseInstance?.getUserProfile?.(chatId, numericUserId) || {};
+          const userLabel = formatUserLabel(profile, 'Пользователь');
           return `• ${userLabel}: ${count}${warnLimit ? `/${warnLimit}` : ''}`;
         })
         .join('\n')
@@ -2597,7 +2620,12 @@ function buildPunishmentListMessage(kind, punishments, page, pageSize = 10) {
   }
 
   const lines = pageItems.map((item, index) => {
-    const userLabel = item.userId ? `User ${item.userId}` : 'Неизвестный пользователь';
+    const userLabel = formatUserLabel({
+      username: item.username,
+      displayName: item.displayName,
+      first_name: item.first_name,
+      full_name: item.full_name,
+    }, 'Пользователь');
     const reason = item.reason ? ` — ${item.reason}` : '';
     const untilLabel = item.untilAt ? ` — до ${new Date(item.untilAt * 1000).toLocaleString('ru-RU')}` : '';
     return `${start + index + 1}. ${userLabel}${reason}${untilLabel}`;
@@ -9465,6 +9493,7 @@ module.exports = {
   parseBotCommandKey,
   isKnownCommandText,
   resolveIdCommandTarget,
+  formatAdminReportText,
 };
 
 2
