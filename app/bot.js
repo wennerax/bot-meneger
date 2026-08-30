@@ -385,6 +385,24 @@ function formatUserLabel(user, fallback = 'Пользователь') {
   return fallback;
 }
 
+function formatUserIdentityText(user, fallback = 'Пользователь') {
+  if (!user || typeof user !== 'object') {
+    return fallback;
+  }
+
+  const mention = getMentionText(user);
+  if (mention && mention !== 'пользователь') {
+    return mention;
+  }
+
+  const fallbackName = user.displayName || user.first_name || user.full_name || user.username;
+  if (fallbackName) {
+    return String(fallbackName).replace(/^@+/, '');
+  }
+
+  return fallback;
+}
+
 function formatAdminReportText(report, acceptedBy = null) {
   const reporter = report.reporter;
   const target = report.target;
@@ -2606,7 +2624,7 @@ function parsePageNumber(input = '') {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
 }
 
-function buildPunishmentListMessage(kind, punishments, page, pageSize = 10) {
+function buildPunishmentListMessage(kind, punishments, page, pageSize = 10, chatId = null, databaseInstance = activeDatabase) {
   const title = kind === 'mute' ? 'Муты' : 'Баны';
   const safePunishments = Array.isArray(punishments) ? punishments : [];
   const totalPages = Math.max(1, Math.ceil(safePunishments.length / pageSize));
@@ -2619,13 +2637,29 @@ function buildPunishmentListMessage(kind, punishments, page, pageSize = 10) {
     return `${title} (страница ${safePage}/${totalPages})\nПока нет активных записей.`;
   }
 
+  const getUserLabel = (item) => {
+    const userId = Number(item?.userId);
+    const profile = Number.isFinite(userId) && chatId && databaseInstance?.getUserProfile
+      ? databaseInstance.getUserProfile(chatId, userId)
+      : null;
+
+    const candidate = profile || item || {};
+    const username = candidate.username ? String(candidate.username).replace(/^@+/, '') : '';
+    const displayName = candidate.displayName || candidate.first_name || candidate.full_name || '';
+
+    if (username) {
+      return username;
+    }
+
+    if (displayName) {
+      return displayName;
+    }
+
+    return 'Пользователь';
+  };
+
   const lines = pageItems.map((item, index) => {
-    const userLabel = formatUserLabel({
-      username: item.username,
-      displayName: item.displayName,
-      first_name: item.first_name,
-      full_name: item.full_name,
-    }, 'Пользователь');
+    const userLabel = getUserLabel(item);
     const reason = item.reason ? ` — ${item.reason}` : '';
     const untilLabel = item.untilAt ? ` — до ${new Date(item.untilAt * 1000).toLocaleString('ru-RU')}` : '';
     return `${start + index + 1}. ${userLabel}${reason}${untilLabel}`;
@@ -6077,7 +6111,7 @@ function createBot() {
       ? database.getActivePunishments(ctx.chat.id).filter((item) => item.action === 'mute')
       : database.getActivePunishments(ctx.chat.id).filter((item) => item.action === 'ban');
 
-    ctx.reply(buildPunishmentListMessage(kind, punishments, page, 10));
+    ctx.reply(buildPunishmentListMessage(kind, punishments, page, 10, ctx.chat.id, database));
   }
 
   function listBotAdminsCommand(ctx) {
@@ -6222,7 +6256,7 @@ function createBot() {
 
     database.clearUserPunishmentHistory(ctx.chat.id, targetData.target.id);
     moderationService.resetWarnings(ctx.chat.id, targetData.target.id);
-    await replyWithAutoDelete(ctx, `История наказаний пользователя ${targetData.target.first_name || targetData.target.username || targetData.target.id} сброшена.`);
+    await replyWithAutoDelete(ctx, `История наказаний пользователя ${formatUserIdentityText(targetData.target)} сброшена.`);
   }
 
   async function deleteMessageOnlyCommand(ctx) {
@@ -8022,9 +8056,17 @@ function createBot() {
       return;
     }
 
+    const targetProfile = database.getUserProfile(chatId, targetUserId) || {};
+    const targetName = formatUserIdentityText({
+      id: targetUserId,
+      username: targetProfile.username,
+      displayName: targetProfile.displayName,
+      first_name: targetProfile.first_name,
+      full_name: targetProfile.full_name,
+    });
     database.clearUserPunishmentHistory(chatId, targetUserId);
     moderationService.resetWarnings(chatId, targetUserId);
-    await ctx.reply(`✅ История наказаний пользователя ${targetUserId} сброшена.`);
+    await ctx.reply(`✅ История наказаний пользователя ${targetName} сброшена.`);
   });
 
   bot.action(/^menu:(.+)$/, async (ctx) => {
@@ -9494,6 +9536,7 @@ module.exports = {
   isKnownCommandText,
   resolveIdCommandTarget,
   formatAdminReportText,
+  formatUserIdentityText,
 };
 
 2
