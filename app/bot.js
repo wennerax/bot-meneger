@@ -5979,8 +5979,6 @@ function createBot() {
       const adminType = levelNames[Number(botAdminLevel)] || '';
       botStatus = `${adminType} админ`;
     }
-    const chartSvg = buildActivityChartSvg(activity);
-    const chartDateLabels = activity.map((item) => item.day ? new Date(`${item.day}T00:00:00`) : null).filter(Boolean).map((date) => `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}`).join('  ');
     const actorLevel = database.isPrimaryBotAdmin(ctx.chat.id, ctx.from.id)
       ? 1
       : database.getBotAdminLevel(ctx.chat.id, ctx.from.id);
@@ -6007,9 +6005,6 @@ function createBot() {
       `${customEmojiPlaceholders.stats_message_count} Сообщений: ${escapeCaptionText(profile.messageCount)}`,
       ...(streakLine ? [`${customEmojiPlaceholders.stats_streak} ${streakLine}`] : []),
       `${customEmojiPlaceholders.stats_top} Место в топе: ${escapeCaptionText(topLabel)}`,
-      '',
-      'Активность пользователя',
-      `Сообщения • ${chartDateLabels || 'нет данных'}`,
     ];
     let captionText = captionLines.join('\n');
     const captionEntities = [];
@@ -6059,21 +6054,11 @@ function createBot() {
       }
     }
 
-    try {
-      const chartPng = await buildActivityChartPng(activity);
-      await ctx.replyWithPhoto({ source: chartPng }, {
-        caption: captionText,
-        caption_entities: captionEntities.length ? captionEntities : undefined,
-        reply_markup: extraReplyMarkup,
-      });
-    } catch (error) {
-      console.error('Failed to convert chart to PNG:', error);
-      await ctx.replyWithDocument({ source: Buffer.from(chartSvg, 'utf8'), filename: 'stats.svg' }, {
-        caption: captionText,
-        caption_entities: captionEntities.length ? captionEntities : undefined,
-        reply_markup: extraReplyMarkup,
-      });
-    }
+    await ctx.replyWithMessage({
+      text: captionText,
+      entities: captionEntities.length ? captionEntities : undefined,
+      reply_markup: extraReplyMarkup,
+    });
   }
 
   function topCommand(ctx) {
