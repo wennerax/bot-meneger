@@ -2786,8 +2786,37 @@ function parsePageNumber(input = '') {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
 }
 
+function formatPunishmentTimestamp(untilAt) {
+  const timestamp = Number(untilAt);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) {
+    return '';
+  }
+
+  const value = new Date(timestamp * 1000);
+  if (Number.isNaN(value.getTime())) {
+    return '';
+  }
+
+  return value.toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function isAutoPunishmentEntry(item = {}) {
+  const reason = String(item?.reason || '');
+  if (!reason) {
+    return false;
+  }
+
+  return /авто|автомат/i.test(reason);
+}
+
 function buildPunishmentListMessage(kind, punishments, page, pageSize = 10, chatId = null, databaseInstance = activeDatabase) {
-  const title = kind === 'mute' ? 'Муты' : 'Баны';
+  const title = kind === 'mute' ? 'Муты' : kind === 'warn' ? 'Предупреждения' : 'Баны';
   const safePunishments = Array.isArray(punishments) ? punishments : [];
   const totalPages = Math.max(1, Math.ceil(safePunishments.length / pageSize));
   const safePage = Math.min(Math.max(page, 1), totalPages);
@@ -2810,7 +2839,7 @@ function buildPunishmentListMessage(kind, punishments, page, pageSize = 10, chat
     const displayName = candidate.displayName || candidate.first_name || candidate.full_name || '';
 
     if (username) {
-      return username;
+      return `@${username}`;
     }
 
     if (displayName) {
@@ -2820,11 +2849,28 @@ function buildPunishmentListMessage(kind, punishments, page, pageSize = 10, chat
     return 'Пользователь';
   };
 
-  const lines = pageItems.map((item, index) => {
+  const getActionLabel = (action) => {
+    if (action === 'ban') return 'бан';
+    if (action === 'mute') return 'мут';
+    if (action === 'warn') return 'варн';
+    if (action === 'kick') return 'кик';
+    return String(action || 'наказание');
+  };
+
+  const lines = pageItems.map((item) => {
     const userLabel = getUserLabel(item);
-    const reason = item.reason ? ` — ${item.reason}` : '';
-    const untilLabel = item.untilAt ? ` — до ${new Date(item.untilAt * 1000).toLocaleString('ru-RU')}` : '';
-    return `${start + index + 1}. ${userLabel}${reason}${untilLabel}`;
+    const actionLabel = getActionLabel(item?.action);
+    const reasonText = String(item?.reason || '').trim();
+    const normalizedReason = reasonText && reasonText !== 'Без причины' ? reasonText : '';
+    const autoPunishment = isAutoPunishmentEntry(item);
+    const timeText = item?.untilAt && ['ban', 'mute', 'kick'].includes(String(item.action || ''))
+      ? ` Время: ${formatPunishmentTimestamp(item.untilAt)}`
+      : '';
+    const reasonPart = normalizedReason ? ` По причине: ${normalizedReason}` : '';
+    const sourcePart = autoPunishment ? `- ${userLabel} - (${actionLabel}) Автонаказание` : `- ${userLabel} - (${actionLabel}) Выдан: модератор`;
+    const suffix = reasonPart || timeText ? `${reasonPart}${timeText}` : '';
+
+    return `${sourcePart}${suffix}`;
   });
 
   return `${title} (страница ${safePage}/${totalPages})\n${lines.join('\n')}`;
@@ -8814,13 +8860,13 @@ function createBot() {
     await clearUserPunishmentHistoryCommand(ctx, args || ctx.message.text.replace(/^\/(?:clearhistory|сбросистории|сброс_истории|clear_history)(?:@\w+)?\s*/i, ''));
   });
 
-  bot.command(['banlist', 'баны'], (ctx) => {
-    const args = ctx.message.text.replace(/^\/(?:banlist|баны)\s*/i, '');
+  bot.command(['bans', 'banlist', 'баны'], (ctx) => {
+    const args = ctx.message.text.replace(/^\/(?:bans|banlist|баны)\s*/i, '');
     listPunishmentsCommand(ctx, 'ban', args);
   });
 
-  bot.command(['mutelist', 'муты'], (ctx) => {
-    const args = ctx.message.text.replace(/^\/(?:mutelist|муты)\s*/i, '');
+  bot.command(['mutes', 'mutelist', 'муты'], (ctx) => {
+    const args = ctx.message.text.replace(/^\/(?:mutes|mutelist|муты)\s*/i, '');
     listPunishmentsCommand(ctx, 'mute', args);
   });
 

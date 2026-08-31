@@ -352,9 +352,33 @@ test('parsePageNumber defaults to page 1 and accepts explicit pages', () => {
   assert.equal(parsePageNumber('abc'), 1);
 });
 
+test('buildPunishmentListMessage distinguishes moderator-issued and auto punishments', () => {
+  const punishments = [
+    { userId: 123, action: 'ban', reason: 'Спам', untilAt: 1753000000 },
+    { userId: 456, action: 'ban', reason: 'Автобан после 3 предупреждений. Последнее: спам', untilAt: 1753003600 },
+  ];
+
+  const message = buildPunishmentListMessage('ban', punishments, 1, 10, -1001, {
+    getUserProfile: (chatId, userId) => {
+      if (Number(userId) === 123) return { username: '@alice' };
+      if (Number(userId) === 456) return { username: '@bob' };
+      return {};
+    },
+  });
+
+  assert.match(message, /- @alice - \(бан\) Выдан: модератор/);
+  assert.match(message, /По причине: Спам/);
+  assert.match(message, /Время:/);
+  assert.match(message, /- @bob - \(бан\) Автонаказание/);
+  assert.match(message, /По причине: Автобан после 3 предупреждений\. Последнее: спам/);
+  assert.doesNotMatch(message, /\b123\b/);
+  assert.doesNotMatch(message, /\b456\b/);
+});
+
 test('buildPunishmentListMessage paginates active bans and mutes without showing raw ids', () => {
   const punishments = Array.from({ length: 12 }, (_, index) => ({
     userId: index + 1,
+    action: 'ban',
     reason: `reason-${index + 1}`,
     untilAt: null,
   }));
@@ -363,10 +387,10 @@ test('buildPunishmentListMessage paginates active bans and mutes without showing
   const pageTwo = buildPunishmentListMessage('mute', punishments, 2, 5);
 
   assert.match(pageOne, /Баны \(страница 1\/3\)/);
-  assert.match(pageOne, /1\. Пользователь/);
+  assert.match(pageOne, /- Пользователь - \(бан\) Выдан: модератор/);
   assert.doesNotMatch(pageOne, /User\s*1/);
   assert.match(pageTwo, /Муты \(страница 2\/3\)/);
-  assert.match(pageTwo, /6\. Пользователь/);
+  assert.match(pageTwo, /- Пользователь - \(бан\) Выдан: модератор/);
   assert.doesNotMatch(pageTwo, /User\s*6/);
 });
 
