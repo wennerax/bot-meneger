@@ -2537,9 +2537,16 @@ async function applyWarnLimitPunishment(ctx, userId, reason, warningCount = null
 
   if (mode === 'mute') {
     const muteCtx = ctx;
-    await muteCtx.telegram.restrictChatMember(muteCtx.chat.id, targetUserId, buildMutePermissions(false), Math.floor(Date.now() / 1000) + Math.round(blockDuration * 3600));
+    const muteUntil = Math.floor(Date.now() / 1000) + Math.round(blockDuration * 3600);
+    await muteCtx.telegram.restrictChatMember(muteCtx.chat.id, targetUserId, buildMutePermissions(false), muteUntil);
     if (effectiveDatabase?.addPunishment) {
-      effectiveDatabase.addPunishment(chatId, targetUserId, 'mute', `Автобан после ${warnLimit} предупреждений. Последнее: ${reason}`, Math.floor(Date.now() / 1000) + Math.round(blockDuration * 3600));
+      effectiveDatabase.addPunishment(chatId, targetUserId, 'mute', `Автобан после ${warnLimit} предупреждений. Последнее: ${reason}`, muteUntil);
+    }
+    if (effectiveDatabase?.addActivePunishment) {
+      effectiveDatabase.addActivePunishment(chatId, targetUserId, 'mute', `Автобан после ${warnLimit} предупреждений. Последнее: ${reason}`, muteUntil);
+    }
+    if (typeof schedulePunishmentExpiry === 'function') {
+      schedulePunishmentExpiry({ chatId, userId: targetUserId, action: 'mute', untilAt: muteUntil });
     }
     if (canReply) {
       const sentMsg = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} ${userLabel}: Получил ${warnLimit}-е предупреждение и замучен на ${blockDuration}ч. Причина: ${reason}`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });

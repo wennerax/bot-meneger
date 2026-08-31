@@ -241,6 +241,42 @@ test('applyWarnLimitPunishment uses target user label instead of moderator name 
   assert.ok(!sentText.includes('Пользователь 42'));
 });
 
+test('applyWarnLimitPunishment stores mute punishments in the active list so they appear in /mutes', async () => {
+  const ctx = {
+    chat: { id: -1001 },
+    from: { id: 7, username: 'mod' },
+    reply: async () => ({ message_id: 1 }),
+    telegram: {
+      restrictChatMember: async () => {},
+      banChatMember: async () => {},
+      kickChatMember: async () => {},
+      unbanChatMember: async () => {},
+    },
+  };
+
+  const calls = [];
+  const service = {
+    getWarnPunishmentMode: () => 'mute',
+    getWarnLimit: () => 3,
+    getWarnBlockDuration: () => 24,
+  };
+
+  const database = {
+    getUserProfile: () => ({ username: '@alice', displayName: 'Alice' }),
+    addPunishment: (...args) => calls.push(['addPunishment', ...args]),
+    addActivePunishment: (...args) => calls.push(['addActivePunishment', ...args]),
+  };
+
+  premiumEmojis.replyWithCustomEmoji = async () => ({ message_id: 1 });
+
+  const result = await applyWarnLimitPunishment(ctx, 42, 'spam', 3, service, database);
+
+  assert.equal(result, true);
+  assert.ok(calls.some(([method]) => method === 'addActivePunishment'));
+  const muteCall = calls.find(([method, chatId, userId, action]) => method === 'addActivePunishment' && chatId === -1001 && userId === 42 && action === 'mute');
+  assert.ok(muteCall);
+});
+
 test('buildBulkModerationSummaryMessage groups multiple reasons into one compact alert', () => {
   const message = buildBulkModerationSummaryMessage('@alice', ['Антифлуд', 'Ссылка', 'Пересланное сообщение из канала']);
 
