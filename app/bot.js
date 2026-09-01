@@ -4015,12 +4015,12 @@ function createBot() {
     }
 
     const now = Date.now();
-    const cutoff = now - 5 * 60 * 1000;
+    const cutoff = now - 60 * 1000;
     const chatHistory = messageHistory.get(chatId) || new Map();
     const userHistory = (chatHistory.get(userId) || []).filter((item) => item.timestamp >= cutoff);
     userHistory.push({ messageId, timestamp: now });
-    if (userHistory.length > 100) {
-      userHistory.splice(0, userHistory.length - 100);
+    if (userHistory.length > 200) {
+      userHistory.splice(0, userHistory.length - 200);
     }
     chatHistory.set(userId, userHistory);
     messageHistory.set(chatId, chatHistory);
@@ -4601,6 +4601,7 @@ function createBot() {
     const service = activeModerationService || defaultModerationService;
     const commands = getCommandsList();
     const disabled = service.getAllCommandDisabled(chatId);
+    const menuMode = service.getMenuCommandAccess(chatId);
     const totalPages = Math.max(1, Math.ceil(commands.length / COMMANDS_PER_PAGE));
     const page = Math.max(0, Math.min(pageIndex, totalPages - 1));
 
@@ -4609,6 +4610,7 @@ function createBot() {
       '',
       'В этом меню можно отключать разделы или отдельные команды бота.',
       '',
+      `⚙️ /menu: ${menuMode === 'private_only' ? 'Только в ЛС' : 'В группе + в ЛС'}`,
       'Статус: ❌ отключено, ✅ включено',
       '',
     ];
@@ -4630,6 +4632,7 @@ function createBot() {
     const commands = getCommandsList();
     const service = activeModerationService || defaultModerationService;
     const disabled = service.getAllCommandDisabled(chatId);
+    const menuMode = service.getMenuCommandAccess(chatId);
     const totalPages = Math.max(1, Math.ceil(commands.length / COMMANDS_PER_PAGE));
     const page = Math.max(0, Math.min(pageIndex, totalPages - 1));
 
@@ -4640,6 +4643,11 @@ function createBot() {
     const suffix = returnFlag === 'settings' ? ':settings' : '';
 
     rows.push([{ text: '📚 Управление разделами', callback_data: `menu:command_rights:sections${suffix}` }]);
+    rows.push([
+      { text: menuMode === 'private_only' ? '✅ Только в ЛС' : 'Группа + ЛС', callback_data: 'menu:none' },
+      { text: 'Только в ЛС', callback_data: `menu:command_rights:menu_access:private_only${suffix}` },
+      { text: 'Группа + ЛС', callback_data: `menu:command_rights:menu_access:all${suffix}` },
+    ]);
 
     pageCommands.forEach((item, idx) => {
       const index = start + idx;
@@ -8724,6 +8732,19 @@ function createBot() {
       return;
     }
 
+    if (action.startsWith('command_rights:menu_access:')) {
+      const parts = action.split(':');
+      const mode = parts[3];
+      const returnFlag = parts.includes('settings') ? 'settings' : 'menu';
+      const returnCallback = returnFlag === 'settings' ? `settings:main:${chatId}` : 'menu:overview';
+      if (mode === 'all' || mode === 'private_only') {
+        moderationService.setMenuCommandAccess(chatId, mode);
+        await safeAnswerCbQuery(ctx, mode === 'all' ? '✅ /menu доступна и в группе, и в ЛС.' : '✅ /menu доступна только в ЛС.');
+        await showMenuCommandRightsMenu(ctx, chatId, 0, returnCallback, returnFlag);
+      }
+      return;
+    }
+
     if (action.startsWith('command_rights:disable:') || action.startsWith('command_rights:enable:')) {
       const parts = action.split(':');
       const commandIndex = Number(parts[2]);
@@ -8907,6 +8928,15 @@ function createBot() {
 
     const chatId = Number(ctx.chat?.id || 0);
     if (!chatId) {
+      return;
+    }
+
+    if (moderationService.getMenuCommandAccess(chatId) === 'private_only') {
+      try {
+        await ctx.deleteMessage();
+      } catch (error) {
+        // ignore if message already deleted or no permission
+      }
       return;
     }
 
@@ -9721,13 +9751,15 @@ function createBot() {
     }
 
     if (isGroupChat(ctx) && moderationService.isSpamProtectionEnabled(ctx.chat.id)) {
+      recordRecentMessage(ctx);
       const shouldPunish = trackSpamActivity(ctx);
       if (shouldPunish) {
         const recentMessages = spamActivity.get(ctx.chat.id)?.get(ctx.from.id)?.messages || [];
+        queueBulkModerationSummary(ctx, ctx.from.id, 'Спам');
         if (recentMessages.length) {
-          queueBulkModerationSummary(ctx, ctx.from.id, 'Спам');
           await Promise.all(recentMessages.map((item) => deleteMessageSafely(ctx, item.messageId)));
         }
+        await deleteRecentMessages(ctx, ctx.chat.id, ctx.from.id, 1);
         await applyAutomaticMute(ctx, ctx.from.id, 24, 'Спам');
         return;
       }

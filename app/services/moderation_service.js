@@ -349,6 +349,9 @@ class ModerationService {
       commandDisabled: (chat.commandDisabled && typeof chat.commandDisabled === 'object')
         ? { ...chat.commandDisabled }
         : {},
+      menuCommandAccess: ['all', 'private_only'].includes(String(chat.menuCommandAccess || '').toLowerCase())
+        ? String(chat.menuCommandAccess).toLowerCase()
+        : 'all',
     };
   }
 
@@ -1622,6 +1625,21 @@ class ModerationService {
 
   getAllCommandDisabled(chatId) {
     return { ...this._getChat(chatId).commandDisabled };
+  }
+
+  getMenuCommandAccess(chatId) {
+    const mode = String(this._getChat(chatId).menuCommandAccess || 'all').toLowerCase();
+    return ['all', 'private_only'].includes(mode) ? mode : 'all';
+  }
+
+  setMenuCommandAccess(chatId, mode) {
+    const normalized = String(mode || '').toLowerCase();
+    if (!['all', 'private_only'].includes(normalized)) {
+      return false;
+    }
+    this._getChat(chatId).menuCommandAccess = normalized;
+    this._save();
+    return true;
   }
 }
 
