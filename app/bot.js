@@ -4644,9 +4644,8 @@ function createBot() {
 
     rows.push([{ text: '📚 Управление разделами', callback_data: `menu:command_rights:sections${suffix}` }]);
     rows.push([
-      { text: menuMode === 'private_only' ? '✅ Только в ЛС' : 'Группа + ЛС', callback_data: 'menu:none' },
-      { text: 'Только в ЛС', callback_data: `menu:command_rights:menu_access:private_only${suffix}` },
-      { text: 'Группа + ЛС', callback_data: `menu:command_rights:menu_access:all${suffix}` },
+      { text: `Группа + ЛС${menuMode === 'all' ? ' ✅' : ''}`, callback_data: `menu:command_rights:menu_access:all${suffix}` },
+      { text: `Только в ЛС${menuMode === 'private_only' ? ' ✅' : ''}`, callback_data: `menu:command_rights:menu_access:private_only${suffix}` },
     ]);
 
     pageCommands.forEach((item, idx) => {
@@ -8734,7 +8733,7 @@ function createBot() {
 
     if (action.startsWith('command_rights:menu_access:')) {
       const parts = action.split(':');
-      const mode = parts[3];
+      const mode = parts[2];
       const returnFlag = parts.includes('settings') ? 'settings' : 'menu';
       const returnCallback = returnFlag === 'settings' ? `settings:main:${chatId}` : 'menu:overview';
       if (mode === 'all' || mode === 'private_only') {
