@@ -2849,6 +2849,27 @@ function buildPunishmentListMessage(kind, punishments, page, pageSize = 10, chat
     return 'Пользователь';
   };
 
+  const getActorLabel = (item) => {
+    const actorId = Number(item?.actorId);
+    if (!Number.isFinite(actorId) || !chatId || !databaseInstance?.getUserProfile) {
+      return 'модератор';
+    }
+
+    const profile = databaseInstance.getUserProfile(chatId, actorId);
+    const username = profile?.username ? String(profile.username).replace(/^@+/, '') : '';
+    const displayName = profile?.displayName || profile?.first_name || profile?.full_name || '';
+
+    if (username) {
+      return `@${username}`;
+    }
+
+    if (displayName) {
+      return displayName;
+    }
+
+    return 'модератор';
+  };
+
   const getActionLabel = (action) => {
     if (action === 'ban') return 'бан';
     if (action === 'mute') return 'мут';
@@ -2867,7 +2888,9 @@ function buildPunishmentListMessage(kind, punishments, page, pageSize = 10, chat
       ? ` Время: ${formatPunishmentTimestamp(item.untilAt)}`
       : '';
     const reasonPart = normalizedReason ? ` По причине: ${normalizedReason}` : '';
-    const sourcePart = autoPunishment ? `- ${userLabel} - (${actionLabel}) Автонаказание` : `- ${userLabel} - (${actionLabel}) Выдан: модератор`;
+    const sourcePart = autoPunishment
+      ? `- ${userLabel} - (${actionLabel}) Автонаказание`
+      : `- ${userLabel} - (${actionLabel}) Выдан: ${getActorLabel(item)}`;
     const suffix = reasonPart || timeText ? `${reasonPart}${timeText}` : '';
 
     return `${sourcePart}${suffix}`;
@@ -6521,7 +6544,7 @@ function createBot() {
 
     const details = parsePunishmentDetails(targetData.remainingArgs, !!ctx.message.reply_to_message);
     moderationService.addWarning(ctx.chat.id, targetData.target.id);
-    database.addPunishment(ctx.chat.id, targetData.target.id, 'warn', details.reason, null);
+    database.addPunishment(ctx.chat.id, targetData.target.id, 'warn', details.reason, null, ctx.from.id);
     recordModerationLog(ctx.chat.id, {
       action: 'warn',
       actorId: ctx.from.id,
@@ -6657,8 +6680,8 @@ function createBot() {
       return;
     }
 
-    database.addPunishment(ctx.chat.id, targetData.target.id, 'mute', details.reason, untilDate || null);
-    database.addActivePunishment(ctx.chat.id, targetData.target.id, 'mute', details.reason, untilDate || null);
+    database.addPunishment(ctx.chat.id, targetData.target.id, 'mute', details.reason, untilDate || null, ctx.from.id);
+    database.addActivePunishment(ctx.chat.id, targetData.target.id, 'mute', details.reason, untilDate || null, ctx.from.id);
     recordModerationLog(ctx.chat.id, {
       action: 'mute',
       actorId: ctx.from.id,
@@ -6748,8 +6771,8 @@ function createBot() {
       return;
     }
 
-    database.addPunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, untilDate || null);
-    database.addActivePunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, untilDate || null);
+    database.addPunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, untilDate || null, ctx.from.id);
+    database.addActivePunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, untilDate || null, ctx.from.id);
     recordModerationLog(ctx.chat.id, {
       action: 'ban',
       actorId: ctx.from.id,
@@ -6804,8 +6827,8 @@ function createBot() {
       return;
     }
 
-    database.addPunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, untilDate || null);
-    database.addActivePunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, untilDate || null);
+    database.addPunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, untilDate || null, ctx.from.id);
+    database.addActivePunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, untilDate || null, ctx.from.id);
     recordModerationLog(ctx.chat.id, {
       action: 'ban',
       actorId: ctx.from.id,

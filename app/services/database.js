@@ -604,13 +604,14 @@ class Database {
     return Boolean(this.data.groups[id]?.linkTrigger);
   }
 
-  addPunishment(chatId, userId, action, reason, untilAt = null) {
+  addPunishment(chatId, userId, action, reason, untilAt = null, actorId = null) {
     this.data.punishments.push({
       chatId: Number(chatId),
       userId: Number(userId),
       action,
       reason,
       untilAt,
+      actorId: actorId === null || actorId === undefined ? null : Number(actorId),
       createdAt: this._now(),
     });
     this._save();
@@ -656,7 +657,7 @@ class Database {
     return this.data.blacklist.some((item) => item.chatId === id && item.userId === user);
   }
 
-  addActivePunishment(chatId, userId, action, reason, untilAt = null) {
+  addActivePunishment(chatId, userId, action, reason, untilAt = null, actorId = null) {
     const id = Number(chatId);
     const user = Number(userId);
     const existingIndex = this.data.activePunishments.findIndex(
@@ -668,6 +669,7 @@ class Database {
       action,
       reason,
       untilAt: untilAt === null || untilAt === undefined ? null : Number(untilAt),
+      actorId: actorId === null || actorId === undefined ? null : Number(actorId),
       createdAt: this._now(),
     };
 

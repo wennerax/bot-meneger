@@ -352,9 +352,9 @@ test('parsePageNumber defaults to page 1 and accepts explicit pages', () => {
   assert.equal(parsePageNumber('abc'), 1);
 });
 
-test('buildPunishmentListMessage distinguishes moderator-issued and auto punishments', () => {
+test('buildPunishmentListMessage shows the actor username instead of generic moderator text', () => {
   const punishments = [
-    { userId: 123, action: 'ban', reason: 'Спам', untilAt: 1753000000 },
+    { userId: 123, action: 'ban', reason: 'Спам', untilAt: 1753000000, actorId: 777 },
     { userId: 456, action: 'ban', reason: 'Автобан после 3 предупреждений. Последнее: спам', untilAt: 1753003600 },
   ];
 
@@ -362,11 +362,12 @@ test('buildPunishmentListMessage distinguishes moderator-issued and auto punishm
     getUserProfile: (chatId, userId) => {
       if (Number(userId) === 123) return { username: '@alice' };
       if (Number(userId) === 456) return { username: '@bob' };
+      if (Number(userId) === 777) return { username: '@moderator' };
       return {};
     },
   });
 
-  assert.match(message, /- @alice - \(бан\) Выдан: модератор/);
+  assert.match(message, /- @alice - \(бан\) Выдан: @moderator/);
   assert.match(message, /По причине: Спам/);
   assert.match(message, /Время:/);
   assert.match(message, /- @bob - \(бан\) Автонаказание/);
