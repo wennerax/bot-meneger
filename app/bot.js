@@ -524,7 +524,7 @@ async function getManagedGroupsForUser(ctx) {
   if (ctx.chat?.id && ctx.chat?.type !== 'private') {
     try {
       const member = await ctx.telegram.getChatMember(ctx.chat.id, userId);
-      if (isGroupMemberWithProfileChangePermission(member) || isGroupMemberWithManageRights(member)) {
+      if (isGroupMemberWithProfileChangePermission(member)) {
         addGroup(ctx.chat.id, ctx.chat.title || String(ctx.chat.id));
       }
     } catch (error) {
@@ -552,7 +552,7 @@ async function getManagedGroupsForUser(ctx) {
 
     try {
       const member = await ctx.telegram.getChatMember(chatId, userId);
-      if (isGroupMemberWithProfileChangePermission(member) || isGroupMemberWithManageRights(member)) {
+      if (isGroupMemberWithProfileChangePermission(member)) {
         addGroup(chatId, group.title || String(chatId));
       }
     } catch (error) {
@@ -2560,7 +2560,7 @@ async function applyWarnLimitPunishment(ctx, userId, reason, warningCount = null
       schedulePunishmentExpiry({ chatId, userId: targetUserId, action: 'mute', untilAt: muteUntil });
     }
     if (canReply) {
-      const sentMsg = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} ${userLabel}: Получил ${warnLimit}-е предупреждение и замучен на ${blockDuration}ч. Причина: ${reason}`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
+      const sentMsg = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} ${userLabel}: Получил ${warnLimit}-е предупреждение и замучен на ${blockDuration}ч. Причина: ${reason}`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML', reply_markup: buildPunishmentCancelKeyboard('mute', chatId, targetUserId) });
       if (typeof scheduleDeleteForContext === 'function') {
         scheduleDeleteForContext(ctx, sentMsg?.message_id, 5000);
       }
@@ -2598,7 +2598,7 @@ async function applyWarnLimitPunishment(ctx, userId, reason, warningCount = null
       schedulePunishmentExpiry({ chatId, userId: targetUserId, action: 'ban', untilAt: untilDate });
     }
     if (canReply) {
-      const sentMsg = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} ${userLabel}: Получил ${warnLimit}-е предупреждение и забанен на ${blockDuration}ч. Причина: ${reason}`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
+      const sentMsg = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} ${userLabel}: Получил ${warnLimit}-е предупреждение и забанен на ${blockDuration}ч. Причина: ${reason}`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML', reply_markup: buildPunishmentCancelKeyboard('ban', chatId, targetUserId) });
       if (typeof scheduleDeleteForContext === 'function') {
         scheduleDeleteForContext(ctx, sentMsg?.message_id, 5000);
       }
@@ -3887,22 +3887,7 @@ function createBot() {
   }
 
   async function canUseAdminPunishmentCommands(ctx) {
-    if (isBotAdmin(ctx)) {
-      return true;
-    }
-
-    const userId = Number(ctx.from?.id);
-    const chatId = Number(ctx.chat?.id);
-    if (!Number.isFinite(userId) || !Number.isFinite(chatId) || !isGroupChat(ctx)) {
-      return false;
-    }
-
-    try {
-      const member = await ctx.telegram.getChatMember(chatId, userId);
-      return isGroupOwnerMember(member) || String(member?.status || '').toLowerCase() === 'administrator';
-    } catch (error) {
-      return false;
-    }
+    return isBotAdmin(ctx);
   }
 
   function isGroupChat(ctx) {
@@ -3967,11 +3952,19 @@ function createBot() {
     return [
       'setrules', 'setgreeting', 'antispam', 'antiflood', 'antilinks',
       'links', 'ссылки', 'allowed', 'menu', 'admins', 'админы', 'logs', 'логи', 'modstats',
-      'статистика_модерации', 'баны', 'муты', 'banlist', 'mutelist',
+      'статистика_модерации',
       'clearhistory', 'clear_history', 'сбросистории', 'сброс_истории',
       'addadmin', 'добавить_админа', 'добавить', 'removeadmin', 'снять_админа',
-      'promote', 'повышение', 'demote', 'разжалование', 'admincom', 'admin_rules', 'аправила', 'arule',
-      'delete_message', 'del', 'delete', 'дел', 'reload', 'рел',
+      'promote', 'повышение', 'demote', 'разжалование', 'admin_rules', 'аправила', 'arule',
+      'reload', 'рел',
+    ].includes(String(commandKey || '').toLowerCase());
+  }
+
+  function isBotPunishmentCommand(commandKey) {
+    return [
+      'warn', 'предупреждение', 'варн', 'пред', 'анварн', 'анпред', 'unwarn',
+      'mute', 'мут', 'unmute', 'размут', 'размутить', 'ban', 'бан', 'unban',
+      'разбан', 'разбанить', 'delwarn', 'delmute', 'delban',
     ].includes(String(commandKey || '').toLowerCase());
   }
 
@@ -3994,6 +3987,11 @@ function createBot() {
     const commandKey = parseBotCommandKey(getMessageText(ctx));
     if (!commandKey) {
       return next();
+    }
+
+    if (isBotPunishmentCommand(commandKey) && !isBotAdmin(ctx)) {
+      await replyWithAutoDelete(ctx, 'Команды наказаний доступны только администраторам бота.');
+      return;
     }
 
     if (!canUseRestrictedAdminCommand(ctx, commandKey)) {
@@ -6406,6 +6404,10 @@ function createBot() {
 
   function listBotAdminsCommand(ctx) {
     ensureGroup(ctx);
+    if (!isBotAdmin(ctx)) {
+      ctx.reply('Эта команда доступна только администраторам бота.');
+      return;
+    }
     const allAdminIds = database.getBotAdmins(ctx.chat.id);
 
     // group by level
@@ -6653,6 +6655,11 @@ function createBot() {
   async function warningsCommand(ctx, args = '') {
     ensureGroup(ctx);
     scheduleDeleteForContext(ctx, ctx.message?.message_id);
+
+    if (!isBotAdmin(ctx)) {
+      await replyWithAutoDelete(ctx, 'Эта команда доступна только администраторам бота.');
+      return;
+    }
 
     if (!args || !args.trim()) {
       await warnsListCommand(ctx);
@@ -6940,7 +6947,9 @@ function createBot() {
     await deleteMessageSafely(ctx, ctx.message.reply_to_message.message_id);
     const targetLabel = getMentionText(targetData.target);
     const durationLabel = formatDurationLabel(details.durationHours);
-    await replyWithAutoDelete(ctx, `⛔ ${targetLabel} получил ban на ${durationLabel}, сообщение удалено. Причина: ${details.reason}`);
+    await replyWithAutoDelete(ctx, `⛔ ${targetLabel} получил ban на ${durationLabel}, сообщение удалено. Причина: ${details.reason}`, {
+      reply_markup: buildPunishmentCancelKeyboard('ban', ctx.chat.id, targetData.target.id),
+    });
   }
 
   async function unbanCommand(ctx, args) {
@@ -7415,6 +7424,21 @@ function createBot() {
     await ctx.editMessageText(helpPage.text, { reply_markup: helpPage.reply_markup });
   });
 
+  bot.use(async (ctx, next) => {
+    const callbackData = String(ctx.callbackQuery?.data || '');
+    const isAdminCallback = callbackData.startsWith('admin_report:')
+      || callbackData.startsWith('warn:')
+      || callbackData.startsWith('punishment:')
+      || callbackData.startsWith('stats:clear_history:');
+
+    if (isAdminCallback && !isBotAdmin(ctx)) {
+      await safeAnswerCbQuery(ctx, 'Эта кнопка доступна только администраторам бота.');
+      return;
+    }
+
+    return next();
+  });
+
   bot.action('admincom:close', async (ctx) => {
     await safeAnswerCbQuery(ctx);
     if (!await canUseAdminPunishmentCommands(ctx)) {
@@ -7481,10 +7505,6 @@ function createBot() {
 
     if (!await canManageGroupSettings(ctx, chatId)) {
       await ctx.reply('У вас нет прав менять настройки этой группы.');
-      return;
-    }
-    if (!canUseBotAdminAction(ctx, 'manage_settings')) {
-      await ctx.reply('Настройки доступны только главному и ведущему администраторам бота.');
       return;
     }
 
@@ -8637,15 +8657,15 @@ function createBot() {
     const isCommandRightsAction = action === 'command_rights'
       || action.startsWith('command_rights:');
     if (botMessageMatch) {
-      if (!(await canManageGroupSettings(ctx, botMessageChatId) && canUseBotAdminAction(ctx, 'manage_settings'))) {
+      if (!(await canManageGroupSettings(ctx, botMessageChatId))) {
         await ctx.reply('У вас нет прав администратора группы с правом менять профиль группы.');
         return;
       }
-    } else if (isCommandRightsAction && (!(await canManageGroupSettings(ctx, chatId)) || !canUseBotAdminAction(ctx, 'manage_settings'))) {
+    } else if (isCommandRightsAction && !(await canManageGroupSettings(ctx, chatId))) {
       await ctx.reply('У вас нет прав менять настройки этой группы.');
       return;
-    } else if (!isBotAdmin(ctx) || !canUseBotAdminAction(ctx, 'manage_settings')) {
-      await ctx.reply('Эта команда доступна только администраторам.');
+    } else if (!(await canManageGroupSettings(ctx, chatId))) {
+      await ctx.reply('У вас нет прав администратора группы с правом менять профиль группы.');
       return;
     }
 
@@ -9115,11 +9135,6 @@ function createBot() {
 
     const chatId = Number(ctx.chat?.id || 0);
     if (!chatId) {
-      return;
-    }
-
-    if (!isBotAdmin(ctx) || !canUseBotAdminAction(ctx, 'manage_settings')) {
-      await ctx.reply('Настройки доступны только главному и ведущему администраторам бота.');
       return;
     }
 
