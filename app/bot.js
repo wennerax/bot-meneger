@@ -2501,6 +2501,17 @@ function buildWarnCancelKeyboard(chatId, userId) {
   };
 }
 
+function buildPunishmentCancelKeyboard(action, chatId, userId) {
+  const safeChatId = Number(chatId);
+  const safeUserId = Number(userId);
+  return {
+    inline_keyboard: [[{
+      text: '❌ Отменить наказание',
+      callback_data: `punishment:undo:${action}:${Number.isFinite(safeChatId) ? safeChatId : 0}:${Number.isFinite(safeUserId) ? safeUserId : 0}`,
+    }]],
+  };
+}
+
 function buildPunishmentUserLabel(ctx, userId, databaseInstance = database) {
   const targetUserId = Number(userId);
   const chatId = Number(ctx?.chat?.id);
@@ -2968,20 +2979,24 @@ function shouldFailClosedForMedia(payload, errorMessage = '', normalizedAnswer =
 }
 
 function isKnownCommandText(text) {
-  const slashCommand = /^(?:\/(start|help|bot|id|айди|about|whoami|кто_я|stats|rules|arule|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|монетка|dice|кубик|fate|вопрос|compliment|комплимент|insult|инсульт|top|топ|admins|админы|banlist|баны|mutelist|муты|setrules|установить_правила|warn|предупреждение|delwarn|warns|warnings|варны|unwarn|снять_предупреждение|mute|мут|delmute|unmute|размут|ban|бан|delban|unban|разбан|del|delete|setgreeting|установить_приветствие|addadmin|добавить_админа|removeadmin|снять_админа|promote|повышение|demote|разжалование|clearhistory|сбросистории|сброс_истории|clear_history|miniapp|миниприложение|admincom|ai|modstats|статистика_модерации|ttt|крестики|крестики-нолики))(?:@[\w_]+)?(\s|$)/i;
-  const bangCommand = /^!(delban|delmute|delwarn|начало|помощь|айди|информация|кто\s*я|статистика|правила|аправила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|инсульт|пред|предупреждение|варны|мут|размут|бан|разбан|топ|анпред|говори|дел|рел)(\s|$)/i;
-  const plusMinusCommand = /^(\+антиспам|\+antispam|\+антифлуд|\+antiflood|\-антиспам|\-antispam|\-антифлуд|\-antiflood|\+ссылки|\+links|\-ссылки|\-links|\+описание|\+description|\+rules(?=\s+\S)|\+правила(?=\s+\S)|\+greeting(?=\s+\S)|\+приветствие(?=\s+\S))(\s|$)/i;
+  const slashCommand = /^(?:\/(start|help|bot|id|айди|about|whoami|кто_я|stats|rules|arule|аправила|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|монетка|dice|кубик|fate|вопрос|compliment|комплимент|insult|инсульт|top|топ|admins|админы|banlist|баны|mutelist|муты|setrules|установить_правила|warn|варн|пред|предупреждение|delwarn|warns|warnings|варны|unwarn|снять_предупреждение|анварн|анпред|mute|мут|delmute|unmute|размут|размутить|говори|ban|бан|delban|unban|разбан|разбанить|del|delete|дел|setgreeting|установить_приветствие|addadmin|добавить_админа|removeadmin|снять_админа|promote|повышение|demote|разжалование|clearhistory|сбросистории|сброс_истории|clear_history|miniapp|миниприложение|admincom|ai|modstats|статистика_модерации|ttt|крестики|крестики-нолики))(?:@[\w_]+)?(\s|$)/i;
+  const bangCommand = /^!(delban|delmute|delwarn|начало|помощь|айди|информация|кто\s*я|статистика|правила|аправила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|инсульт|пред|предупреждение|варны|мут|размут|размутить|бан|разбан|разбанить|топ|анпред|анварн|говори|дел|рел)(\s|$)/i;
+  const plusMinusCommand = /^(?:[+-](?:антиспам|antispam|антифлуд|antiflood|ссылки|links|варн|warn|предупреждение|мут|mute|бан|ban|размут|размутить|unmute|разбан|разбанить|unban|анварн)|\+описание|\+description|\+rules(?=\s+\S)|\+правила(?=\s+\S)|\+greeting(?=\s+\S)|\+приветствие(?=\s+\S))(\s|$)/i;
   return slashCommand.test(text) || bangCommand.test(text) || plusMinusCommand.test(text);
 }
 
 function parseBotCommandKey(text) {
   const normalized = String(text || '').trim();
-  const plusMinusMatch = normalized.match(/^[+-](антиспам|antispam|антифлуд|antiflood|ссылки|links)\b/i);
+  const plusMinusMatch = normalized.match(/^[+-](антиспам|antispam|антифлуд|antiflood|ссылки|links|варн|warn|предупреждение|мут|mute|бан|ban|размут|размутить|unmute|разбан|разбанить|unban|анварн)\b/i);
   if (plusMinusMatch) {
     const command = plusMinusMatch[1].toLowerCase();
     if (command === 'антиспам' || command === 'antispam') return 'antispam';
     if (command === 'антифлуд' || command === 'antiflood') return 'antiflood';
-    return 'antilinks';
+    if (command === 'ссылки' || command === 'links') return 'antilinks';
+    if (['варн', 'warn', 'предупреждение'].includes(command)) return 'warn';
+    if (['мут', 'mute', 'размут', 'размутить', 'unmute'].includes(command)) return 'mute';
+    if (['бан', 'ban', 'разбан', 'разбанить', 'unban'].includes(command)) return 'ban';
+    if (command === 'анварн') return 'warn';
   }
 
   const slashMatch = normalized.match(/^\/([^\s]+)/);
@@ -6708,7 +6723,7 @@ function createBot() {
 
     const targetLabel = getMentionText(targetData.target);
     const durationLabel = formatDurationLabel(details.durationHours);
-    const sentMsg = await premiumEmojis.replyWithCustomEmoji(ctx, `{lock} ${targetLabel} получил mute на ${durationLabel}. Причина: ${details.reason}`, { '{lock}': 'mute_lock' });
+    const sentMsg = await premiumEmojis.replyWithCustomEmoji(ctx, `{lock} ${targetLabel} получил mute на ${durationLabel}. Причина: ${details.reason}`, { '{lock}': 'mute_lock' }, { reply_markup: buildPunishmentCancelKeyboard('mute', ctx.chat.id, targetData.target.id) });
     scheduleDeleteForContext(ctx, sentMsg?.message_id, 5000);
     if (deleteTargetMessage) {
       await deleteMessageSafely(ctx, ctx.message.reply_to_message.message_id);
@@ -6799,7 +6814,9 @@ function createBot() {
 
     const targetLabel = getMentionText(targetData.target);
     const durationLabel = formatDurationLabel(details.durationHours);
-    await replyWithAutoDelete(ctx, `⛔ ${targetLabel} получил ban на ${durationLabel}. Причина: ${details.reason}`);
+    await replyWithAutoDelete(ctx, `⛔ ${targetLabel} получил ban на ${durationLabel}. Причина: ${details.reason}`, {
+      reply_markup: buildPunishmentCancelKeyboard('ban', ctx.chat.id, targetData.target.id),
+    });
   }
 
   async function delBanCommand(ctx, args) {
@@ -7112,11 +7129,41 @@ function createBot() {
   }
 
   async function handleRussianCommand(ctx, text) {
+    const prefix = text[0];
     const [commandWithBot, ...parts] = text.slice(1).split(/\s+/);
     const command = commandWithBot.split('@')[0].toLowerCase();
     const args = parts.join(' ');
     const normalizedCommand = command.replace(/_/g, ' ');
     const secondWord = parts[0]?.toLowerCase() || '';
+
+    if (prefix === '+' || prefix === '-') {
+      const isRemoval = prefix === '-';
+      if (['анварн'].includes(normalizedCommand)) {
+        await unwarnCommand(ctx, args);
+        return true;
+      }
+      if (['размут', 'размутить'].includes(normalizedCommand)) {
+        await unmuteCommand(ctx, args);
+        return true;
+      }
+      if (['разбан', 'разбанить'].includes(normalizedCommand)) {
+        await unbanCommand(ctx, args);
+        return true;
+      }
+      if (['варн', 'warn', 'предупреждение'].includes(normalizedCommand)) {
+        await (isRemoval ? unwarnCommand : warnCommand)(ctx, args);
+        return true;
+      }
+      if (['мут', 'mute'].includes(normalizedCommand)) {
+        await (isRemoval ? unmuteCommand : muteCommand)(ctx, args);
+        return true;
+      }
+      if (['бан', 'ban'].includes(normalizedCommand)) {
+        await (isRemoval ? unbanCommand : banCommand)(ctx, args);
+        return true;
+      }
+      return false;
+    }
 
     switch (normalizedCommand) {
       case 'начало':
@@ -7176,6 +7223,7 @@ function createBot() {
         }
         return false;
       case 'анпред':
+      case 'анварн':
         await unwarnCommand(ctx, args);
         return true;
       case 'мут':
@@ -7185,6 +7233,7 @@ function createBot() {
         await muteCommand(ctx, args, true);
         return true;
       case 'размут':
+      case 'размутить':
       case 'говори':
         await unmuteCommand(ctx, args);
         return true;
@@ -7198,6 +7247,7 @@ function createBot() {
         await delBanCommand(ctx, args);
         return true;
       case 'разбан':
+      case 'разбанить':
         await unbanCommand(ctx, args);
         return true;
       case 'установить приветствие':
@@ -8268,6 +8318,52 @@ function createBot() {
     await safeEditMessageText(ctx, `⚠️ Предупреждение отменено для ${targetLabel}. Осталось: ${nextWarnings}.`);
   });
 
+  bot.action(/^punishment:undo:(mute|ban):(-?\d+):(\d+)$/, async (ctx) => {
+    const action = ctx.match[1];
+    const chatId = Number(ctx.match[2]);
+    const userId = Number(ctx.match[3]);
+
+    if (!Number.isFinite(chatId) || !Number.isFinite(userId)) {
+      await safeAnswerCbQuery(ctx, 'Некорректный запрос отмены.');
+      return;
+    }
+
+    if (!isGroupChat(ctx) || Number(ctx.chat?.id) !== chatId) {
+      await safeAnswerCbQuery(ctx, 'Нельзя отменить наказание вне исходного чата.');
+      return;
+    }
+
+    if (!isBotAdmin(ctx)) {
+      await safeAnswerCbQuery(ctx, 'Отменить наказание могут только администраторы.');
+      return;
+    }
+
+    try {
+      if (action === 'mute') {
+        await ctx.telegram.restrictChatMember(chatId, userId, buildMutePermissions(true));
+      } else {
+        await ctx.telegram.unbanChatMember(chatId, userId, true);
+      }
+      database.removeActivePunishment(chatId, userId, action);
+      clearScheduledPunishment(chatId, userId, action);
+      recordModerationLog(chatId, {
+        action: action === 'mute' ? 'unmute' : 'unban',
+        actorId: ctx.from.id,
+        targetId: userId,
+        reason: `Отмена ${action === 'mute' ? 'мута' : 'бана'} через кнопку`,
+        details: 'Наказание отменено через кнопку в сообщении',
+      });
+    } catch (error) {
+      await safeAnswerCbQuery(ctx, `Не удалось отменить ${action === 'mute' ? 'мут' : 'бан'}.`);
+      return;
+    }
+
+    const profile = database.getUserProfile(chatId, userId);
+    const targetLabel = profile.displayName || profile.username || userId;
+    await safeAnswerCbQuery(ctx, `${action === 'mute' ? 'Мут' : 'Бан'} отменён.`);
+    await safeEditMessageText(ctx, `✅ ${action === 'mute' ? 'Мут' : 'Бан'} отменён для ${targetLabel}.`);
+  });
+
   bot.action(/^warn:adjust:(-?\d+):(\d+):(-?\d+)$/, async (ctx) => {
     const chatId = Number(ctx.match[1]);
     const userId = Number(ctx.match[2]);
@@ -8451,11 +8547,16 @@ function createBot() {
 
     const botMessageMatch = String(action).match(/^bot_message(?::(-?\d+))?$/);
     const botMessageChatId = botMessageMatch ? Number(botMessageMatch[1] || chatId) : 0;
+    const isCommandRightsAction = action === 'command_rights'
+      || action.startsWith('command_rights:');
     if (botMessageMatch) {
       if (!(await canManageGroupSettings(ctx, botMessageChatId))) {
         await ctx.reply('У вас нет прав администратора группы с правом менять профиль группы.');
         return;
       }
+    } else if (isCommandRightsAction && !(await canManageGroupSettings(ctx, chatId))) {
+      await ctx.reply('У вас нет прав менять настройки этой группы.');
+      return;
     } else if (!isBotAdmin(ctx)) {
       await ctx.reply('Эта команда доступна только администраторам.');
       return;
@@ -8788,7 +8889,7 @@ function createBot() {
     rulesCommand(ctx);
   });
 
-  bot.command('arule', async (ctx) => {
+  bot.command(['arule', 'аправила'], async (ctx) => {
     await adminRulesCommand(ctx);
   });
 
@@ -8802,8 +8903,8 @@ function createBot() {
     await roleplayCommand(ctx, args, 'kiss');
   });
 
-  bot.command(['slap', 'шлепнуть'], async (ctx) => {
-    const args = ctx.message.text.replace(/^\/(?:slap|шлепнуть)\s*/i, '');
+  bot.command(['slap', 'шлепнуть', 'шлёпнуть'], async (ctx) => {
+    const args = ctx.message.text.replace(/^\/(?:slap|шлепнуть|шлёпнуть)\s*/i, '');
     await roleplayCommand(ctx, args, 'slap');
   });
 
@@ -9123,11 +9224,11 @@ function createBot() {
     ctx.reply('Правила чата обновлены.');
   });
 
-  bot.command(['warn', 'предупреждение'], async (ctx) => {
-    await warnCommand(ctx, ctx.message.text.replace(/^\/(?:warn|предупреждение)\s*/i, ''));
+  bot.command(['warn', 'варн', 'пред', 'предупреждение'], async (ctx) => {
+    await warnCommand(ctx, ctx.message.text.replace(/^\/(?:warn|варн|пред|предупреждение)\s*/i, ''));
   });
 
-  bot.command(['del', 'delete'], async (ctx) => {
+  bot.command(['del', 'delete', 'дел'], async (ctx) => {
     ensureGroup(ctx);
     scheduleDeleteForContext(ctx, ctx.message?.message_id);
     if (!isBotAdmin(ctx)) {
@@ -9156,8 +9257,8 @@ function createBot() {
     await warnsListCommand(ctx);
   });
 
-  bot.command(['unwarn', 'снять_предупреждение'], async (ctx) => {
-    await unwarnCommand(ctx, ctx.message.text.replace(/^\/(?:unwarn|снять_предупреждение)\s*/i, ''));
+  bot.command(['unwarn', 'снять_предупреждение', 'анварн', 'анпред'], async (ctx) => {
+    await unwarnCommand(ctx, ctx.message.text.replace(/^\/(?:unwarn|снять_предупреждение|анварн|анпред)\s*/i, ''));
   });
 
   bot.command(['mute', 'мут'], async (ctx) => {
@@ -9168,8 +9269,8 @@ function createBot() {
     await muteCommand(ctx, ctx.message.text.replace(/^\/delmute(?:@[\w_]+)?\s*/i, ''), true);
   });
 
-  bot.command(['unmute', 'размут'], async (ctx) => {
-    await unmuteCommand(ctx, ctx.message.text.replace(/^\/(?:unmute|размут)\s*/i, ''));
+  bot.command(['unmute', 'размут', 'размутить', 'говори'], async (ctx) => {
+    await unmuteCommand(ctx, ctx.message.text.replace(/^\/(?:unmute|размут|размутить|говори)\s*/i, ''));
   });
 
   bot.command(['ban', 'бан'], async (ctx) => {
@@ -9180,8 +9281,8 @@ function createBot() {
     await delBanCommand(ctx, ctx.message.text.replace(/^\/delban(?:@[\w_]+)?\s*/i, ''));
   });
 
-  bot.command(['unban', 'разбан'], async (ctx) => {
-    await unbanCommand(ctx, ctx.message.text.replace(/^\/(?:unban|разбан)\s*/i, ''));
+  bot.command(['unban', 'разбан', 'разбанить'], async (ctx) => {
+    await unbanCommand(ctx, ctx.message.text.replace(/^\/(?:unban|разбан|разбанить)\s*/i, ''));
   });
 
   bot.command(['setgreeting', 'установить_приветствие'], (ctx) => {
@@ -9557,7 +9658,7 @@ function createBot() {
       return;
     }
 
-    if (text.startsWith('!')) {
+    if (text.startsWith('!') || /^[+-]/.test(text)) {
       if (await handleRussianCommand(ctx, text)) {
         return;
       }

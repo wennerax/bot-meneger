@@ -10,6 +10,35 @@ test('parsePunishmentDetails extracts duration and reason', () => {
   assert.deepEqual(result, { durationHours: 24, reason: 'реклама' });
 });
 
+test('parseBotCommandKey recognizes plus and minus punishment commands', () => {
+  assert.equal(parseBotCommandKey('+варн @alice причина'), 'warn');
+  assert.equal(parseBotCommandKey('-варн @alice'), 'warn');
+  assert.equal(parseBotCommandKey('+warn @alice причина'), 'warn');
+  assert.equal(parseBotCommandKey('-warn @alice'), 'warn');
+  assert.equal(parseBotCommandKey('+мут @alice 10m'), 'mute');
+  assert.equal(parseBotCommandKey('-мут @alice'), 'mute');
+  assert.equal(parseBotCommandKey('+бан @alice'), 'ban');
+  assert.equal(parseBotCommandKey('-бан @alice'), 'ban');
+  assert.equal(parseBotCommandKey('+ban @alice'), 'ban');
+  assert.equal(parseBotCommandKey('-ban @alice'), 'ban');
+  assert.equal(parseBotCommandKey('/анварн @alice'), 'анварн');
+  assert.equal(parseBotCommandKey('!размут @alice'), 'unmute');
+  assert.equal(parseBotCommandKey('/разбан @alice'), 'разбан');
+  assert.equal(parseBotCommandKey('+анварн @alice'), 'warn');
+  assert.equal(parseBotCommandKey('-размут @alice'), 'mute');
+  assert.equal(parseBotCommandKey('+разбан @alice'), 'ban');
+  assert.equal(isKnownCommandText('+варн @alice'), true);
+  assert.equal(isKnownCommandText('-мут @alice'), true);
+  assert.equal(isKnownCommandText('+warn @alice'), true);
+  assert.equal(isKnownCommandText('-ban @alice'), true);
+  assert.equal(isKnownCommandText('/анварн @alice'), true);
+  assert.equal(isKnownCommandText('!размут @alice'), true);
+  assert.equal(isKnownCommandText('+разбан @alice'), true);
+  assert.equal(isKnownCommandText('/мут @alice 10m'), true);
+  assert.equal(isKnownCommandText('/варн @alice'), true);
+  assert.equal(isKnownCommandText('/анпред @alice'), true);
+});
+
 test('buildBotMediaSend maps media to Telegram send methods and preserves captions', () => {
   assert.deepEqual(buildBotMediaSend({ sticker: { file_id: 'sticker-1' } }), {
     method: 'sendSticker',
