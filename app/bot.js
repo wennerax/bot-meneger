@@ -71,20 +71,21 @@ function isChannelPostInGroupMessage(message = {}) {
     return false;
   }
 
-  const isSenderChatChannel = message.sender_chat?.type === 'channel';
-  const isForwardedFromChannel = message.forward_from_chat?.type === 'channel';
-  const hasRegularUser = Boolean(message.from && typeof message.from === 'object' && message.from.id);
-  
-  // Поддержка forum topics: если есть message_thread_id и нет from, это пост в topic
-  const isTopicPost = message.message_thread_id && message.message_thread_id !== 0;
+  const isSenderChatChannel = String(message.sender_chat?.type || '').toLowerCase() === 'channel';
+  const isAutomaticForwardFromChannel = message.is_automatic_forward === true
+    && (String(message.forward_origin?.type || '').toLowerCase() === 'channel'
+      || String(message.forward_from_chat?.type || '').toLowerCase() === 'channel');
+  const isDiscussionChannelForward = Boolean(message.message_thread_id)
+    && (String(message.forward_origin?.type || '').toLowerCase() === 'channel'
+      || String(message.forward_from_chat?.type || '').toLowerCase() === 'channel');
 
   // Telegram may include `from` on channel-authored posts in discussion topics.
   // `sender_chat` is the authoritative signal that the post was sent as a channel.
-  if (isSenderChatChannel) {
+  if (isSenderChatChannel || isAutomaticForwardFromChannel || isDiscussionChannelForward) {
     return true;
   }
 
-  return (isTopicPost || !hasRegularUser) && isForwardedFromChannel;
+  return false;
 }
 
 function isAnonymousSenderMessage(message = {}) {
@@ -4494,7 +4495,19 @@ function createBot() {
     }
     const service = activeModerationService || defaultModerationService;
     const message = ctx.message || {};
-    const channel = message.sender_chat;
+    const channel = message.sender_chat
+      || (message.is_automatic_forward === true && message.forward_origin?.type === 'channel'
+        ? message.forward_origin.chat
+        : null)
+      || (message.is_automatic_forward === true && message.forward_from_chat?.type === 'channel'
+        ? message.forward_from_chat
+        : null)
+      || (message.message_thread_id && message.forward_origin?.type === 'channel'
+        ? message.forward_origin.chat
+        : null)
+      || (message.message_thread_id && message.forward_from_chat?.type === 'channel'
+        ? message.forward_from_chat
+        : null);
     if (!channel || String(channel.type || '').toLowerCase() !== 'channel') {
       return false;
     }
@@ -5117,6 +5130,7 @@ function createBot() {
     const replyOptions = {};
     if (ctx.message.message_thread_id && ctx.message.message_thread_id !== 0) {
       replyOptions.message_thread_id = ctx.message.message_thread_id;
+      replyOptions.reply_to_message_id = ctx.message.message_id;
     } else {
       replyOptions.reply_to_message_id = ctx.message.message_id;
     }
@@ -5138,9 +5152,8 @@ function createBot() {
         };
         if (replyOptions.message_thread_id) {
           mediaOptions.message_thread_id = replyOptions.message_thread_id;
-        } else {
-          mediaOptions.reply_to_message_id = replyOptions.reply_to_message_id;
         }
+        mediaOptions.reply_to_message_id = replyOptions.reply_to_message_id;
         
         if (menuMedia.type === 'photo') {
           sentMessage = await ctx.replyWithPhoto(menuMedia.fileId, mediaOptions);

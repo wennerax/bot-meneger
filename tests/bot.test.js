@@ -607,7 +607,15 @@ test('isAnonymousSenderMessage detects hidden sender messages', () => {
 test('isChannelPostInGroupMessage recognizes channel-authored posts with a from user', () => {
   assert.equal(isChannelPostInGroupMessage({ sender_chat: { type: 'channel' }, from: { id: 123 } }), true);
   assert.equal(isChannelPostInGroupMessage({ sender_chat: { type: 'channel' } }), true);
-  assert.equal(isChannelPostInGroupMessage({ forward_from_chat: { type: 'channel' } }), true);
+  assert.equal(isChannelPostInGroupMessage({
+    is_automatic_forward: true,
+    forward_from_chat: { type: 'channel' },
+  }), true);
+  assert.equal(isChannelPostInGroupMessage({
+    message_thread_id: 12,
+    forward_origin: { type: 'channel', chat: { id: -1001, type: 'channel' } },
+  }), true);
+  assert.equal(isChannelPostInGroupMessage({ forward_from_chat: { type: 'channel' } }), false);
 });
 
 test('shouldFailClosedForMedia removes only explicit adult sticker content and leaves safe stickers alone', () => {
