@@ -342,10 +342,17 @@ async function safeEditMessageText(ctx, text, extra) {
   try {
     await ctx.editMessageText(text, extra);
   } catch (err) {
-    // Ignore "message is not modified" error - happens when content is identical to current message
-    if (err.response?.description && !err.response.description.includes('message is not modified')) {
-      throw err;
+    const description = String(err.response?.description || err.description || '');
+    if (description.includes('message is not modified')) {
+      return;
     }
+    if (description.includes('message to edit not found')) {
+      if (typeof ctx.reply === 'function') {
+        await ctx.reply(text, extra);
+      }
+      return;
+    }
+    throw err;
   }
 }
 
@@ -1458,6 +1465,13 @@ async function safeEditMessageText(ctx, text, extra = {}) {
       return;
     }
 
+    if (typeof description === 'string' && description.includes('message to edit not found')) {
+      if (typeof ctx.reply === 'function') {
+        await ctx.reply(text, extra);
+      }
+      return;
+    }
+
     if (retryAfter > 0) {
       await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
       try {
@@ -1466,6 +1480,12 @@ async function safeEditMessageText(ctx, text, extra = {}) {
       } catch (retryError) {
         const retryDescription = retryError?.response?.description || retryError?.description || '';
         if (typeof retryDescription === 'string' && retryDescription.includes('message is not modified')) {
+          return;
+        }
+        if (typeof retryDescription === 'string' && retryDescription.includes('message to edit not found')) {
+          if (typeof ctx.reply === 'function') {
+            await ctx.reply(text, extra);
+          }
           return;
         }
       }
