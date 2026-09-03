@@ -4487,13 +4487,14 @@ function createBot() {
     return null;
   }
 
-  function isAllowedAnonymousChannel(ctx) {
+  function isAllowedAnonymousChannel(ctx, targetChatId = null) {
     if (!ctx || !ctx.chat || !ctx.message) {
       return false;
     }
     const service = activeModerationService || defaultModerationService;
     const message = ctx.message || {};
     const channel = message.sender_chat
+      || (String(ctx.chat?.type || '').toLowerCase() === 'channel' ? ctx.chat : null)
       || (message.is_automatic_forward === true && message.forward_origin?.type === 'channel'
         ? message.forward_origin.chat
         : null)
@@ -4509,7 +4510,7 @@ function createBot() {
     if (!channel || String(channel.type || '').toLowerCase() !== 'channel') {
       return false;
     }
-    return service.isAllowedAnonymousChannel(ctx.chat.id, channel);
+    return service.isAllowedAnonymousChannel(Number(targetChatId || ctx.chat.id), channel);
   }
 
   function isChannelPostInGroup(ctx) {
@@ -5103,9 +5104,9 @@ function createBot() {
     }
   }
 
-  async function sendMenuReplyForChannelPost(ctx) {
-    const chatId = ctx.chat.id;
-    if (isAllowedAnonymousChannel(ctx)) {
+  async function sendMenuReplyForChannelPost(ctx, targetChatId = null, replyToPost = true) {
+    const chatId = Number(targetChatId || ctx.chat.id);
+    if (isAllowedAnonymousChannel(ctx, chatId)) {
       return null;
     }
     if (!moderationService.getMenuEnabled(chatId)) {
@@ -5126,13 +5127,15 @@ function createBot() {
     
     // Для первого комментария в topic используем message_thread_id, иначе reply_to_message_id
     const replyOptions = {};
-    if (ctx.message.message_thread_id && ctx.message.message_thread_id !== 0) {
+    if (replyToPost && ctx.message.message_thread_id && ctx.message.message_thread_id !== 0) {
       replyOptions.message_thread_id = ctx.message.message_thread_id;
     }
-    replyOptions.reply_parameters = {
-      message_id: ctx.message.message_id,
-      allow_sending_without_reply: true,
-    };
+    if (replyToPost) {
+      replyOptions.reply_parameters = {
+        message_id: ctx.message.message_id,
+        allow_sending_without_reply: true,
+      };
+    }
     
     if (entities.length) {
       replyOptions.entities = entities;
@@ -5155,21 +5158,21 @@ function createBot() {
         mediaOptions.reply_parameters = replyOptions.reply_parameters;
         
         if (menuMedia.type === 'photo') {
-          sentMessage = await ctx.replyWithPhoto(menuMedia.fileId, mediaOptions);
+          sentMessage = await ctx.telegram.sendPhoto(chatId, menuMedia.fileId, mediaOptions);
         } else if (menuMedia.type === 'video') {
-          sentMessage = await ctx.replyWithVideo(menuMedia.fileId, mediaOptions);
+          sentMessage = await ctx.telegram.sendVideo(chatId, menuMedia.fileId, mediaOptions);
         } else if (menuMedia.type === 'animation') {
-          sentMessage = await ctx.replyWithAnimation(menuMedia.fileId, mediaOptions);
+          sentMessage = await ctx.telegram.sendAnimation(chatId, menuMedia.fileId, mediaOptions);
         } else if (menuMedia.type === 'document') {
-          sentMessage = await ctx.replyWithDocument(menuMedia.fileId, mediaOptions);
+          sentMessage = await ctx.telegram.sendDocument(chatId, menuMedia.fileId, mediaOptions);
         } else if (menuMedia.type === 'audio') {
-          sentMessage = await ctx.replyWithAudio(menuMedia.fileId, mediaOptions);
+          sentMessage = await ctx.telegram.sendAudio(chatId, menuMedia.fileId, mediaOptions);
         } else if (menuMedia.type === 'voice') {
-          sentMessage = await ctx.replyWithVoice(menuMedia.fileId, mediaOptions);
+          sentMessage = await ctx.telegram.sendVoice(chatId, menuMedia.fileId, mediaOptions);
         } else if (menuMedia.type === 'video_note') {
-          sentMessage = await ctx.replyWithVideoNote(menuMedia.fileId, mediaOptions);
+          sentMessage = await ctx.telegram.sendVideoNote(chatId, menuMedia.fileId, mediaOptions);
         } else if (menuMedia.type === 'sticker') {
-          sentMessage = await ctx.replyWithSticker(menuMedia.fileId, mediaOptions);
+          sentMessage = await ctx.telegram.sendSticker(chatId, menuMedia.fileId, mediaOptions);
         }
       }
     } catch (error) {
@@ -5178,15 +5181,15 @@ function createBot() {
 
     try {
       if (!sentMessage) {
-        sentMessage = await ctx.reply(formattedText, { ...replyOptions, entities: entities.length ? entities : undefined });
+        sentMessage = await ctx.telegram.sendMessage(chatId, formattedText, { ...replyOptions, entities: entities.length ? entities : undefined });
       }
       return sentMessage;
     } catch (error) {
       throw error;
     } finally {
       try {
-        if (ctx.message?.message_id) {
-          await ctx.telegram.unpinChatMessage(ctx.chat.id, ctx.message.message_id);
+        if (replyToPost && ctx.message?.message_id) {
+          await ctx.telegram.unpinChatMessage(chatId, ctx.message.message_id);
         }
       } catch (error) {
         console.warn('unpinChatMessage failed:', error?.response?.description || error?.message || error);
@@ -10288,6 +10291,20 @@ function createBot() {
       return;
     }
     await next();
+  });
+
+  bot.on('channel_post', async (ctx) => {
+    let linkedChatId = 0;
+    try {
+      linkedChatId = Number((await ctx.telegram.getChat(ctx.chat.id))?.linked_chat_id || 0);
+    } catch (error) {
+      console.warn('Unable to resolve linked discussion chat:', error?.response?.description || error?.message || error);
+      return;
+    }
+    if (!linkedChatId) {
+      return;
+    }
+    await sendMenuReplyForChannelPost(ctx, linkedChatId, false);
   });
 
   bot.on(['text', 'photo', 'video', 'document', 'animation', 'audio', 'voice', 'sticker', 'video_note'], async (ctx) => {
