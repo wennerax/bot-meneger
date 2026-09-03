@@ -4589,7 +4589,7 @@ function createBot() {
   }
 
   function buildCommandSectionsKeyboard(chatId, returnFlag = 'menu') {
-    const suffix = returnFlag === 'settings' ? ':settings' : '';
+    const suffix = returnFlag === 'settings' ? `:settings:${chatId}` : '';
     const rows = getCommandSections().map((section) => {
       const state = getCommandSectionState(chatId, section);
       const status = state.allDisabled ? '❌' : state.partiallyDisabled ? '⚠️' : '✅';
@@ -4655,7 +4655,7 @@ function createBot() {
     const pageCommands = commands.slice(start, start + COMMANDS_PER_PAGE);
 
     const rows = [];
-    const suffix = returnFlag === 'settings' ? ':settings' : '';
+    const suffix = returnFlag === 'settings' ? `:settings:${chatId}` : '';
 
     rows.push([{ text: '📚 Управление разделами', callback_data: `menu:command_rights:sections${suffix}` }]);
     rows.push([
@@ -8539,7 +8539,8 @@ function createBot() {
 
   bot.action(/^menu:(.+)$/, async (ctx) => {
     const action = ctx.match[1];
-    const chatId = ctx.chat?.id;
+    const settingsChatMatch = String(action).match(/:settings:(-?\d+)$/);
+    const chatId = settingsChatMatch ? Number(settingsChatMatch[1]) : ctx.chat?.id;
     if (!chatId) {
       return;
     }
@@ -8789,8 +8790,8 @@ function createBot() {
       return;
     }
 
-    if (action === 'command_rights:sections' || action === 'command_rights:sections:settings') {
-      const returnFlag = action.endsWith(':settings') ? 'settings' : 'menu';
+    if (action === 'command_rights:sections' || action.startsWith('command_rights:sections:settings')) {
+      const returnFlag = action.includes(':settings') ? 'settings' : 'menu';
       await ctx.editMessageText(buildCommandSectionsText(chatId), { reply_markup: buildCommandSectionsKeyboard(chatId, returnFlag) });
       return;
     }
@@ -9670,6 +9671,9 @@ function createBot() {
     }
 
     if (text.startsWith('/')) {
+      if (await handleRussianCommand(ctx, text)) {
+        return;
+      }
       if (isPrivateChat(ctx) && !isKnownCommandText(text)) {
         await handlePrivateAIMessages(ctx, text);
         return;
