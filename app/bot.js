@@ -10282,6 +10282,14 @@ function createBot() {
     await adjustBotAdminLevelCommand(ctx, args, 'demote');
   });
 
+  bot.on('message', async (ctx, next) => {
+    if (isChannelPostInGroup(ctx) || isAllowedAnonymousChannel(ctx)) {
+      await sendMenuReplyForChannelPost(ctx);
+      return;
+    }
+    await next();
+  });
+
   bot.on(['text', 'photo', 'video', 'document', 'animation', 'audio', 'voice', 'sticker', 'video_note'], async (ctx) => {
     if (ctx.chat && getPendingSettingsAction(ctx)) {
       const handled = await processPendingSettingsAction(ctx);
