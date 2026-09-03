@@ -2562,7 +2562,7 @@ async function applyWarnLimitPunishment(ctx, userId, reason, warningCount = null
     if (canReply) {
       const sentMsg = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} ${userLabel}: Получил ${warnLimit}-е предупреждение и замучен на ${blockDuration}ч. Причина: ${reason}`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML', reply_markup: buildPunishmentCancelKeyboard('mute', chatId, targetUserId) });
       if (typeof scheduleDeleteForContext === 'function') {
-        scheduleDeleteForContext(ctx, sentMsg?.message_id, 5000);
+        scheduleDeleteForContext(ctx, sentMsg?.message_id, 10000);
       }
     }
     return true;
@@ -2579,7 +2579,7 @@ async function applyWarnLimitPunishment(ctx, userId, reason, warningCount = null
     if (canReply) {
       const sentMsg = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} ${userLabel}: Получил ${warnLimit}-е предупреждение и исключён из чата. Причина: ${reason}`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
       if (typeof scheduleDeleteForContext === 'function') {
-        scheduleDeleteForContext(ctx, sentMsg?.message_id, 5000);
+        scheduleDeleteForContext(ctx, sentMsg?.message_id, 10000);
       }
     }
     return true;
@@ -2600,7 +2600,7 @@ async function applyWarnLimitPunishment(ctx, userId, reason, warningCount = null
     if (canReply) {
       const sentMsg = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} ${userLabel}: Получил ${warnLimit}-е предупреждение и забанен на ${blockDuration}ч. Причина: ${reason}`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML', reply_markup: buildPunishmentCancelKeyboard('ban', chatId, targetUserId) });
       if (typeof scheduleDeleteForContext === 'function') {
-        scheduleDeleteForContext(ctx, sentMsg?.message_id, 5000);
+        scheduleDeleteForContext(ctx, sentMsg?.message_id, 10000);
       }
     }
     return true;
@@ -6644,7 +6644,7 @@ function createBot() {
       }
     } else {
       const sentMsg5 = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} Предупреждение для ${userName}: ${warningCount}/${warnLimit}. Причина: ${reasonEscaped}`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML', reply_markup: buildWarnCancelKeyboard(ctx.chat.id, targetData.target.id) });
-      scheduleDeleteForContext(ctx, sentMsg5?.message_id, 5000);
+      scheduleDeleteForContext(ctx, sentMsg5?.message_id, 10000);
     }
 
     if (deleteTargetMessage) {
@@ -6789,7 +6789,7 @@ function createBot() {
     const targetLabel = getMentionText(targetData.target);
     const durationLabel = formatDurationLabel(details.durationHours);
     const sentMsg = await premiumEmojis.replyWithCustomEmoji(ctx, `{lock} ${targetLabel} получил mute на ${durationLabel}. Причина: ${details.reason}`, { '{lock}': 'mute_lock' }, { reply_markup: buildPunishmentCancelKeyboard('mute', ctx.chat.id, targetData.target.id) });
-    scheduleDeleteForContext(ctx, sentMsg?.message_id, 5000);
+    scheduleDeleteForContext(ctx, sentMsg?.message_id, 10000);
     if (deleteTargetMessage) {
       await deleteMessageSafely(ctx, ctx.message.reply_to_message.message_id);
     }
@@ -6887,7 +6887,7 @@ function createBot() {
     const durationLabel = formatDurationLabel(details.durationHours);
     await replyWithAutoDelete(ctx, `⛔ ${targetLabel} получил ban на ${durationLabel}. Причина: ${details.reason}`, {
       reply_markup: buildPunishmentCancelKeyboard('ban', ctx.chat.id, targetData.target.id),
-    });
+    }, 10000);
   }
 
   async function delBanCommand(ctx, args) {
@@ -6949,7 +6949,7 @@ function createBot() {
     const durationLabel = formatDurationLabel(details.durationHours);
     await replyWithAutoDelete(ctx, `⛔ ${targetLabel} получил ban на ${durationLabel}, сообщение удалено. Причина: ${details.reason}`, {
       reply_markup: buildPunishmentCancelKeyboard('ban', ctx.chat.id, targetData.target.id),
-    });
+    }, 10000);
   }
 
   async function unbanCommand(ctx, args) {
