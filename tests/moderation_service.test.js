@@ -255,6 +255,22 @@ test('allowed domain prefixes permit links under the same host', () => {
   assert.equal(service.isAllowedLink(100, 'https://example.com/track/123'), false);
 });
 
+test('a host rule allows every path, while a path rule stays exact', () => {
+  const service = new ModerationService();
+  service.addAllowedLink(100, 'https://vk.com/');
+
+  assert.equal(service.isAllowedLink(100, 'https://vk.com/audio'), true);
+  assert.equal(service.isAllowedLink(100, 'https://vk.com/club123'), true);
+  assert.equal(service.isAllowedLink(100, 'https://t.me/Lololoshka_F_D'), false);
+
+  service.clearAllowedLinks(100);
+  service.addAllowedLink(100, 'https://vk.com/audio');
+
+  assert.equal(service.isAllowedLink(100, 'https://vk.com/audio'), true);
+  assert.equal(service.isAllowedLink(100, 'https://vk.com/audio?autoplay=1'), false);
+  assert.equal(service.isAllowedLink(100, 'https://vk.com/video'), false);
+});
+
 test('allowed domain rules without trailing slash still permit host and subpaths', () => {
   const service = new ModerationService();
   service.addAllowedLink(100, 'https://customdomain.test');
