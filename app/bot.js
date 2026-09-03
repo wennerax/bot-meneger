@@ -4488,11 +4488,11 @@ function createBot() {
     }
     const service = activeModerationService || defaultModerationService;
     const message = ctx.message || {};
-    const channelId = message.sender_chat?.id || message.forward_from_chat?.id;
-    if (!Number.isFinite(Number(channelId))) {
+    const channel = message.sender_chat || message.forward_from_chat;
+    if (!channel || String(channel.type || '').toLowerCase() !== 'channel') {
       return false;
     }
-    return service.isAllowedAnonymousChannel(ctx.chat.id, channelId);
+    return service.isAllowedAnonymousChannel(ctx.chat.id, channel);
   }
 
   function isChannelPostInGroup(ctx) {
@@ -5088,6 +5088,9 @@ function createBot() {
 
   async function sendMenuReplyForChannelPost(ctx) {
     const chatId = ctx.chat.id;
+    if (isAllowedAnonymousChannel(ctx)) {
+      return null;
+    }
     if (!moderationService.getMenuEnabled(chatId)) {
       return null;
     }
@@ -9136,8 +9139,8 @@ function createBot() {
 
     if (action.startsWith('command_rights:st:')) {
       const parts = action.split(':');
-      const sectionId = parts[3];
-      const mode = parts[4];
+      const sectionId = parts[2];
+      const mode = parts[3];
       const returnFlag = parts.includes('settings') || parts.includes('s') ? 'settings' : 'menu';
       const section = getCommandSections().find((item) => item.id === sectionId);
       if (!section || !['enable', 'disable'].includes(mode)) {
