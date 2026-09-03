@@ -1662,6 +1662,40 @@ class ModerationService {
     return ['all', 'private_only'].includes(mode) ? mode : 'all';
   }
 
+  transferSettings(sourceChatId, targetChatId, option = 'all') {
+    const source = this._getChat(sourceChatId);
+    const target = this._getChat(targetChatId);
+    const optionKeys = {
+      rules: ['rules', 'adminRules'],
+      links: ['allowedLinks'],
+      banwords: ['banWords'],
+      first_comment: ['menu'],
+      toggles: [
+        'banwordSettings', 'warnSettings', 'forwardsSettings', 'spamProtectionEnabled',
+        'linkProtectionEnabled', 'moderatorWarningsEnabled', 'floodProtectionEnabled',
+        'rulesEnabled', 'streaksEnabled', 'streaksLabel', 'chatAccessMode', 'captchaEnabled',
+        'captchaMode', 'captchaTimeoutMinutes', 'mediaAiEnabled', 'mentionNotifications',
+        'adminNotify', 'hideAnonymous', 'allowedForwards', 'commandRights', 'commandDisabled',
+        'menuCommandAccess', 'agreement',
+      ],
+    };
+    const keys = option === 'all'
+      ? Object.keys(this._normalizeChat({})).filter((key) => !['warnings', 'moderationLogs'].includes(key))
+      : optionKeys[option];
+
+    if (!keys || Number(sourceChatId) === Number(targetChatId)) {
+      return false;
+    }
+
+    keys.forEach((key) => {
+      if (Object.prototype.hasOwnProperty.call(source, key)) {
+        target[key] = JSON.parse(JSON.stringify(source[key]));
+      }
+    });
+    this._save();
+    return true;
+  }
+
   setMenuCommandAccess(chatId, mode) {
     const normalized = String(mode || '').toLowerCase();
     if (!['all', 'private_only'].includes(normalized)) {

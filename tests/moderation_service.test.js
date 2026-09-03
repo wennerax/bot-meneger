@@ -98,6 +98,21 @@ test('admin rules are stored separately and can be toggled', () => {
   assert.equal(service.isAdminRulesEnabled(100), true);
 });
 
+test('selected settings can be transferred without copying unrelated data', () => {
+  const service = new ModerationService();
+
+  service.setRules(100, 'Правила источника');
+  service.clearAllowedLinks(100);
+  service.addAllowedLink(100, 'source.example');
+  service.setRules(200, 'Собственные правила');
+  service.clearAllowedLinks(200);
+  service.addAllowedLink(200, 'target.example');
+
+  assert.equal(service.transferSettings(100, 200, 'links'), true);
+  assert.deepEqual(service.getAllowedLinks(200), ['source.example']);
+  assert.equal(service.getRules(200), 'Собственные правила');
+});
+
 test('admin notification group is stored per chat', () => {
   const service = new ModerationService();
 

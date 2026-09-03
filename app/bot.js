@@ -584,6 +584,27 @@ async function showSettingsGroupSelector(ctx) {
   }
 }
 
+async function showSettingsTransferSourceMenu(ctx, targetChatId) {
+  const groups = await getManagedGroupsForUser(ctx);
+  const availableGroups = groups.filter((group) => Number(group.chatId) !== Number(targetChatId));
+  if (!availableGroups.length) {
+    await safeEditMessageText(ctx, '📥 Перенос настроек\n\nНужна ещё одна группа с доступом к настройкам, чтобы выбрать источник.', {
+      reply_markup: { inline_keyboard: [[{ text: 'Назад', callback_data: `settings:main:${targetChatId}` }]] },
+    });
+    return;
+  }
+
+  await safeEditMessageText(ctx, '📥 Перенос настроек\n\nВыберите группу, из которой перенести настройки:', {
+    reply_markup: buildSettingsTransferSourceKeyboard(targetChatId, availableGroups),
+  });
+}
+
+async function showSettingsTransferOptionsMenu(ctx, targetChatId, sourceChatId) {
+  await safeEditMessageText(ctx, `📥 Перенос настроек\n\nИсточник: ${getGroupDisplayName(sourceChatId)}\nНазначение: ${getGroupDisplayName(targetChatId)}\n\nВыберите, что перенести:`, {
+    reply_markup: buildSettingsTransferKeyboard(targetChatId, sourceChatId),
+  });
+}
+
 function buildSettingsMainKeyboard(chatId, page = 0) {
   const pages = [
     [
@@ -628,6 +649,9 @@ function buildSettingsMainKeyboard(chatId, page = 0) {
       { text: '🛡️ Модерация', callback_data: `settings:section:moderation:${chatId}` },
       { text: '🎞️ GIF Команды', callback_data: `settings:section:gif_commands:${chatId}` },
     ],
+    [
+      { text: '📥 Перенос настроек', callback_data: `settings:transfer:${chatId}` },
+    ],
     ],
   ];
   const selectedPage = Math.max(0, Math.min(Number(page) || 0, pages.length - 1));
@@ -639,6 +663,41 @@ function buildSettingsMainKeyboard(chatId, page = 0) {
     navigation.push({ text: 'Вперёд ➡️', callback_data: `settings:page:${chatId}:${selectedPage + 1}` });
   }
   return [...pages[selectedPage], navigation];
+}
+
+function buildSettingsTransferKeyboard(targetChatId, sourceChatId) {
+  const options = [
+    ['📜 Правила', 'rules'],
+    ['🔗 Ссылки', 'links'],
+    ['🚫 Банворды', 'banwords'],
+    ['💬 Первый ком', 'first_comment'],
+    ['⚙️ Вкл/выкл', 'toggles'],
+    ['📦 Всё', 'all'],
+  ];
+  return {
+    inline_keyboard: [
+      ...options.map(([text, option]) => [{
+        text,
+        callback_data: `settings:transfer_apply:${targetChatId}:${sourceChatId}:${option}`,
+      }]),
+      [{ text: '⬅️ Выбрать другую группу', callback_data: `settings:transfer:${targetChatId}` }],
+      [{ text: 'Назад', callback_data: `settings:main:${targetChatId}` }],
+    ],
+  };
+}
+
+function buildSettingsTransferSourceKeyboard(targetChatId, groups) {
+  return {
+    inline_keyboard: [
+      ...groups
+        .filter((group) => Number(group.chatId) !== Number(targetChatId))
+        .map((group) => [{
+          text: `🏘️ ${group.title}`,
+          callback_data: `settings:transfer_source:${targetChatId}:${group.chatId}`,
+        }]),
+      [{ text: 'Назад', callback_data: `settings:main:${targetChatId}` }],
+    ],
+  };
 }
 
 function buildMenuKeyboard(chatId) {
@@ -7529,12 +7588,29 @@ function createBot() {
     const callbackData = ctx.callbackQuery?.data || `settings:${action}`;
     const directTimeoutOpen = callbackData.match(/^settings:captcha_timeout:(-?\d+)$/);
     const directTimeoutSet = callbackData.match(/^settings:captcha_timeout_set:(-?\d+):(-?\d+)$/);
+    const directTransferSource = callbackData.match(/^settings:transfer_source:(-?\d+):(-?\d+)$/);
+    const directTransferApply = callbackData.match(/^settings:transfer_apply:(-?\d+):(-?\d+):(rules|links|banwords|first_comment|toggles|all)$/);
 
     let parsed = parseSettingsAction(action);
     if (directTimeoutOpen) {
       parsed = { ...parsed, target: 'captcha_timeout', chatId: Number(directTimeoutOpen[1]) || 0 };
     } else if (directTimeoutSet) {
       parsed = { ...parsed, target: 'captcha_timeout_set', chatId: Number(directTimeoutSet[1]) || 0, value: directTimeoutSet[2] };
+    } else if (directTransferSource) {
+      parsed = {
+        ...parsed,
+        target: 'transfer_source',
+        chatId: Number(directTransferSource[1]) || 0,
+        value: directTransferSource[2],
+      };
+    } else if (directTransferApply) {
+      parsed = {
+        ...parsed,
+        target: 'transfer_apply',
+        chatId: Number(directTransferApply[1]) || 0,
+        value: directTransferApply[3],
+        extra: directTransferApply[2],
+      };
     }
 
     const chatId = Number(parsed.chatId || ctx.chat?.id || 0);
@@ -7587,6 +7663,37 @@ function createBot() {
 
     if (parsed.target === 'page') {
       await showSettingsMainMenu(ctx, chatId, Number(parsed.value) || 0);
+      return;
+    }
+
+    if (parsed.target === 'transfer') {
+      await showSettingsTransferSourceMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'transfer_source') {
+      const sourceChatId = Number(parsed.value || 0);
+      if (!await canManageGroupSettings(ctx, sourceChatId)) {
+        await ctx.reply('У вас нет прав менять настройки исходной группы.');
+        return;
+      }
+      await showSettingsTransferOptionsMenu(ctx, chatId, sourceChatId);
+      return;
+    }
+
+    if (parsed.target === 'transfer_apply') {
+      const sourceChatId = Number(parsed.extra || 0);
+      if (!await canManageGroupSettings(ctx, sourceChatId)) {
+        await ctx.reply('У вас нет прав менять настройки исходной группы.');
+        return;
+      }
+      const service = activeModerationService || defaultModerationService;
+      if (!service.transferSettings(sourceChatId, chatId, parsed.value)) {
+        await safeAnswerCbQuery(ctx, '⚠️ Не удалось перенести настройки.');
+        return;
+      }
+      await safeAnswerCbQuery(ctx, '✅ Настройки перенесены.');
+      await showSettingsTransferOptionsMenu(ctx, chatId, sourceChatId);
       return;
     }
 
