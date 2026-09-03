@@ -678,7 +678,7 @@ function buildSettingsTransferKeyboard(targetChatId, sourceChatId) {
     inline_keyboard: [
       ...options.map(([text, option]) => [{
         text,
-        callback_data: `settings:transfer_apply:${targetChatId}:${sourceChatId}:${option}`,
+        callback_data: `settings:ta:${targetChatId}:${sourceChatId}:${option}`,
       }]),
       [{ text: '⬅️ Выбрать другую группу', callback_data: `settings:transfer:${targetChatId}` }],
       [{ text: 'Назад', callback_data: `settings:main:${targetChatId}` }],
@@ -7589,7 +7589,7 @@ function createBot() {
     const directTimeoutOpen = callbackData.match(/^settings:captcha_timeout:(-?\d+)$/);
     const directTimeoutSet = callbackData.match(/^settings:captcha_timeout_set:(-?\d+):(-?\d+)$/);
     const directTransferSource = callbackData.match(/^settings:transfer_source:(-?\d+):(-?\d+)$/);
-    const directTransferApply = callbackData.match(/^settings:transfer_apply:(-?\d+):(-?\d+):(rules|links|banwords|first_comment|toggles|all)$/);
+    const directTransferApply = callbackData.match(/^settings:ta:(-?\d+):(-?\d+):(rules|links|banwords|first_comment|toggles|all)$/);
 
     let parsed = parseSettingsAction(action);
     if (directTimeoutOpen) {
