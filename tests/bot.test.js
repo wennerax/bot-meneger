@@ -615,6 +615,10 @@ test('isChannelPostInGroupMessage recognizes channel-authored posts with a from 
     message_thread_id: 12,
     forward_origin: { type: 'channel', chat: { id: -1001, type: 'channel' } },
   }), true);
+  assert.equal(isChannelPostInGroupMessage({
+    is_automatic_forward: true,
+    message_thread_id: 12,
+  }), true);
   assert.equal(isChannelPostInGroupMessage({ forward_from_chat: { type: 'channel' } }), false);
 });
 

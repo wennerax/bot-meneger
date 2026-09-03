@@ -72,9 +72,7 @@ function isChannelPostInGroupMessage(message = {}) {
   }
 
   const isSenderChatChannel = String(message.sender_chat?.type || '').toLowerCase() === 'channel';
-  const isAutomaticForwardFromChannel = message.is_automatic_forward === true
-    && (String(message.forward_origin?.type || '').toLowerCase() === 'channel'
-      || String(message.forward_from_chat?.type || '').toLowerCase() === 'channel');
+  const isAutomaticForwardFromChannel = message.is_automatic_forward === true;
   const isDiscussionChannelForward = Boolean(message.message_thread_id)
     && (String(message.forward_origin?.type || '').toLowerCase() === 'channel'
       || String(message.forward_from_chat?.type || '').toLowerCase() === 'channel');
@@ -5130,10 +5128,11 @@ function createBot() {
     const replyOptions = {};
     if (ctx.message.message_thread_id && ctx.message.message_thread_id !== 0) {
       replyOptions.message_thread_id = ctx.message.message_thread_id;
-      replyOptions.reply_to_message_id = ctx.message.message_id;
-    } else {
-      replyOptions.reply_to_message_id = ctx.message.message_id;
     }
+    replyOptions.reply_parameters = {
+      message_id: ctx.message.message_id,
+      allow_sending_without_reply: true,
+    };
     
     if (entities.length) {
       replyOptions.entities = entities;
@@ -5153,7 +5152,7 @@ function createBot() {
         if (replyOptions.message_thread_id) {
           mediaOptions.message_thread_id = replyOptions.message_thread_id;
         }
-        mediaOptions.reply_to_message_id = replyOptions.reply_to_message_id;
+        mediaOptions.reply_parameters = replyOptions.reply_parameters;
         
         if (menuMedia.type === 'photo') {
           sentMessage = await ctx.replyWithPhoto(menuMedia.fileId, mediaOptions);
