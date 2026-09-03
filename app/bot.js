@@ -7710,12 +7710,6 @@ function createBot() {
     }
     chatId = await resolveChatIdAfterMigration(chatId);
     parsed.chatId = chatId;
-    if (ctx.chat) {
-      ctx.chat.id = chatId;
-    }
-    if (ctx.callbackQuery?.message?.chat) {
-      ctx.callbackQuery.message.chat.id = chatId;
-    }
     try {
       await ctx.answerCbQuery();
     } catch (error) {
