@@ -605,8 +605,12 @@ test('isAnonymousSenderMessage detects hidden sender messages', () => {
 });
 
 test('isChannelPostInGroupMessage recognizes channel-authored posts with a from user', () => {
-  assert.equal(isChannelPostInGroupMessage({ sender_chat: { type: 'channel' }, from: { id: 123 } }), true);
-  assert.equal(isChannelPostInGroupMessage({ sender_chat: { type: 'channel' } }), true);
+  assert.equal(isChannelPostInGroupMessage({
+    sender_chat: { type: 'channel' },
+    is_automatic_forward: true,
+    from: { id: 123 },
+  }), true);
+  assert.equal(isChannelPostInGroupMessage({ sender_chat: { type: 'channel' } }), false);
   assert.equal(isChannelPostInGroupMessage({
     is_automatic_forward: true,
     forward_from_chat: { type: 'channel' },
@@ -614,7 +618,7 @@ test('isChannelPostInGroupMessage recognizes channel-authored posts with a from 
   assert.equal(isChannelPostInGroupMessage({
     message_thread_id: 12,
     forward_origin: { type: 'channel', chat: { id: -1001, type: 'channel' } },
-  }), true);
+  }), false);
   assert.equal(isChannelPostInGroupMessage({
     is_automatic_forward: true,
     message_thread_id: 12,

@@ -71,15 +71,10 @@ function isChannelPostInGroupMessage(message = {}) {
     return false;
   }
 
-  const isSenderChatChannel = String(message.sender_chat?.type || '').toLowerCase() === 'channel';
   const isAutomaticForwardFromChannel = message.is_automatic_forward === true;
-  const isDiscussionChannelForward = Boolean(message.message_thread_id)
-    && (String(message.forward_origin?.type || '').toLowerCase() === 'channel'
-      || String(message.forward_from_chat?.type || '').toLowerCase() === 'channel');
 
-  // Telegram may include `from` on channel-authored posts in discussion topics.
-  // `sender_chat` is the authoritative signal that the post was sent as a channel.
-  if (isSenderChatChannel || isAutomaticForwardFromChannel || isDiscussionChannelForward) {
+  // Telegram may include `from` on automatic channel posts in discussion topics.
+  if (isAutomaticForwardFromChannel) {
     return true;
   }
 
@@ -5106,7 +5101,7 @@ function createBot() {
 
   async function sendMenuReplyForChannelPost(ctx, targetChatId = null, replyToPost = true) {
     const chatId = Number(targetChatId || ctx.chat.id);
-    if (isAllowedAnonymousChannel(ctx, chatId)) {
+    if (!targetChatId && !isChannelPostInGroup(ctx) && isAllowedAnonymousChannel(ctx, chatId)) {
       return null;
     }
     if (!moderationService.getMenuEnabled(chatId)) {
@@ -9802,6 +9797,18 @@ function createBot() {
     // Handle anonymous messages (sender_chat/author_signature) - messages posted through a channel or hidden sender
     if (isGroupChat(ctx) && isAnonymousSenderMessage(message)) {
       const service = activeModerationService || defaultModerationService;
+      const isOrdinaryChannelMessage = String(message.sender_chat?.type || '').toLowerCase() === 'channel'
+        && !isAutomaticForwardFromChannel;
+      if (isOrdinaryChannelMessage) {
+        if (!service.isAllowedAnonymousChannel(ctx.chat.id, message.sender_chat)) {
+          try {
+            await deleteMessageSafely(ctx, message.message_id);
+          } catch (error) {
+            console.warn('Failed to delete non-excluded channel message:', error?.message || error);
+          }
+        }
+        return;
+      }
       if (service.isHideAnonymousEnabled(ctx.chat.id)) {
         if (service.shouldDeleteAnonymousMessages(ctx.chat.id)) {
           try {
@@ -10286,7 +10293,7 @@ function createBot() {
   });
 
   bot.on('message', async (ctx, next) => {
-    if (isChannelPostInGroup(ctx) || isAllowedAnonymousChannel(ctx)) {
+    if (isChannelPostInGroup(ctx)) {
       await sendMenuReplyForChannelPost(ctx);
       return;
     }
@@ -10333,11 +10340,6 @@ function createBot() {
           return;
         }
       }
-    }
-
-    if (isAllowedAnonymousChannel(ctx)) {
-      await sendMenuReplyForChannelPost(ctx);
-      return;
     }
 
     if (isChannelPostInGroup(ctx)) {
