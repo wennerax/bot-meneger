@@ -313,8 +313,8 @@ test('clearAllowedLinks removes all allowed links from chat', () => {
   service.addAllowedLink(100, 'vk_musix_bot');
 
   assert.equal(service.clearAllowedLinks(100), true);
-  assert.deepEqual(service.getAllowedLinks(100), []);
-  assert.equal(service.clearAllowedLinks(100), false);
+  assert.equal(service.getAllowedLinks(100).includes('vk.com/audio'), true);
+  assert.equal(service.clearAllowedLinks(100), true);
 });
 
 test('allowed forwards match Telegram source ids, usernames and links', () => {

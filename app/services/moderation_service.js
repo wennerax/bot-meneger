@@ -984,7 +984,12 @@ class ModerationService {
   }
 
   getAllowedLinks(chatId) {
-    return [...this._getChat(chatId).allowedLinks];
+    const allowedLinks = this._getChat(chatId).allowedLinks;
+    if (allowedLinks.length === 0) {
+      allowedLinks.push(...DEFAULT_ALLOWED_LINKS.map((item) => String(item).trim().toLowerCase()).filter(Boolean));
+      this._save();
+    }
+    return [...new Set(allowedLinks)];
   }
 
   addAllowedLink(chatId, value) {
@@ -1482,7 +1487,7 @@ class ModerationService {
       return false;
     }
 
-    return this._getChat(chatId).allowedLinks.some((item) => {
+    return this.getAllowedLinks(chatId).some((item) => {
       const rule = parseAllowedLinkRule(item);
       return matchesAllowedRule(rule, normalizedUrl);
     });
@@ -1538,7 +1543,12 @@ class ModerationService {
   }
 
   getAllowedAnonymousChannels(chatId) {
-    return [...this._getChat(chatId).hideAnonymous.allowedAnonymousChannels];
+    const allowedChannels = this._getChat(chatId).hideAnonymous.allowedAnonymousChannels;
+    if (allowedChannels.length === 0) {
+      allowedChannels.push(...DEFAULT_ALLOWED_ANONYMOUS_CHANNELS);
+      this._save();
+    }
+    return [...new Set(allowedChannels)];
   }
 
   addAllowedAnonymousChannel(chatId, channelId) {
@@ -1565,8 +1575,7 @@ class ModerationService {
   }
 
   isAllowedAnonymousChannel(chatId, channel) {
-    const chat = this._getChat(chatId);
-    const normalized = new Set(chat.hideAnonymous.allowedAnonymousChannels || []);
+    const normalized = new Set(this.getAllowedAnonymousChannels(chatId));
     if (!normalized.size) {
       return false;
     }
