@@ -3963,6 +3963,29 @@ function createBot() {
     return Boolean(message.photo || message.video || message.document || message.animation || message.audio || message.voice || message.sticker || message.video_note);
   }
 
+  function isRestrictedAdminCommand(commandKey) {
+    return [
+      'setrules', 'setgreeting', 'antispam', 'antiflood', 'antilinks',
+      'links', 'ссылки', 'allowed', 'menu', 'admins', 'админы', 'logs', 'логи', 'modstats',
+      'статистика_модерации', 'баны', 'муты', 'banlist', 'mutelist',
+      'clearhistory', 'clear_history', 'сбросистории', 'сброс_истории',
+      'addadmin', 'добавить_админа', 'добавить', 'removeadmin', 'снять_админа',
+      'promote', 'повышение', 'demote', 'разжалование', 'admincom', 'admin_rules', 'аправила', 'arule',
+      'delete_message', 'del', 'delete', 'дел', 'reload', 'рел',
+    ].includes(String(commandKey || '').toLowerCase());
+  }
+
+  function canUseRestrictedAdminCommand(ctx, commandKey) {
+    if (!isRestrictedAdminCommand(commandKey) || !isBotAdmin(ctx)) {
+      return true;
+    }
+
+    const level = database.isPrimaryBotAdmin(ctx.chat.id, ctx.from.id)
+      ? 1
+      : Number(database.getBotAdminLevel(ctx.chat.id, ctx.from.id));
+    return !Number.isFinite(level) || level <= 2;
+  }
+
   async function enforceDisabledCommand(ctx, next) {
     if (!ctx.chat || !isGroupChat(ctx) || !ctx.message) {
       return next();
@@ -3971,6 +3994,11 @@ function createBot() {
     const commandKey = parseBotCommandKey(getMessageText(ctx));
     if (!commandKey) {
       return next();
+    }
+
+    if (!canUseRestrictedAdminCommand(ctx, commandKey)) {
+      await replyWithAutoDelete(ctx, 'У вас есть доступ только к командам варна, мута и бана.');
+      return;
     }
 
     if (moderationService.isCommandDisabled(ctx.chat.id, commandKey)) {
@@ -6411,6 +6439,9 @@ function createBot() {
     if (['manage_admins'].includes(normalizedAction)) {
       return 2;
     }
+    if (['manage_settings'].includes(normalizedAction)) {
+      return 2;
+    }
     return null;
   }
 
@@ -6433,6 +6464,15 @@ function createBot() {
     }
 
     ctx.reply('У вас недостаточно прав для этой команды.');
+    return false;
+  }
+
+  function ensureBotAdminCanUseSettingsCommand(ctx) {
+    if (canUseBotAdminAction(ctx, 'manage_settings')) {
+      return true;
+    }
+
+    ctx.reply('Эта команда доступна только главному и ведущему администратору бота.');
     return false;
   }
 
@@ -6959,8 +6999,8 @@ function createBot() {
 
   async function addBotAdminCommand(ctx, args = '') {
     ensureGroup(ctx);
-    if (!isBotAdmin(ctx)) {
-      ctx.reply('Только главный или вспомогательный администратор бота может добавлять новых админов.');
+    if (!database.isPrimaryBotAdmin(ctx.chat.id, ctx.from.id)) {
+      ctx.reply('Только главный администратор бота может добавлять новых админов.');
       return;
     }
 
@@ -7441,6 +7481,10 @@ function createBot() {
 
     if (!await canManageGroupSettings(ctx, chatId)) {
       await ctx.reply('У вас нет прав менять настройки этой группы.');
+      return;
+    }
+    if (!canUseBotAdminAction(ctx, 'manage_settings')) {
+      await ctx.reply('Настройки доступны только главному и ведущему администраторам бота.');
       return;
     }
 
@@ -8593,14 +8637,14 @@ function createBot() {
     const isCommandRightsAction = action === 'command_rights'
       || action.startsWith('command_rights:');
     if (botMessageMatch) {
-      if (!(await canManageGroupSettings(ctx, botMessageChatId))) {
+      if (!(await canManageGroupSettings(ctx, botMessageChatId) && canUseBotAdminAction(ctx, 'manage_settings'))) {
         await ctx.reply('У вас нет прав администратора группы с правом менять профиль группы.');
         return;
       }
-    } else if (isCommandRightsAction && !(await canManageGroupSettings(ctx, chatId))) {
+    } else if (isCommandRightsAction && (!(await canManageGroupSettings(ctx, chatId)) || !canUseBotAdminAction(ctx, 'manage_settings'))) {
       await ctx.reply('У вас нет прав менять настройки этой группы.');
       return;
-    } else if (!isBotAdmin(ctx)) {
+    } else if (!isBotAdmin(ctx) || !canUseBotAdminAction(ctx, 'manage_settings')) {
       await ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
@@ -9074,6 +9118,11 @@ function createBot() {
       return;
     }
 
+    if (!isBotAdmin(ctx) || !canUseBotAdminAction(ctx, 'manage_settings')) {
+      await ctx.reply('Настройки доступны только главному и ведущему администраторам бота.');
+      return;
+    }
+
     if (moderationService.getMenuCommandAccess(chatId) === 'private_only') {
       try {
         await ctx.deleteMessage();
@@ -9258,6 +9307,7 @@ function createBot() {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
+    if (!ensureBotAdminCanUseSettingsCommand(ctx)) return;
     const text = ctx.message.text.split(/\s+/).slice(1).join(' ').trim();
     if (!text) {
       ctx.reply('Использование: /setrules текст правил');
@@ -9334,6 +9384,7 @@ function createBot() {
       ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
+    if (!ensureBotAdminCanUseSettingsCommand(ctx)) return;
     const text = ctx.message.text.split(/\s+/).slice(1).join(' ').trim();
     if (!text) {
       ctx.reply('Использование: /setgreeting текст приветствия');
@@ -9734,6 +9785,7 @@ function createBot() {
         ctx.reply('Эта команда доступна только администраторам.');
         return;
       }
+      if (!ensureBotAdminCanUseSettingsCommand(ctx)) return;
       moderationService.enableSpamProtection(ctx.chat.id);
       await replyAndScheduleDelete(ctx, '✅ Антиспам включён.');
       return;
@@ -9745,6 +9797,7 @@ function createBot() {
         ctx.reply('Эта команда доступна только администраторам.');
         return;
       }
+      if (!ensureBotAdminCanUseSettingsCommand(ctx)) return;
       moderationService.disableSpamProtection(ctx.chat.id);
       await replyAndScheduleDelete(ctx, '✅ Антиспам выключен.');
       return;
@@ -9756,6 +9809,7 @@ function createBot() {
         ctx.reply('Эта команда доступна только администраторам.');
         return;
       }
+      if (!ensureBotAdminCanUseSettingsCommand(ctx)) return;
       moderationService.enableFloodProtection(ctx.chat.id);
       await replyAndScheduleDelete(ctx, '✅ Антифлуд включён.');
       return;
@@ -9767,6 +9821,7 @@ function createBot() {
         ctx.reply('Эта команда доступна только администраторам.');
         return;
       }
+      if (!ensureBotAdminCanUseSettingsCommand(ctx)) return;
       moderationService.disableFloodProtection(ctx.chat.id);
       await replyAndScheduleDelete(ctx, '✅ Антифлуд выключен.');
       return;
@@ -9779,6 +9834,7 @@ function createBot() {
         ctx.reply('Эта команда доступна только администраторам.');
         return;
       }
+      if (!ensureBotAdminCanUseSettingsCommand(ctx)) return;
       const linkValue = addAllowedLinkMatch[1].trim();
       if (!linkValue) {
         ctx.reply('Использование: +links <url> — добавить разрешённую ссылку или домен.');
@@ -9799,6 +9855,7 @@ function createBot() {
         ctx.reply('Эта команда доступна только администраторам.');
         return;
       }
+      if (!ensureBotAdminCanUseSettingsCommand(ctx)) return;
       const argValue = removeAllowedLinkMatch[1].trim();
       if (!argValue) {
         moderationService.disableLinkProtection(ctx.chat.id);
@@ -9829,6 +9886,7 @@ function createBot() {
         ctx.reply('Эта команда доступна только администраторам.');
         return;
       }
+      if (!ensureBotAdminCanUseSettingsCommand(ctx)) return;
       moderationService.enableLinkProtection(ctx.chat.id);
       await replyAndScheduleDelete(ctx, '✅ Антиссылки включены.');
       return;
@@ -9840,6 +9898,7 @@ function createBot() {
         ctx.reply('Эта команда доступна только администраторам.');
         return;
       }
+      if (!ensureBotAdminCanUseSettingsCommand(ctx)) return;
       moderationService.disableLinkProtection(ctx.chat.id);
       await replyAndScheduleDelete(ctx, '✅ Антиссылки выключены.');
       return;
@@ -9862,6 +9921,7 @@ function createBot() {
         ctx.reply('Эта команда доступна только администраторам.');
         return;
       }
+      if (!ensureBotAdminCanUseSettingsCommand(ctx)) return;
       ensureGroup(ctx);
       const newRules = lowerText.startsWith('+rules') ? text.slice(7) : text.slice(10);
       if (!newRules.trim()) {
@@ -9878,6 +9938,7 @@ function createBot() {
         ctx.reply('Эта команда доступна только администраторам.');
         return;
       }
+      if (!ensureBotAdminCanUseSettingsCommand(ctx)) return;
       ensureGroup(ctx);
       const newGreeting = lowerText.startsWith('+greeting') ? text.slice(10) : text.slice(13);
       if (!newGreeting.trim()) {
