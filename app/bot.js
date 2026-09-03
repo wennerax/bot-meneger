@@ -4488,7 +4488,7 @@ function createBot() {
     }
     const service = activeModerationService || defaultModerationService;
     const message = ctx.message || {};
-    const channel = message.sender_chat || message.forward_from_chat;
+    const channel = message.sender_chat;
     if (!channel || String(channel.type || '').toLowerCase() !== 'channel') {
       return false;
     }
