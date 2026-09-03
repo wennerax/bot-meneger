@@ -120,6 +120,7 @@ test('first comment and all settings are transferred completely', () => {
   service.addMenuRow(100);
   service.addMenuButton(100, 'Открыть', 'https://source.example');
   service.setMenuMedia(100, { type: 'photo', fileId: 'source-photo' });
+  service.enableSpamProtection(100);
   service.disableLinkProtection(100);
 
   assert.equal(service.transferSettings(100, 200, 'first_comment'), true);
@@ -129,6 +130,9 @@ test('first comment and all settings are transferred completely', () => {
 
   assert.equal(service.transferSettings(100, 300, 'all'), true);
   assert.equal(service.getMenuText(300), 'Комментарий источника');
+  assert.deepEqual(service.getMenuButtons(300), [[{ text: 'Открыть', url: 'https://source.example' }]]);
+  assert.deepEqual(service.getMenuMedia(300), { type: 'photo', fileId: 'source-photo' });
+  assert.equal(service.isSpamProtectionEnabled(300), true);
   assert.equal(service.isLinkProtectionEnabled(300), false);
 });
 

@@ -1686,8 +1686,19 @@ class ModerationService {
       return false;
     }
 
+    if (option === 'first_comment' || option === 'all') {
+      target.menu = {
+        enabled: source.menu.enabled !== false,
+        text: normalizeTextPayload(source.menu.text),
+        buttons: Array.isArray(source.menu.buttons)
+          ? source.menu.buttons.map((row) => Array.isArray(row) ? row.map((button) => ({ ...button })) : [])
+          : [],
+        media: source.menu.media && typeof source.menu.media === 'object' ? { ...source.menu.media } : null,
+      };
+    }
+
     keys.forEach((key) => {
-      if (Object.prototype.hasOwnProperty.call(source, key)) {
+      if (key !== 'menu' && Object.prototype.hasOwnProperty.call(source, key)) {
         target[key] = JSON.parse(JSON.stringify(source[key]));
       }
     });
