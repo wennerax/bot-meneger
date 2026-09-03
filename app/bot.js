@@ -3291,6 +3291,46 @@ function createBot() {
   const pendingMenuActions = new Map();
   const pendingSettingsActions = new Map();
   const ticTacToeGames = new Map();
+  const migratedChatIds = new Map();
+
+  function resolveMigratedChatId(chatId) {
+    let currentId = Number(chatId);
+    const visited = new Set();
+    while (migratedChatIds.has(currentId) && !visited.has(currentId)) {
+      visited.add(currentId);
+      currentId = migratedChatIds.get(currentId);
+    }
+    return currentId;
+  }
+
+  async function handleChatMigration(ctx) {
+    const oldChatId = Number(ctx.message?.chat?.id);
+    const newChatId = Number(ctx.message?.migrate_to_chat_id);
+    if (!Number.isFinite(oldChatId) || !Number.isFinite(newChatId) || oldChatId === newChatId) {
+      return;
+    }
+
+    migratedChatIds.set(oldChatId, newChatId);
+    moderationService.transferSettings(oldChatId, newChatId, 'all');
+    database.ensureGroup(newChatId, ctx.message?.chat?.title || String(newChatId), ctx.message?.chat?.owner_id || null);
+  }
+
+  async function resolveChatIdAfterMigration(chatId) {
+    const currentId = resolveMigratedChatId(chatId);
+    try {
+      await bot.telegram.getChat(currentId);
+      return currentId;
+    } catch (error) {
+      const newChatId = Number(error?.parameters?.migrate_to_chat_id);
+      if (!Number.isFinite(newChatId)) {
+        return currentId;
+      }
+      migratedChatIds.set(currentId, newChatId);
+      moderationService.transferSettings(currentId, newChatId, 'all');
+      database.ensureGroup(newChatId, String(newChatId));
+      return newChatId;
+    }
+  }
 
   function getTicTacToeUserLabel(user) {
     if (user?.username) {
@@ -3436,6 +3476,7 @@ function createBot() {
   }
 
   bot.use(async (ctx, next) => {
+    await handleChatMigration(ctx);
     const message = ctx.message;
     const commandText = message?.text || '';
     if (message && ctx.chat?.type !== 'private' && ctx.from && !ctx.from.is_bot && /^\/\S+/.test(commandText)) {
@@ -7534,6 +7575,12 @@ function createBot() {
 
   bot.use(async (ctx, next) => {
     const callbackData = String(ctx.callbackQuery?.data || '');
+    if (callbackData.startsWith('settings:')) {
+      const migratedCallbackData = callbackData.replace(/-?\d+/g, (value) => String(resolveMigratedChatId(value)));
+      if (migratedCallbackData !== callbackData && ctx.callbackQuery) {
+        ctx.callbackQuery.data = migratedCallbackData;
+      }
+    }
     const isAdminCallback = callbackData.startsWith('admin_report:')
       || callbackData.startsWith('warn:')
       || callbackData.startsWith('punishment:')
@@ -7613,7 +7660,7 @@ function createBot() {
       };
     }
 
-    const chatId = Number(parsed.chatId || ctx.chat?.id || 0);
+    let chatId = Number(parsed.chatId || ctx.chat?.id || 0);
     if (!chatId) {
       try {
         await ctx.answerCbQuery();
@@ -7621,6 +7668,14 @@ function createBot() {
         // ignore stale callback_query errors
       }
       return;
+    }
+    chatId = await resolveChatIdAfterMigration(chatId);
+    parsed.chatId = chatId;
+    if (ctx.chat) {
+      ctx.chat.id = chatId;
+    }
+    if (ctx.callbackQuery?.message?.chat) {
+      ctx.callbackQuery.message.chat.id = chatId;
     }
     try {
       await ctx.answerCbQuery();
@@ -7672,7 +7727,7 @@ function createBot() {
     }
 
     if (parsed.target === 'transfer_source') {
-      const sourceChatId = Number(parsed.value || 0);
+      const sourceChatId = await resolveChatIdAfterMigration(Number(parsed.value || 0));
       if (!await canManageGroupSettings(ctx, sourceChatId)) {
         await ctx.reply('У вас нет прав менять настройки исходной группы.');
         return;
@@ -7682,7 +7737,7 @@ function createBot() {
     }
 
     if (parsed.target === 'transfer_apply') {
-      const sourceChatId = Number(parsed.extra || 0);
+      const sourceChatId = await resolveChatIdAfterMigration(Number(parsed.extra || 0));
       if (!await canManageGroupSettings(ctx, sourceChatId)) {
         await ctx.reply('У вас нет прав менять настройки исходной группы.');
         return;
