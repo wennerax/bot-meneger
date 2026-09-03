@@ -578,7 +578,7 @@ async function showSettingsGroupSelector(ctx) {
   };
 
   if (ctx.callbackQuery) {
-    await ctx.editMessageText('🎛️ Выберите группу для настроек:', { reply_markup: keyboard });
+    await safeEditMessageText(ctx, '🎛️ Выберите группу для настроек:', { reply_markup: keyboard });
   } else {
     await ctx.reply('🎛️ Выберите группу для настроек:', { reply_markup: keyboard });
   }
@@ -1303,7 +1303,7 @@ async function showSettingsCommandRightsMenu(ctx, chatId, pageIndex = 0) {
     return;
   }
 
-  await ctx.editMessageText(buildSettingsCommandRightsText(chatId, pageIndex), {
+  await safeEditMessageText(ctx, buildSettingsCommandRightsText(chatId, pageIndex), {
     reply_markup: buildSettingsCommandRightsKeyboard(chatId, pageIndex),
   });
 }
@@ -1314,7 +1314,7 @@ async function showSettingsAdminAdvancedMenu(ctx, chatId) {
     return;
   }
 
-  await ctx.editMessageText(buildSettingsAdminAdvancedMenuText(), { reply_markup: buildSettingsAdminAdvancedKeyboard(chatId) });
+  await safeEditMessageText(ctx, buildSettingsAdminAdvancedMenuText(), { reply_markup: buildSettingsAdminAdvancedKeyboard(chatId) });
 }
 
 async function showSettingsAdminChatMenu(ctx, chatId) {
@@ -1753,7 +1753,7 @@ async function showSettingsCaptchaMenu(ctx, chatId) {
     `⏱ Время прохождения: ${timeout} мин`,
   ].join('\n');
 
-  await ctx.editMessageText(text, { reply_markup: buildSettingsCaptchaKeyboard(chatId) });
+  await safeEditMessageText(ctx, text, { reply_markup: buildSettingsCaptchaKeyboard(chatId) });
 }
 
 async function showSettingsAgreementMenu(ctx, chatId) {
@@ -1776,7 +1776,7 @@ async function showSettingsAgreementMenu(ctx, chatId) {
     agreementText.slice(0, 900) || 'Пусто',
   ].join('\n');
 
-  await ctx.editMessageText(text, { reply_markup: buildSettingsAgreementKeyboard(chatId) });
+  await safeEditMessageText(ctx, text, { reply_markup: buildSettingsAgreementKeyboard(chatId) });
 }
 
 async function showSettingsLinksMenu(ctx, chatId) {
@@ -1800,7 +1800,7 @@ async function showSettingsLinksMenu(ctx, chatId) {
     linkExceptionUsers.length ? `• ${linkExceptionUsers.join('\n• ')}` : 'Список исключённых пользователей пуст.',
   ].join('\n');
 
-  await ctx.editMessageText(text, { reply_markup: buildSettingsLinksKeyboard(chatId) });
+  await safeEditMessageText(ctx, text, { reply_markup: buildSettingsLinksKeyboard(chatId) });
 }
 
 async function showSettingsForwardsMenu(ctx, chatId) {
@@ -1827,7 +1827,7 @@ async function showSettingsForwardsMenu(ctx, chatId) {
 async function renderForwardsMenu(ctx, text, extra) {
   if (ctx.callbackQuery) {
     try {
-      await ctx.editMessageText(text, extra);
+      await safeEditMessageText(ctx, text, extra);
     } catch (error) {
       const description = error?.response?.description || error?.description || '';
       if (description.includes('message is not modified')) {
@@ -1916,7 +1916,7 @@ async function showSettingsForwardsSettingsMenu(ctx, chatId, category) {
   };
 
   try {
-    await ctx.editMessageText(text, { reply_markup: keyboard });
+    await safeEditMessageText(ctx, text, { reply_markup: keyboard });
   } catch (error) {
     if (error.description && error.description.includes('message is not modified')) {
       await safeAnswerCbQuery(ctx, '🔜 Меню уже открыто');
@@ -1957,7 +1957,7 @@ async function showSettingsForwardsPunishmentMenu(ctx, chatId, category) {
   ].join('\n');
 
   try {
-    await ctx.editMessageText(text, { reply_markup: buildSettingsForwardsPunishmentKeyboard(chatId, category) });
+    await safeEditMessageText(ctx, text, { reply_markup: buildSettingsForwardsPunishmentKeyboard(chatId, category) });
   } catch (error) {
     if (error.description && error.description.includes('message is not modified')) {
       await safeAnswerCbQuery(ctx, '🔜 Меню уже открыто');
@@ -1990,7 +1990,7 @@ async function showSettingsForwardsDeleteMessageMenu(ctx, chatId, category) {
   ].join('\n');
 
   try {
-    await ctx.editMessageText(text, { reply_markup: buildSettingsForwardsDeleteMessageKeyboard(chatId, category, settings.deleteMessage) });
+    await safeEditMessageText(ctx, text, { reply_markup: buildSettingsForwardsDeleteMessageKeyboard(chatId, category, settings.deleteMessage) });
   } catch (error) {
     if (error.description && error.description.includes('message is not modified')) {
       await safeAnswerCbQuery(ctx, '🔜 Меню уже открыто');
@@ -2018,7 +2018,7 @@ async function showSettingsAntiMenu(ctx, chatId) {
     `Антиссылки: ${linksEnabled ? 'включены' : 'выключены'}`,
   ].join('\n');
 
-  await ctx.editMessageText(text, { reply_markup: buildSettingsAntiKeyboard(chatId) });
+  await safeEditMessageText(ctx, text, { reply_markup: buildSettingsAntiKeyboard(chatId) });
 }
 
 async function showSettingsStreaksMenu(ctx, chatId) {
@@ -2052,7 +2052,7 @@ async function showSettingsStreaksMenu(ctx, chatId) {
     });
   }
 
-  await ctx.editMessageText(text, { reply_markup: buildSettingsStreaksKeyboard(chatId), entities: entities.length ? entities : undefined });
+  await safeEditMessageText(ctx, text, { reply_markup: buildSettingsStreaksKeyboard(chatId), entities: entities.length ? entities : undefined });
 }
 
 async function showSettingsFirstMessageMenu(ctx, chatId) {
@@ -2073,7 +2073,7 @@ async function showSettingsFirstMessageMenu(ctx, chatId) {
     '• настроить кнопки, ряды и ссылки',
     '• добавить или удалить медиа',
   ].join('\n');
-  await ctx.editMessageText(text, { reply_markup: buildSettingsFirstMessageKeyboard(chatId) });
+  await safeEditMessageText(ctx, text, { reply_markup: buildSettingsFirstMessageKeyboard(chatId) });
 }
 
 async function showSettingsFirstMessageButtonsMenu(ctx, chatId) {
@@ -2090,7 +2090,7 @@ async function showSettingsFirstMessageButtonsMenu(ctx, chatId) {
     '• добавить или убрать кнопку',
     '• задать текст кнопки и ссылку, куда она ведёт',
   ].join('\n');
-  await ctx.editMessageText(text, { reply_markup: buildSettingsFirstMessageButtonsKeyboard(chatId) });
+  await safeEditMessageText(ctx, text, { reply_markup: buildSettingsFirstMessageButtonsKeyboard(chatId) });
 }
 
 async function showSettingsRulesMenu(ctx, chatId) {
@@ -2108,7 +2108,7 @@ async function showSettingsRulesMenu(ctx, chatId) {
     `Статус функции правил: ${enabled ? 'включена' : 'отключена'}`,
   ].join('\n');
 
-  await ctx.editMessageText(text, { reply_markup: buildSettingsRulesKeyboard(chatId) });
+  await safeEditMessageText(ctx, text, { reply_markup: buildSettingsRulesKeyboard(chatId) });
 }
 
 async function showSettingsAdminRulesMenu(ctx, chatId) {
@@ -7983,7 +7983,7 @@ function createBot() {
     }
 
     if (parsed.target === 'captcha_modes') {
-      await ctx.editMessageText('Выберите режим капчи:', { reply_markup: buildCaptchaModesKeyboard(chatId) });
+      await safeEditMessageText(ctx, 'Выберите режим капчи:', { reply_markup: buildCaptchaModesKeyboard(chatId) });
       return;
     }
 
@@ -7995,7 +7995,7 @@ function createBot() {
     }
 
     if (parsed.target === 'captcha_timeout') {
-      await ctx.editMessageText('Выберите время на прохождение капчи:', { reply_markup: buildCaptchaTimeoutKeyboard(chatId) });
+      await safeEditMessageText(ctx, 'Выберите время на прохождение капчи:', { reply_markup: buildCaptchaTimeoutKeyboard(chatId) });
       return;
     }
 
@@ -8338,7 +8338,7 @@ function createBot() {
       const rows = service.getMenuButtons(chatId);
       const row = Array.isArray(rows[rowIndex]) ? rows[rowIndex] : [];
       const rowLabel = row.length ? row.map((item) => item.text).join(', ') : 'пусто';
-      await ctx.editMessageText(`Ряд ${rowIndex + 1}: ${rowLabel}`, {
+      await safeEditMessageText(ctx, `Ряд ${rowIndex + 1}: ${rowLabel}`, {
         reply_markup: {
           inline_keyboard: [
             [{ text: 'Добавить кнопку в ряд', callback_data: `settings:first_button_add:${chatId}:${rowIndex}` }],
@@ -8378,7 +8378,7 @@ function createBot() {
 
     if (parsed.target === 'rules_view') {
       const rules = moderationService.getRules(chatId);
-      await ctx.editMessageText(rules || 'Правила ещё не заданы.', { reply_markup: buildSettingsRulesKeyboard(chatId) });
+      await safeEditMessageText(ctx, rules || 'Правила ещё не заданы.', { reply_markup: buildSettingsRulesKeyboard(chatId) });
       return;
     }
 
@@ -8891,7 +8891,7 @@ function createBot() {
     }
 
     if (action === 'overview' || action === 'first_message') {
-      await ctx.editMessageText(formatMenuOverview(chatId), { reply_markup: getMenuKeyboard(chatId) });
+      await safeEditMessageText(ctx, formatMenuOverview(chatId), { reply_markup: getMenuKeyboard(chatId) });
       return;
     }
 
@@ -8916,7 +8916,7 @@ function createBot() {
         '• Только владелец — писать может только владелец группы',
       ].join('\n');
 
-      await ctx.editMessageText(text, { reply_markup: buildSettingsChatKeyboard(chatId) });
+      await safeEditMessageText(ctx, text, { reply_markup: buildSettingsChatKeyboard(chatId) });
       return;
     }
 
@@ -9027,7 +9027,7 @@ function createBot() {
     }
 
     if (action === 'buttons') {
-      await ctx.editMessageText(formatMenuOverview(chatId), { reply_markup: buildMenuButtonsKeyboard(chatId) });
+      await safeEditMessageText(ctx, formatMenuOverview(chatId), { reply_markup: buildMenuButtonsKeyboard(chatId) });
       return;
     }
 
@@ -9054,7 +9054,7 @@ function createBot() {
     if (action === 'add_row') {
       moderationService.addMenuRow(chatId);
       await ctx.reply('✅ Ряд добавлен.');
-      await ctx.editMessageText(formatMenuOverview(chatId), { reply_markup: buildMenuButtonsKeyboard(chatId) });
+      await safeEditMessageText(ctx, formatMenuOverview(chatId), { reply_markup: buildMenuButtonsKeyboard(chatId) });
       return;
     }
 
@@ -9065,7 +9065,7 @@ function createBot() {
       } else {
         await ctx.reply('⚠️ Не удалось удалить ряд. Проверьте номер.');
       }
-      await ctx.editMessageText(formatMenuOverview(chatId), { reply_markup: buildMenuButtonsKeyboard(chatId) });
+      await safeEditMessageText(ctx, formatMenuOverview(chatId), { reply_markup: buildMenuButtonsKeyboard(chatId) });
       return;
     }
 
@@ -9083,7 +9083,7 @@ function createBot() {
     if (action === 'clear_buttons') {
       moderationService.clearMenuButtons(chatId);
       await ctx.reply('✅ Все кнопки удалены.');
-      await ctx.editMessageText(formatMenuOverview(chatId), { reply_markup: getMenuKeyboard(chatId) });
+      await safeEditMessageText(ctx, formatMenuOverview(chatId), { reply_markup: getMenuKeyboard(chatId) });
       return;
     }
 
@@ -9098,7 +9098,7 @@ function createBot() {
           await ctx.reply('⚠️ Не удалось удалить кнопку. Проверьте номер ряда и кнопку.');
         }
       }
-      await ctx.editMessageText(formatMenuOverview(chatId), { reply_markup: buildMenuButtonsKeyboard(chatId) });
+      await safeEditMessageText(ctx, formatMenuOverview(chatId), { reply_markup: buildMenuButtonsKeyboard(chatId) });
       return;
     }
 
@@ -9108,7 +9108,7 @@ function createBot() {
         await ctx.reply('⚠️ Неверный ряд.');
         return;
       }
-      await ctx.editMessageText(formatMenuOverview(chatId), { reply_markup: buildMenuRowInfoKeyboard(chatId, rowIndex) });
+      await safeEditMessageText(ctx, formatMenuOverview(chatId), { reply_markup: buildMenuRowInfoKeyboard(chatId, rowIndex) });
       return;
     }
 
@@ -9119,7 +9119,7 @@ function createBot() {
 
     if (action === 'command_rights:sections' || action.startsWith('command_rights:sections:settings') || action.startsWith('command_rights:sections:s:')) {
       const returnFlag = action.includes(':settings') || action.includes(':s:') ? 'settings' : 'menu';
-      await ctx.editMessageText(buildCommandSectionsText(chatId), { reply_markup: buildCommandSectionsKeyboard(chatId, returnFlag) });
+      await safeEditMessageText(ctx, buildCommandSectionsText(chatId), { reply_markup: buildCommandSectionsKeyboard(chatId, returnFlag) });
       return;
     }
 
@@ -9145,7 +9145,7 @@ function createBot() {
       }
       section.commands.forEach(({ cmd }) => moderationService.setCommandDisabled(chatId, cmd, mode === 'disable'));
       await safeAnswerCbQuery(ctx, mode === 'disable' ? `❌ Раздел ${section.label} отключён.` : `✅ Раздел ${section.label} включён.`);
-      await ctx.editMessageText(buildCommandSectionsText(chatId), { reply_markup: buildCommandSectionsKeyboard(chatId, returnFlag) });
+      await safeEditMessageText(ctx, buildCommandSectionsText(chatId), { reply_markup: buildCommandSectionsKeyboard(chatId, returnFlag) });
       return;
     }
 
