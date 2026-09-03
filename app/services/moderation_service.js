@@ -56,7 +56,7 @@ const DEFAULT_ALLOWED_LINKS = readJsonList(path.join(__dirname, '..', 'data', 'a
   't.me/shazambot?start=music_yt_mxkttxnz9iw', 'song.link/y/mxkttxnz9iw', 'ozon.ru/t/',
   't.me/minitestvbot', 't.me/losslessrobot', 't.me/howyourbot', 'open.spotify.com',
   'play.spotify.com', 'embed.spotify.com', 'spotify.com', 'spotify.link/',
-  't.me/digitalmusikbot?start=from_inline_caption', 't.me/wwhisbot?start=faq',
+  't.me/digitalmusikbot?start=from_inline_caption', 't.me/wwhisbot?start=faq'
 ]);
 const DEFAULT_ALLOWED_ANONYMOUS_CHANNELS = ['-1001598468726'];
 
