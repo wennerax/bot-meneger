@@ -346,7 +346,7 @@ async function safeEditMessageText(ctx, text, extra) {
     if (description.includes('message is not modified')) {
       return;
     }
-    if (description.includes('message to edit not found')) {
+    if (description.includes('message to edit not found') || description.includes("message can't be edited")) {
       if (typeof ctx.reply === 'function') {
         await ctx.reply(text, extra);
       }
@@ -1465,7 +1465,7 @@ async function safeEditMessageText(ctx, text, extra = {}) {
       return;
     }
 
-    if (typeof description === 'string' && description.includes('message to edit not found')) {
+    if (typeof description === 'string' && (description.includes('message to edit not found') || description.includes("message can't be edited"))) {
       if (typeof ctx.reply === 'function') {
         await ctx.reply(text, extra);
       }
@@ -1482,7 +1482,7 @@ async function safeEditMessageText(ctx, text, extra = {}) {
         if (typeof retryDescription === 'string' && retryDescription.includes('message is not modified')) {
           return;
         }
-        if (typeof retryDescription === 'string' && retryDescription.includes('message to edit not found')) {
+        if (typeof retryDescription === 'string' && (retryDescription.includes('message to edit not found') || retryDescription.includes("message can't be edited"))) {
           if (typeof ctx.reply === 'function') {
             await ctx.reply(text, extra);
           }
