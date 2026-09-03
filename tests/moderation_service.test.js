@@ -207,8 +207,9 @@ test('chat access mode restricts writes to allowed roles', () => {
 test('chat starts with no allowed links by default', () => {
   const service = new ModerationService();
 
-  assert.deepEqual(service.getAllowedLinks(100), []);
-  assert.equal(service.isAllowedLink(100, 'https://t.me/wwhisbot?start=faq'), false);
+  assert.equal(service.getAllowedLinks(100).includes('vk.com/audio'), true);
+  assert.equal(service.isAllowedLink(100, 'https://soundcloud.com/track/123'), true);
+  assert.equal(service.isAllowedLink(100, 'https://example.com/shop'), false);
 });
 
 test('link protection exceptions can be managed per user', () => {
@@ -228,7 +229,7 @@ test('link protection exceptions can be managed per user', () => {
 test('allowed links accept only exact configured URLs', () => {
   const service = new ModerationService();
 
-  assert.equal(service.isAllowedLink(100, 'https://t.me/wwhisbot?start=faq'), false);
+  assert.equal(service.isAllowedLink(100, 'https://t.me/otherbot?start=faq'), false);
   assert.equal(service.isAllowedLink(100, 'https://t.me/wwhisbot?start=faq/extra'), false);
   assert.equal(service.isAllowedLink(100, 'https://example.com/shop'), false);
 

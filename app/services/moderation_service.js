@@ -44,6 +44,9 @@ const DEFAULT_BAN_WORDS = readJsonList(path.join(__dirname, '..', 'data', 'ban_w
   'обьёбыш', 'объебанный', 'наркотики'
 ]);
 
+const DEFAULT_ALLOWED_LINKS = readJsonList(path.join(__dirname, '..', 'data', 'allowed_links.json'), []);
+const DEFAULT_ALLOWED_ANONYMOUS_CHANNELS = ['-1001598468726'];
+
 function normalizeAllowedUrl(value) {
   return String(value || '').trim().toLowerCase()
     .replace(/^https?:\/\//i, '')
@@ -218,7 +221,7 @@ class ModerationService {
       },
       allowedLinks: (() => {
         if (!Array.isArray(chat.allowedLinks)) {
-          return [];
+          return [...new Set(DEFAULT_ALLOWED_LINKS.map((item) => String(item).trim().toLowerCase()).filter(Boolean))];
         }
         const chatList = chat.allowedLinks.map((item) => String(item).trim().toLowerCase()).filter(Boolean);
         return [...new Set(chatList)];
@@ -333,7 +336,7 @@ class ModerationService {
         enabled: Boolean(chat.hideAnonymous?.enabled),
         deleteMessages: Boolean(chat.hideAnonymous?.deleteMessages),
         allowedAnonymousChannels: (() => {
-          const list = [];
+          const list = [...DEFAULT_ALLOWED_ANONYMOUS_CHANNELS];
           if (Array.isArray(chat.hideAnonymous?.allowedAnonymousChannels)) {
             list.push(...chat.hideAnonymous.allowedAnonymousChannels.map((item) => this._normalizeAnonymousChannelIdentifier(item)).filter(Boolean));
           }
