@@ -6427,6 +6427,15 @@ function createBot() {
     return Number(actorLevel) <= Number(maxAllowedLevel);
   }
 
+  function ensureBotAdminCanUsePunishmentCommand(ctx, actionName) {
+    if (canUseBotAdminAction(ctx, actionName)) {
+      return true;
+    }
+
+    ctx.reply('У вас недостаточно прав для этой команды.');
+    return false;
+  }
+
   function ensureBotAdminCanPunishTarget(ctx, targetUserId, actionName) {
     if (canSelfClearPunishmentHistory(ctx, targetUserId, actionName)) {
       return true;
@@ -6549,6 +6558,9 @@ function createBot() {
       await replyWithAutoDelete(ctx, 'Эта команда доступна только администраторам.');
       return;
     }
+    if (!ensureBotAdminCanUsePunishmentCommand(ctx, deleteTargetMessage ? 'delwarn' : 'warn')) {
+      return;
+    }
 
     if (deleteTargetMessage && !ctx.message?.reply_to_message) {
       await replyWithAutoDelete(ctx, 'Ответьте этой командой на сообщение пользователя, которому нужно выдать предупреждение и удалить сообщение.');
@@ -6643,6 +6655,9 @@ function createBot() {
       await replyWithAutoDelete(ctx, 'Эта команда доступна только администраторам.');
       return;
     }
+    if (!ensureBotAdminCanUsePunishmentCommand(ctx, 'unwarn')) {
+      return;
+    }
 
     const targetData = await resolveCommandTarget(ctx, args, '/unwarn @юз');
     if (!targetData) {
@@ -6675,6 +6690,9 @@ function createBot() {
     scheduleDeleteForContext(ctx, ctx.message?.message_id);
     if (!isBotAdmin(ctx)) {
       await replyWithAutoDelete(ctx, 'Эта команда доступна только администраторам.');
+      return;
+    }
+    if (!ensureBotAdminCanUsePunishmentCommand(ctx, deleteTargetMessage ? 'delmute' : 'mute')) {
       return;
     }
 
@@ -6737,6 +6755,9 @@ function createBot() {
       await replyWithAutoDelete(ctx, 'Эта команда доступна только администраторам.');
       return;
     }
+    if (!ensureBotAdminCanUsePunishmentCommand(ctx, 'unmute')) {
+      return;
+    }
 
     const targetData = await resolveCommandTarget(ctx, args, '/unmute @юз');
     if (!targetData) {
@@ -6771,6 +6792,9 @@ function createBot() {
     scheduleDeleteForContext(ctx, ctx.message?.message_id);
     if (!isBotAdmin(ctx)) {
       await replyWithAutoDelete(ctx, 'Эта команда доступна только администраторам.');
+      return;
+    }
+    if (!ensureBotAdminCanUsePunishmentCommand(ctx, 'ban')) {
       return;
     }
 
@@ -6824,6 +6848,9 @@ function createBot() {
     scheduleDeleteForContext(ctx, ctx.message?.message_id);
     if (!isBotAdmin(ctx)) {
       await replyWithAutoDelete(ctx, 'Эта команда доступна только администраторам.');
+      return;
+    }
+    if (!ensureBotAdminCanUsePunishmentCommand(ctx, 'delban')) {
       return;
     }
 
@@ -6881,6 +6908,9 @@ function createBot() {
     scheduleDeleteForContext(ctx, ctx.message?.message_id);
     if (!isBotAdmin(ctx)) {
       await replyWithAutoDelete(ctx, 'Эта команда доступна только администраторам.');
+      return;
+    }
+    if (!ensureBotAdminCanUsePunishmentCommand(ctx, 'unban')) {
       return;
     }
 
@@ -8296,6 +8326,10 @@ function createBot() {
       await safeAnswerCbQuery(ctx, 'Отменить предупреждение могут только администраторы.');
       return;
     }
+    if (!canUseBotAdminAction(ctx, 'unwarn')) {
+      await safeAnswerCbQuery(ctx, 'Недостаточно прав для отмены предупреждения.');
+      return;
+    }
 
     const currentWarnings = moderationService.getWarnings(chatId, userId);
     if (currentWarnings <= 0) {
@@ -8335,6 +8369,10 @@ function createBot() {
 
     if (!isBotAdmin(ctx)) {
       await safeAnswerCbQuery(ctx, 'Отменить наказание могут только администраторы.');
+      return;
+    }
+    if (!canUseBotAdminAction(ctx, action === 'mute' ? 'unmute' : 'unban')) {
+      await safeAnswerCbQuery(ctx, 'Недостаточно прав для отмены наказания.');
       return;
     }
 
@@ -8381,6 +8419,10 @@ function createBot() {
 
     if (!isBotAdmin(ctx)) {
       await safeAnswerCbQuery(ctx, 'Только администратор может менять предупреждения.');
+      return;
+    }
+    if (!canUseBotAdminAction(ctx, delta > 0 ? 'warn' : 'unwarn')) {
+      await safeAnswerCbQuery(ctx, 'Недостаточно прав для изменения предупреждений.');
       return;
     }
 
