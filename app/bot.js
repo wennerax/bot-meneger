@@ -76,9 +76,15 @@ function isChannelPostInGroupMessage(message = {}) {
   const hasRegularUser = Boolean(message.from && typeof message.from === 'object' && message.from.id);
   
   // Поддержка forum topics: если есть message_thread_id и нет from, это пост в topic
-  const isTopicPost = message.message_thread_id && message.message_thread_id !== 0 && !hasRegularUser;
+  const isTopicPost = message.message_thread_id && message.message_thread_id !== 0;
 
-  return (isTopicPost || !hasRegularUser) && (isSenderChatChannel || isForwardedFromChannel);
+  // Telegram may include `from` on channel-authored posts in discussion topics.
+  // `sender_chat` is the authoritative signal that the post was sent as a channel.
+  if (isSenderChatChannel) {
+    return true;
+  }
+
+  return (isTopicPost || !hasRegularUser) && isForwardedFromChannel;
 }
 
 function isAnonymousSenderMessage(message = {}) {

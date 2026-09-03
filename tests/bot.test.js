@@ -604,8 +604,8 @@ test('isAnonymousSenderMessage detects hidden sender messages', () => {
   assert.equal(isAnonymousSenderMessage(null), false);
 });
 
-test('isChannelPostInGroupMessage ignores messages sent on behalf of a channel by a user', () => {
-  assert.equal(isChannelPostInGroupMessage({ sender_chat: { type: 'channel' }, from: { id: 123 } }), false);
+test('isChannelPostInGroupMessage recognizes channel-authored posts with a from user', () => {
+  assert.equal(isChannelPostInGroupMessage({ sender_chat: { type: 'channel' }, from: { id: 123 } }), true);
   assert.equal(isChannelPostInGroupMessage({ sender_chat: { type: 'channel' } }), true);
   assert.equal(isChannelPostInGroupMessage({ forward_from_chat: { type: 'channel' } }), true);
 });
