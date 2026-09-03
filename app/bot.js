@@ -1121,8 +1121,8 @@ function getHelpPages() {
       '/ban, !бан <время> <причина> - заблокировать пользователя',
       '/delban, !delban <время> <причина> - заблокировать и удалить сообщение (только ответом)',
       '/unban, !разбан - разблокировать пользователя',
+      '/kick, /кик, !кик, +кик @юз — исключить пользователя без блокировки.',
       '/banlist, !баны [страница] - список активных банов',
-      '/mutelist, !муты [страница] - список активных мутов',
       '/admins, !админы - список администраторов бота',
       '/addadmin @юз, !добавить админа @юз - назначить админа бота',
       '/removeadmin @юз, !снять админа @юз - снять вспомогательного администратора бота',
@@ -2979,15 +2979,15 @@ function shouldFailClosedForMedia(payload, errorMessage = '', normalizedAnswer =
 }
 
 function isKnownCommandText(text) {
-  const slashCommand = /^(?:\/(start|help|bot|id|айди|about|whoami|кто_я|stats|rules|arule|аправила|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|монетка|dice|кубик|fate|вопрос|compliment|комплимент|insult|инсульт|top|топ|admins|админы|banlist|баны|mutelist|муты|setrules|установить_правила|warn|варн|пред|предупреждение|delwarn|warns|warnings|варны|unwarn|снять_предупреждение|анварн|анпред|mute|мут|delmute|unmute|размут|размутить|говори|ban|бан|delban|unban|разбан|разбанить|del|delete|дел|setgreeting|установить_приветствие|addadmin|добавить_админа|removeadmin|снять_админа|promote|повышение|demote|разжалование|clearhistory|сбросистории|сброс_истории|clear_history|miniapp|миниприложение|admincom|ai|modstats|статистика_модерации|ttt|крестики|крестики-нолики))(?:@[\w_]+)?(\s|$)/i;
-  const bangCommand = /^!(delban|delmute|delwarn|начало|помощь|айди|информация|кто\s*я|статистика|правила|аправила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|инсульт|пред|предупреждение|варны|мут|размут|размутить|бан|разбан|разбанить|топ|анпред|анварн|говори|дел|рел)(\s|$)/i;
-  const plusMinusCommand = /^(?:[+-](?:антиспам|antispam|антифлуд|antiflood|ссылки|links|варн|warn|предупреждение|мут|mute|бан|ban|размут|размутить|unmute|разбан|разбанить|unban|анварн)|\+описание|\+description|\+rules(?=\s+\S)|\+правила(?=\s+\S)|\+greeting(?=\s+\S)|\+приветствие(?=\s+\S))(\s|$)/i;
+  const slashCommand = /^(?:\/(start|help|bot|id|айди|about|whoami|кто_я|stats|rules|arule|аправила|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|монетка|dice|кубик|fate|вопрос|compliment|комплимент|insult|инсульт|top|топ|admins|админы|banlist|баны|mutelist|муты|setrules|установить_правила|warn|варн|пред|предупреждение|delwarn|warns|warnings|варны|unwarn|снять_предупреждение|анварн|анпред|mute|мут|delmute|unmute|размут|размутить|говори|ban|бан|delban|unban|разбан|разбанить|kick|кик|del|delete|дел|setgreeting|установить_приветствие|addadmin|добавить_админа|removeadmin|снять_админа|promote|повышение|demote|разжалование|clearhistory|сбросистории|сброс_истории|clear_history|miniapp|миниприложение|admincom|ai|modstats|статистика_модерации|ttt|крестики|крестики-нолики))(?:@[\w_]+)?(\s|$)/i;
+  const bangCommand = /^!(delban|delmute|delwarn|начало|помощь|айди|информация|кто\s*я|статистика|правила|аправила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|инсульт|пред|предупреждение|варны|мут|размут|размутить|бан|разбан|разбанить|кик|топ|анпред|анварн|говори|дел|рел)(\s|$)/i;
+  const plusMinusCommand = /^(?:\+(?:антиспам|antispam|антифлуд|antiflood|ссылки|links|варн|warn|предупреждение|мут|mute|бан|ban|кик|kick)|[+-](?:размут|размутить|unmute|разбан|разбанить|unban|анварн)|\+описание|\+description|\+rules(?=\s+\S)|\+правила(?=\s+\S)|\+greeting(?=\s+\S)|\+приветствие(?=\s+\S))(\s|$)/i;
   return slashCommand.test(text) || bangCommand.test(text) || plusMinusCommand.test(text);
 }
 
 function parseBotCommandKey(text) {
   const normalized = String(text || '').trim();
-  const plusMinusMatch = normalized.match(/^[+-](антиспам|antispam|антифлуд|antiflood|ссылки|links|варн|warn|предупреждение|мут|mute|бан|ban|размут|размутить|unmute|разбан|разбанить|unban|анварн)\b/i);
+  const plusMinusMatch = normalized.match(/^[+-](антиспам|antispam|антифлуд|antiflood|ссылки|links|варн|warn|предупреждение|мут|mute|бан|ban|кик|kick|размут|размутить|unmute|разбан|разбанить|unban|анварн)\b/i);
   if (plusMinusMatch) {
     const command = plusMinusMatch[1].toLowerCase();
     if (command === 'антиспам' || command === 'antispam') return 'antispam';
@@ -2996,6 +2996,7 @@ function parseBotCommandKey(text) {
     if (['варн', 'warn', 'предупреждение'].includes(command)) return 'warn';
     if (['мут', 'mute', 'размут', 'размутить', 'unmute'].includes(command)) return 'mute';
     if (['бан', 'ban', 'разбан', 'разбанить', 'unban'].includes(command)) return 'ban';
+    if (['кик', 'kick'].includes(command)) return 'kick';
     if (command === 'анварн') return 'warn';
   }
 
@@ -3964,7 +3965,7 @@ function createBot() {
     return [
       'warn', 'предупреждение', 'варн', 'пред', 'анварн', 'анпред', 'unwarn',
       'mute', 'мут', 'unmute', 'размут', 'размутить', 'ban', 'бан', 'unban',
-      'разбан', 'разбанить', 'delwarn', 'delmute', 'delban',
+      'разбан', 'разбанить', 'kick', 'кик', 'delwarn', 'delmute', 'delban',
     ].includes(String(commandKey || '').toLowerCase());
   }
 
@@ -5999,6 +6000,7 @@ function createBot() {
       '/unban @юз, !разбан @юз — разблокировать пользователя.',
       '/banlist [страница], !баны [страница] — список активных банов.',
       '/mutelist [страница], !муты [страница] — список активных мутов.',
+      '/kick @юз, !кик @юз — исключить пользователя без блокировки.',
       '/clearhistory @юз — очистить историю наказаний пользователя (для старших уровней).',
       '',
       'Если срок и причина не указаны, наказание действует без срока, а причина указывается как «Без причины».',
@@ -6429,7 +6431,7 @@ function createBot() {
 
   function getBotAdminActionPermissionLevel(actionName) {
     const normalizedAction = String(actionName || '').toLowerCase();
-    if (['warn', 'unwarn', 'delwarn', 'mute', 'unmute', 'delmute'].includes(normalizedAction)) {
+    if (['warn', 'unwarn', 'delwarn', 'mute', 'unmute', 'delmute', 'kick'].includes(normalizedAction)) {
       return 5;
     }
     if (['ban', 'unban', 'delban'].includes(normalizedAction)) {
@@ -6991,6 +6993,42 @@ function createBot() {
     await replyWithAutoDelete(ctx, `Пользователь ${targetData.target.first_name || targetData.target.username || targetData.target.id} разблокирован.`);
   }
 
+  async function kickCommand(ctx, args) {
+    ensureGroup(ctx);
+    scheduleDeleteForContext(ctx, ctx.message?.message_id);
+    if (!isBotAdmin(ctx)) {
+      await replyWithAutoDelete(ctx, 'Эта команда доступна только администраторам бота.');
+      return;
+    }
+
+    const targetData = await resolveCommandTarget(ctx, args, '/kick @юз');
+    if (!targetData) {
+      return;
+    }
+
+    if (!ensureBotAdminCanPunishTarget(ctx, targetData.target.id, 'kick')) {
+      return;
+    }
+
+    try {
+      await ctx.telegram.banChatMember(ctx.chat.id, targetData.target.id);
+      await ctx.telegram.unbanChatMember(ctx.chat.id, targetData.target.id, true);
+    } catch (error) {
+      await replyWithAutoDelete(ctx, 'Не удалось исключить пользователя: у бота нет прав администратора.');
+      return;
+    }
+
+    recordModerationLog(ctx.chat.id, {
+      action: 'kick',
+      actorId: ctx.from.id,
+      targetId: targetData.target.id,
+      reason: targetData.remainingArgs || 'Без причины',
+      details: 'Пользователь исключён без блокировки',
+    });
+
+    await replyWithAutoDelete(ctx, `👢 ${getMentionText(targetData.target)} исключён из группы без блокировки.`);
+  }
+
   function setGreetingCommand(ctx, args) {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
@@ -7241,6 +7279,14 @@ function createBot() {
         await (isRemoval ? unbanCommand : banCommand)(ctx, args);
         return true;
       }
+      if (['кик', 'kick'].includes(normalizedCommand)) {
+        if (isRemoval) {
+          await replyWithAutoDelete(ctx, 'Для кика нет команды отмены. Пользователь может вступить в группу снова.');
+        } else {
+          await kickCommand(ctx, args);
+        }
+        return true;
+      }
       return false;
     }
 
@@ -7328,6 +7374,9 @@ function createBot() {
       case 'разбан':
       case 'разбанить':
         await unbanCommand(ctx, args);
+        return true;
+      case 'кик':
+        await kickCommand(ctx, args);
         return true;
       case 'установить приветствие':
         setGreetingCommand(ctx, args);
@@ -9391,6 +9440,10 @@ function createBot() {
 
   bot.command(['unban', 'разбан', 'разбанить'], async (ctx) => {
     await unbanCommand(ctx, ctx.message.text.replace(/^\/(?:unban|разбан|разбанить)\s*/i, ''));
+  });
+
+  bot.command(['kick', 'кик'], async (ctx) => {
+    await kickCommand(ctx, ctx.message.text.replace(/^\/(?:kick|кик)(?:@[\w_]+)?\s*/i, ''));
   });
 
   bot.command(['setgreeting', 'установить_приветствие'], (ctx) => {
