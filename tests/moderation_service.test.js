@@ -204,12 +204,18 @@ test('chat access mode restricts writes to allowed roles', () => {
   assert.equal(service.canWriteInChat(100, 7, false, false), true);
 });
 
-test('chat starts with no allowed links by default', () => {
+test('chat starts with default allowed links', () => {
   const service = new ModerationService();
 
   assert.equal(service.getAllowedLinks(100).includes('vk.com/audio'), true);
   assert.equal(service.isAllowedLink(100, 'https://soundcloud.com/track/123'), true);
   assert.equal(service.isAllowedLink(100, 'https://example.com/shop'), false);
+});
+
+test('chat starts with the default hidden-user channel exception', () => {
+  const service = new ModerationService();
+
+  assert.equal(service.getAllowedAnonymousChannels(100).includes('-1001598468726'), true);
 });
 
 test('link protection exceptions can be managed per user', () => {

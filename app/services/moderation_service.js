@@ -220,10 +220,12 @@ class ModerationService {
         })(),
       },
       allowedLinks: (() => {
-        if (!Array.isArray(chat.allowedLinks)) {
-          return [...new Set(DEFAULT_ALLOWED_LINKS.map((item) => String(item).trim().toLowerCase()).filter(Boolean))];
+        const chatList = Array.isArray(chat.allowedLinks)
+          ? chat.allowedLinks.map((item) => String(item).trim().toLowerCase()).filter(Boolean)
+          : [];
+        if (chatList.length === 0) {
+          chatList.push(...DEFAULT_ALLOWED_LINKS.map((item) => String(item).trim().toLowerCase()).filter(Boolean));
         }
-        const chatList = chat.allowedLinks.map((item) => String(item).trim().toLowerCase()).filter(Boolean);
         return [...new Set(chatList)];
       })(),
       linkExceptionUsers: (() => {
@@ -336,12 +338,15 @@ class ModerationService {
         enabled: Boolean(chat.hideAnonymous?.enabled),
         deleteMessages: Boolean(chat.hideAnonymous?.deleteMessages),
         allowedAnonymousChannels: (() => {
-          const list = [...DEFAULT_ALLOWED_ANONYMOUS_CHANNELS];
+          const list = [];
           if (Array.isArray(chat.hideAnonymous?.allowedAnonymousChannels)) {
             list.push(...chat.hideAnonymous.allowedAnonymousChannels.map((item) => this._normalizeAnonymousChannelIdentifier(item)).filter(Boolean));
           }
           if (Array.isArray(chat.hideAnonymous?.allowedChannelIds)) {
             list.push(...chat.hideAnonymous.allowedChannelIds.map((item) => this._normalizeAnonymousChannelIdentifier(item)).filter(Boolean));
+          }
+          if (list.length === 0) {
+            list.push(...DEFAULT_ALLOWED_ANONYMOUS_CHANNELS);
           }
           return [...new Set(list)];
         })(),
