@@ -3570,7 +3570,7 @@ function createBot() {
   }
 
   async function startCaptchaForUser(ctx, userId, joinUser = null) {
-    if (!isGroupChat(ctx)) {
+    if (!isMemberChat(ctx)) {
       return;
     }
 
@@ -4014,6 +4014,10 @@ function createBot() {
   function isGroupChat(ctx) {
     const type = ctx.chat?.type;
     return type === 'group' || type === 'supergroup';
+  }
+
+  function isMemberChat(ctx) {
+    return Boolean(ctx.chat?.type && ctx.chat.type !== 'private');
   }
 
   function isPrivateChat(ctx) {
