@@ -611,6 +611,7 @@ test('isChannelPostInGroupMessage recognizes channel-authored posts with a from 
     from: { id: 123 },
   }), true);
   assert.equal(isChannelPostInGroupMessage({ sender_chat: { type: 'channel' } }), false);
+  assert.equal(isAnonymousSenderMessage({ sender_chat: { type: 'channel' } }), true);
   assert.equal(isChannelPostInGroupMessage({
     is_automatic_forward: true,
     forward_from_chat: { type: 'channel' },

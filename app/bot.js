@@ -9797,6 +9797,7 @@ function createBot() {
     // Handle anonymous messages (sender_chat/author_signature) - messages posted through a channel or hidden sender
     if (isGroupChat(ctx) && isAnonymousSenderMessage(message)) {
       const service = activeModerationService || defaultModerationService;
+      const isAutomaticForwardFromChannel = message.is_automatic_forward === true;
       const isOrdinaryChannelMessage = String(message.sender_chat?.type || '').toLowerCase() === 'channel'
         && !isAutomaticForwardFromChannel;
       if (isOrdinaryChannelMessage) {
