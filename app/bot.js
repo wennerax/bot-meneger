@@ -5961,7 +5961,7 @@ function createBot() {
 
   async function idCommand(ctx) {
     if (!(await canUseAdminPunishmentCommands(ctx))) {
-      await ctx.reply('Эта команда доступна только админам группы и модераторам бота.');
+      await replyWithAutoDelete(ctx, 'Эта команда доступна только администраторам бота.');
       return;
     }
 
@@ -6407,7 +6407,7 @@ function createBot() {
   function listBotAdminsCommand(ctx) {
     ensureGroup(ctx);
     if (!isBotAdmin(ctx)) {
-      ctx.reply('Эта команда доступна только администраторам бота.');
+      void replyWithAutoDelete(ctx, 'Эта команда доступна только администраторам бота.');
       return;
     }
     const allAdminIds = database.getBotAdmins(ctx.chat.id);
