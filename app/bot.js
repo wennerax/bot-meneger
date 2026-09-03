@@ -4589,7 +4589,7 @@ function createBot() {
   }
 
   function buildCommandSectionsKeyboard(chatId, returnFlag = 'menu') {
-    const suffix = returnFlag === 'settings' ? `:settings:${chatId}` : '';
+    const suffix = returnFlag === 'settings' ? `:s:${chatId}` : '';
     const rows = getCommandSections().map((section) => {
       const state = getCommandSectionState(chatId, section);
       const status = state.allDisabled ? '❌' : state.partiallyDisabled ? '⚠️' : '✅';
@@ -4655,7 +4655,7 @@ function createBot() {
     const pageCommands = commands.slice(start, start + COMMANDS_PER_PAGE);
 
     const rows = [];
-    const suffix = returnFlag === 'settings' ? `:settings:${chatId}` : '';
+    const suffix = returnFlag === 'settings' ? `:s:${chatId}` : '';
 
     rows.push([{ text: '📚 Управление разделами', callback_data: `menu:command_rights:sections${suffix}` }]);
     rows.push([
@@ -8539,7 +8539,7 @@ function createBot() {
 
   bot.action(/^menu:(.+)$/, async (ctx) => {
     const action = ctx.match[1];
-    const settingsChatMatch = String(action).match(/:settings:(-?\d+)$/);
+    const settingsChatMatch = String(action).match(/:(?:settings|s):(-?\d+)$/);
     const chatId = settingsChatMatch ? Number(settingsChatMatch[1]) : ctx.chat?.id;
     if (!chatId) {
       return;
@@ -8790,8 +8790,8 @@ function createBot() {
       return;
     }
 
-    if (action === 'command_rights:sections' || action.startsWith('command_rights:sections:settings')) {
-      const returnFlag = action.includes(':settings') ? 'settings' : 'menu';
+    if (action === 'command_rights:sections' || action.startsWith('command_rights:sections:settings') || action.startsWith('command_rights:sections:s:')) {
+      const returnFlag = action.includes(':settings') || action.includes(':s:') ? 'settings' : 'menu';
       await ctx.editMessageText(buildCommandSectionsText(chatId), { reply_markup: buildCommandSectionsKeyboard(chatId, returnFlag) });
       return;
     }
@@ -8799,7 +8799,7 @@ function createBot() {
     if (action.startsWith('command_rights:commands:')) {
       const parts = action.split(':');
       const pageIndex = Number(parts[3]);
-      const returnFlag = parts.includes('settings') ? 'settings' : 'menu';
+      const returnFlag = parts.includes('settings') || parts.includes('s') ? 'settings' : 'menu';
       const returnCallback = returnFlag === 'settings' ? `settings:main:${chatId}` : 'menu:overview';
       if (Number.isFinite(pageIndex)) {
         await showMenuCommandRightsMenu(ctx, chatId, pageIndex, returnCallback, returnFlag);
@@ -8811,7 +8811,7 @@ function createBot() {
       const parts = action.split(':');
       const sectionId = parts[3];
       const mode = parts[4];
-      const returnFlag = parts.includes('settings') ? 'settings' : 'menu';
+      const returnFlag = parts.includes('settings') || parts.includes('s') ? 'settings' : 'menu';
       const section = getCommandSections().find((item) => item.id === sectionId);
       if (!section || !['enable', 'disable'].includes(mode)) {
         return;
@@ -8825,7 +8825,7 @@ function createBot() {
     if (action.startsWith('command_rights:nav:')) {
       const parts = action.split(':');
       const pageIndex = Number(parts[2]);
-      const returnFlag = parts.includes('settings') ? 'settings' : 'menu';
+      const returnFlag = parts.includes('settings') || parts.includes('s') ? 'settings' : 'menu';
       const returnCallback = returnFlag === 'settings' ? `settings:main:${chatId}` : 'menu:overview';
       if (Number.isFinite(pageIndex)) {
         await showMenuCommandRightsMenu(ctx, chatId, pageIndex, returnCallback, returnFlag);
@@ -8836,7 +8836,7 @@ function createBot() {
     if (action.startsWith('command_rights:menu_access:')) {
       const parts = action.split(':');
       const mode = parts[2];
-      const returnFlag = parts.includes('settings') ? 'settings' : 'menu';
+      const returnFlag = parts.includes('settings') || parts.includes('s') ? 'settings' : 'menu';
       const returnCallback = returnFlag === 'settings' ? `settings:main:${chatId}` : 'menu:overview';
       if (mode === 'all' || mode === 'private_only') {
         moderationService.setMenuCommandAccess(chatId, mode);
@@ -8851,7 +8851,7 @@ function createBot() {
       const commandIndex = Number(parts[2]);
       const enable = action.startsWith('command_rights:enable:');
       const commands = getCommandsList();
-      const returnFlag = parts.includes('settings') ? 'settings' : 'menu';
+      const returnFlag = parts.includes('settings') || parts.includes('s') ? 'settings' : 'menu';
       const returnCallback = returnFlag === 'settings' ? `settings:main:${chatId}` : 'menu:overview';
 
       if (Number.isFinite(commandIndex) && commandIndex >= 0 && commandIndex < commands.length) {
