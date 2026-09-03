@@ -44,7 +44,20 @@ const DEFAULT_BAN_WORDS = readJsonList(path.join(__dirname, '..', 'data', 'ban_w
   'обьёбыш', 'объебанный', 'наркотики'
 ]);
 
-const DEFAULT_ALLOWED_LINKS = readJsonList(path.join(__dirname, '..', 'data', 'allowed_links.json'), []);
+const DEFAULT_ALLOWED_LINKS = readJsonList(path.join(__dirname, '..', 'data', 'allowed_links.json'), [
+  'vk.com/audio', 'vt.tiktok.com', 't.me/bred_ish',
+  'telegra.ph/pravila-chata-bredim-07-21', 'telegra.ph/varyaya-sistema-i-banwordy-07-21',
+  'vk.com/wall', 'youtu.be/', 'song.link/', 'zvuk.com/', 'soundcloud.com',
+  'music.yandex.ru/', 'open.spotify.com/track/', 'tiktok.com/@username/video/',
+  'vm.tiktok.com/', 'vm.tiktok.com/zmabsbans/', 'vk_musix_bot', 't.me/vk_musix_bot',
+  'youtube.com/', 'instagram.com/', 't.me/buddy_music_bot?start=inv5008792526',
+  't.me/suyobot', 't.me/ctilevo', 't.me/kamenmogila', 't.me/voiceshazambot',
+  't.me/voiceshazambot?start=music_yt_lgdjau8b-wu', 't.me/loadbot',
+  't.me/shazambot?start=music_yt_mxkttxnz9iw', 'song.link/y/mxkttxnz9iw', 'ozon.ru/t/',
+  't.me/minitestvbot', 't.me/losslessrobot', 't.me/howyourbot', 'open.spotify.com',
+  'play.spotify.com', 'embed.spotify.com', 'spotify.com', 'spotify.link/',
+  't.me/digitalmusikbot?start=from_inline_caption', 't.me/wwhisbot?start=faq',
+]);
 const DEFAULT_ALLOWED_ANONYMOUS_CHANNELS = ['-1001598468726'];
 
 function normalizeAllowedUrl(value) {
