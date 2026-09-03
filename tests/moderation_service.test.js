@@ -113,6 +113,47 @@ test('selected settings can be transferred without copying unrelated data', () =
   assert.equal(service.getRules(200), 'Собственные правила');
 });
 
+test('first comment and all settings are transferred completely', () => {
+  const service = new ModerationService();
+
+  service.setMenuText(100, 'Комментарий источника');
+  service.addMenuRow(100);
+  service.addMenuButton(100, 'Открыть', 'https://source.example');
+  service.setMenuMedia(100, { type: 'photo', fileId: 'source-photo' });
+  service.disableLinkProtection(100);
+
+  assert.equal(service.transferSettings(100, 200, 'first_comment'), true);
+  assert.equal(service.getMenuText(200), 'Комментарий источника');
+  assert.deepEqual(service.getMenuButtons(200), [[{ text: 'Открыть', url: 'https://source.example' }]]);
+  assert.deepEqual(service.getMenuMedia(200), { type: 'photo', fileId: 'source-photo' });
+
+  assert.equal(service.transferSettings(100, 300, 'all'), true);
+  assert.equal(service.getMenuText(300), 'Комментарий источника');
+  assert.equal(service.isLinkProtectionEnabled(300), false);
+});
+
+test('each transfer category copies its corresponding settings', () => {
+  const service = new ModerationService();
+
+  service.setRules(100, 'Новые правила');
+  service.addBanWord(100, 'запрещённое слово');
+  service.disableSpamProtection(100);
+  service.setCommandDisabled(100, 'rules', true);
+  service.setForwardsPunishment(100, 'channels', 'ban');
+
+  assert.equal(service.transferSettings(100, 200, 'rules'), true);
+  assert.equal(service.getRules(200), 'Новые правила');
+
+  assert.equal(service.transferSettings(100, 200, 'banwords'), true);
+  assert.ok(service.getBanWords(200).includes('запрещённое слово'));
+  assert.equal(service.getBanwordPunishmentMode(200), service.getBanwordPunishmentMode(100));
+
+  assert.equal(service.transferSettings(100, 200, 'toggles'), true);
+  assert.equal(service.isSpamProtectionEnabled(200), false);
+  assert.equal(service.isCommandDisabled(200, 'rules'), true);
+  assert.equal(service.getForwardsSettings(200, 'channels').punishmentMode, 'ban');
+});
+
 test('admin notification group is stored per chat', () => {
   const service = new ModerationService();
 

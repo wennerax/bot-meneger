@@ -1665,23 +1665,22 @@ class ModerationService {
   transferSettings(sourceChatId, targetChatId, option = 'all') {
     const source = this._getChat(sourceChatId);
     const target = this._getChat(targetChatId);
+    const allSettings = [
+      'rules', 'adminRules', 'adminRulesEnabled', 'greeting', 'filters', 'banWords', 'banwordSettings',
+      'warnSettings', 'allowedLinks', 'linkExceptionUsers', 'allowedForwards', 'forwardsSettings', 'menu',
+      'gifCommands', 'agreement', 'spamProtectionEnabled', 'linkProtectionEnabled', 'moderatorWarningsEnabled',
+      'floodProtectionEnabled', 'rulesEnabled', 'streaksEnabled', 'streaksLabel', 'chatAccessMode',
+      'captchaEnabled', 'captchaMode', 'mediaAiEnabled', 'captchaTimeoutMinutes', 'mentionNotifications',
+      'adminNotify', 'hideAnonymous', 'commandRights', 'commandDisabled', 'menuCommandAccess',
+    ];
     const optionKeys = {
-      rules: ['rules', 'adminRules'],
+      rules: ['rules', 'adminRules', 'adminRulesEnabled'],
       links: ['allowedLinks'],
-      banwords: ['banWords'],
+      banwords: ['banWords', 'banwordSettings'],
       first_comment: ['menu'],
-      toggles: [
-        'banwordSettings', 'warnSettings', 'forwardsSettings', 'spamProtectionEnabled',
-        'linkProtectionEnabled', 'moderatorWarningsEnabled', 'floodProtectionEnabled',
-        'rulesEnabled', 'streaksEnabled', 'streaksLabel', 'chatAccessMode', 'captchaEnabled',
-        'captchaMode', 'captchaTimeoutMinutes', 'mediaAiEnabled', 'mentionNotifications',
-        'adminNotify', 'hideAnonymous', 'allowedForwards', 'commandRights', 'commandDisabled',
-        'menuCommandAccess', 'agreement',
-      ],
+      toggles: allSettings.filter((key) => !['rules', 'adminRules', 'adminRulesEnabled', 'allowedLinks', 'banWords', 'menu'].includes(key)),
     };
-    const keys = option === 'all'
-      ? Object.keys(this._normalizeChat({})).filter((key) => !['warnings', 'moderationLogs'].includes(key))
-      : optionKeys[option];
+    const keys = option === 'all' ? allSettings : optionKeys[option];
 
     if (!keys || Number(sourceChatId) === Number(targetChatId)) {
       return false;
@@ -1692,6 +1691,7 @@ class ModerationService {
         target[key] = JSON.parse(JSON.stringify(source[key]));
       }
     });
+    this.chats.set(Number(targetChatId), this._normalizeChat(target));
     this._save();
     return true;
   }
