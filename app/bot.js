@@ -7589,7 +7589,7 @@ function createBot() {
     const directTimeoutOpen = callbackData.match(/^settings:captcha_timeout:(-?\d+)$/);
     const directTimeoutSet = callbackData.match(/^settings:captcha_timeout_set:(-?\d+):(-?\d+)$/);
     const directTransferSource = callbackData.match(/^settings:transfer_source:(-?\d+):(-?\d+)$/);
-    const directTransferApply = callbackData.match(/^settings:ta:(-?\d+):(-?\d+):(rules|links|banwords|first_comment|toggles|all)$/);
+    const directTransferApply = callbackData.match(/^settings:(?:ta|transfer_apply):(-?\d+):(-?\d+):(rules|links|banwords|first_comment|toggles|all)$/);
 
     let parsed = parseSettingsAction(action);
     if (directTimeoutOpen) {
@@ -7692,8 +7692,18 @@ function createBot() {
         await safeAnswerCbQuery(ctx, '⚠️ Не удалось перенести настройки.');
         return;
       }
-      await safeAnswerCbQuery(ctx, '✅ Настройки перенесены.');
-      await showSettingsTransferOptionsMenu(ctx, chatId, sourceChatId);
+      const optionLabels = {
+        rules: 'правила',
+        links: 'ссылки',
+        banwords: 'банворды',
+        first_comment: 'первый комментарий',
+        toggles: 'включённые и выключенные функции',
+        all: 'все настройки',
+      };
+      await safeAnswerCbQuery(ctx, '✅ Перенесено');
+      await safeEditMessageText(ctx, `✅ Перенесено: ${optionLabels[parsed.value] || 'настройки'}\n\nИсточник: ${getGroupDisplayName(sourceChatId)}\nНазначение: ${getGroupDisplayName(chatId)}`, {
+        reply_markup: buildSettingsTransferKeyboard(chatId, sourceChatId),
+      });
       return;
     }
 
