@@ -3308,6 +3308,7 @@ function createBot() {
   const messageHistory = new Map();
   const captchaStates = new Map();
   const agreementStates = new Map();
+  const captchaStartsInProgress = new Set();
   const pendingMenuActions = new Map();
   const pendingSettingsActions = new Map();
   const ticTacToeGames = new Map();
@@ -3575,10 +3576,19 @@ function createBot() {
     }
 
     const chatId = Number(ctx.chat.id);
+    const captchaKey = `${chatId}:${userId}`;
+    const hasActiveCaptcha = [...captchaStates.values(), ...agreementStates.values()]
+      .some((state) => Number(state.chatId) === chatId && Number(state.userId) === Number(userId));
+    if (hasActiveCaptcha || captchaStartsInProgress.has(captchaKey)) {
+      return;
+    }
+
+    captchaStartsInProgress.add(captchaKey);
     const memberUser = joinUser || ctx.chatMember?.new_chat_member?.user || ctx.update?.chat_member?.new_chat_member?.user || null;
     const displayName = memberUser?.first_name || memberUser?.username || 'пользователь';
     const moderationService = activeModerationService || defaultModerationService;
     if (!shouldStartCaptchaForChat(chatId, moderationService)) {
+      captchaStartsInProgress.delete(captchaKey);
       return;
     }
     const mode = moderationService.getCaptchaMode(chatId);
@@ -3602,6 +3612,7 @@ function createBot() {
       );
     } catch (error) {
       await ctx.telegram.sendMessage(chatId, `Не удалось создать капчу в группе для пользователя ${displayName}. Пожалуйста, проверьте права бота.`);
+      captchaStartsInProgress.delete(captchaKey);
       return;
     }
 
@@ -3609,6 +3620,7 @@ function createBot() {
     const pollMessageId = pollMessage?.message_id;
     if (!pollId || !pollMessageId) {
       await ctx.telegram.sendMessage(chatId, `Не удалось создать капчу для пользователя ${displayName}.`);
+      captchaStartsInProgress.delete(captchaKey);
       return;
     }
 
@@ -3627,6 +3639,26 @@ function createBot() {
       instructionMessageId: instructionMessage?.message_id,
       createdAt: Date.now(),
     });
+    captchaStartsInProgress.delete(captchaKey);
+  }
+
+  async function cancelCaptchaForUser(telegram, chatId, userId) {
+    const states = [
+      ...captchaStates.entries(),
+      ...agreementStates.entries(),
+    ].filter(([, state]) => Number(state.chatId) === Number(chatId) && Number(state.userId) === Number(userId));
+
+    for (const [pollId, state] of states) {
+      captchaStates.delete(pollId);
+      agreementStates.delete(pollId);
+      await cleanupAgreementMessages(telegram, chatId, [
+        state.pollMessageId,
+        state.instructionMessageId,
+        ...(state.agreementMessageIds || []),
+      ]);
+    }
+
+    captchaStartsInProgress.delete(`${chatId}:${userId}`);
   }
 
   async function cleanupAgreementMessages(telegram, chatId, messageIds = []) {
@@ -9513,8 +9545,13 @@ function createBot() {
     const oldStatus = ctx.chatMember?.old_chat_member?.status;
     if (joinedStatuses.includes(member.status) && !joinedStatuses.includes(oldStatus)) {
       database.recordUserJoin(ctx.chat.id, userId, member.user?.first_name || member.user?.username, member.user?.username);
+      await startCaptchaForUser(ctx, userId, member.user);
+      return;
     }
-    await startCaptchaForUser(ctx, userId, member.user);
+
+    if (['left', 'kicked'].includes(String(member.status).toLowerCase())) {
+      await cancelCaptchaForUser(ctx.telegram, ctx.chat.id, userId);
+    }
   });
 
   bot.on('chat_join_request', async (ctx) => {
@@ -9524,14 +9561,8 @@ function createBot() {
       return;
     }
 
-    const moderationService = activeModerationService || defaultModerationService;
-    if (!shouldStartCaptchaForChat(request.chat.id, moderationService)) {
-      return;
-    }
-
     try {
       await ctx.telegram.approveChatJoinRequest(request.chat.id, userId);
-      await startCaptchaForUser(ctx, userId, request.from);
     } catch (error) {
       console.warn('Не удалось обработать заявку на вступление для капчи:', error?.response?.description || error?.message || error);
     }
