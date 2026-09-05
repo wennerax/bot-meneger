@@ -9594,6 +9594,8 @@ function createBot() {
       return;
     }
 
+    await deleteMessageSafely(ctx, ctx.message.message_id);
+
     for (const member of newMembers) {
       if (member.is_bot) {
         continue;
