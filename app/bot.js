@@ -10385,7 +10385,7 @@ function createBot() {
   });
 
   bot.on('message', async (ctx, next) => {
-    if (isGroupChat(ctx) && (ctx.message?.new_chat_members || ctx.message?.left_chat_member)) {
+    if (isGroupChat(ctx) && (ctx.message?.new_chat_members || ctx.message?.left_chat_member || ctx.message?.pinned_message)) {
       await deleteMessageSafely(ctx, ctx.message.message_id);
       return;
     }
