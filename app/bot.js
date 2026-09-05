@@ -9517,6 +9517,26 @@ function createBot() {
     await startCaptchaForUser(ctx, userId, member.user);
   });
 
+  bot.on('chat_join_request', async (ctx) => {
+    const request = ctx.update?.chat_join_request;
+    const userId = Number(request?.from?.id);
+    if (!request?.chat || !Number.isFinite(userId)) {
+      return;
+    }
+
+    const moderationService = activeModerationService || defaultModerationService;
+    if (!shouldStartCaptchaForChat(request.chat.id, moderationService)) {
+      return;
+    }
+
+    try {
+      await ctx.telegram.approveChatJoinRequest(request.chat.id, userId);
+      await startCaptchaForUser(ctx, userId, request.from);
+    } catch (error) {
+      console.warn('Не удалось обработать заявку на вступление для капчи:', error?.response?.description || error?.message || error);
+    }
+  });
+
   bot.on('new_chat_members', async (ctx) => {
     const newMembers = ctx.message?.new_chat_members;
     if (!Array.isArray(newMembers) || !ctx.chat) {
