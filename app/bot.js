@@ -10403,7 +10403,17 @@ function startBot(botState = null, onStarted = null) {
     console.log('BOT_TOKEN is not configured.');
     return Promise.resolve(false);
   }
-  return bot.launch().then(async () => {
+  return bot.launch({
+    allowedUpdates: [
+      'message',
+      'channel_post',
+      'callback_query',
+      'poll_answer',
+      'my_chat_member',
+      'chat_member',
+      'chat_join_request',
+    ],
+  }).then(async () => {
     console.log('Bot started');
     if (typeof onStarted === 'function') {
       await onStarted(bot);
