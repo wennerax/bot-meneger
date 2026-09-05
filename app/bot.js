@@ -3309,6 +3309,7 @@ function createBot() {
   const captchaStates = new Map();
   const agreementStates = new Map();
   const captchaStartsInProgress = new Set();
+  const cancelledCaptchaStarts = new Set();
   const pendingMenuActions = new Map();
   const pendingSettingsActions = new Map();
   const ticTacToeGames = new Map();
@@ -3613,6 +3614,7 @@ function createBot() {
     } catch (error) {
       await ctx.telegram.sendMessage(chatId, `Не удалось создать капчу в группе для пользователя ${displayName}. Пожалуйста, проверьте права бота.`);
       captchaStartsInProgress.delete(captchaKey);
+      cancelledCaptchaStarts.delete(captchaKey);
       return;
     }
 
@@ -3621,6 +3623,14 @@ function createBot() {
     if (!pollId || !pollMessageId) {
       await ctx.telegram.sendMessage(chatId, `Не удалось создать капчу для пользователя ${displayName}.`);
       captchaStartsInProgress.delete(captchaKey);
+      cancelledCaptchaStarts.delete(captchaKey);
+      return;
+    }
+
+    if (cancelledCaptchaStarts.has(captchaKey)) {
+      cancelledCaptchaStarts.delete(captchaKey);
+      captchaStartsInProgress.delete(captchaKey);
+      await cleanupAgreementMessages(ctx.telegram, chatId, [pollMessageId]);
       return;
     }
 
@@ -3658,7 +3668,12 @@ function createBot() {
       ]);
     }
 
-    captchaStartsInProgress.delete(`${chatId}:${userId}`);
+    const captchaKey = `${chatId}:${userId}`;
+    if (captchaStartsInProgress.has(captchaKey)) {
+      cancelledCaptchaStarts.add(captchaKey);
+    } else {
+      cancelledCaptchaStarts.delete(captchaKey);
+    }
   }
 
   async function cleanupAgreementMessages(telegram, chatId, messageIds = []) {
@@ -9558,6 +9573,11 @@ function createBot() {
     const request = ctx.update?.chat_join_request;
     const userId = Number(request?.from?.id);
     if (!request?.chat || !Number.isFinite(userId)) {
+      return;
+    }
+
+    const moderationService = activeModerationService || defaultModerationService;
+    if (!shouldStartCaptchaForChat(request.chat.id, moderationService)) {
       return;
     }
 
