@@ -2591,7 +2591,7 @@ function buildPunishmentCancelKeyboard(action, chatId, userId) {
   const safeUserId = Number(userId);
   return {
     inline_keyboard: [[{
-      text: '❌ Отменить наказание',
+      text: '❌ Отмена',
       callback_data: `punishment:undo:${action}:${Number.isFinite(safeChatId) ? safeChatId : 0}:${Number.isFinite(safeUserId) ? safeUserId : 0}`,
     }]],
   };
@@ -4322,7 +4322,9 @@ function createBot() {
 
     if (isGroupChat(ctx)) {
       const userLabel = buildPunishmentUserLabel(ctx, userId, database);
-      await replyWithAutoDelete(ctx, buildModerationAlertMessage(userLabel, durationHours, reason));
+      await replyWithAutoDelete(ctx, buildModerationAlertMessage(userLabel, durationHours, reason), {
+        reply_markup: buildPunishmentCancelKeyboard('mute', ctx.chat.id, userId),
+      });
     }
 
   }
