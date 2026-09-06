@@ -4324,7 +4324,7 @@ function createBot() {
       const userLabel = buildPunishmentUserLabel(ctx, userId, database);
       await replyWithAutoDelete(ctx, buildModerationAlertMessage(userLabel, durationHours, reason), {
         reply_markup: buildPunishmentCancelKeyboard('mute', ctx.chat.id, userId),
-      });
+      }, 12000);
     }
 
   }
