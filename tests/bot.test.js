@@ -672,7 +672,7 @@ test('buildCaptchaChallenge always requires the banana in emoji mode', () => {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const challenge = buildCaptchaChallenge('emoji', 'Алиса');
 
-    assert.match(challenge.prompt, /Выбери 🍌/);
+    assert.equal(challenge.prompt, 'Алиса, нажмите на смайлик с БАНАНОМ, чтобы подтвердить, что вы НЕ БОТ для входа, и откройте чат снова 👇🏻');
     assert.equal(challenge.correctOption, '🍌');
     assert.equal(challenge.options.includes('🍌'), false);
     assert.equal(new Set(challenge.options).size, challenge.options.length);

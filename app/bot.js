@@ -2742,7 +2742,7 @@ function buildCaptchaChallenge(mode = 'emoji', displayName = 'пользоват
   const options = emojis.filter((emoji) => emoji !== target);
   const shuffled = [...options].sort(() => Math.random() - 0.5);
   return {
-    prompt: 'Капча для пользователя ' + displayName + '. Выбери ' + target,
+    prompt: displayName + ', нажмите на смайлик с БАНАНОМ, чтобы подтвердить, что вы НЕ БОТ для входа, и откройте чат снова 👇🏻',
     options: shuffled,
     correctOption: target,
     mode: normalizedMode,
