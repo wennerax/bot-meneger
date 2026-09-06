@@ -5818,23 +5818,11 @@ function createBot() {
         // ignore
       }
 
-      // delete moderator's message containing the report
-      try {
-        if (ctx.message && ctx.message.message_id) {
-          await ctx.deleteMessage(ctx.message.message_id);
-        }
-      } catch (err) {
-        // ignore deletion errors
-      }
-
-      // delete prompt message that asked the moderator to write the report
-      try {
-        const promptMessageId = Number(pending.promptMessageId || 0);
-        if (Number.isFinite(promptMessageId) && promptMessageId > 0) {
-          await ctx.deleteMessage(promptMessageId);
-        }
-      } catch (err) {
-        // ignore deletion errors
+      // Delete the moderator's reply and the prompt after the report is saved.
+      await deleteMessageSafely(ctx, ctx.message?.message_id);
+      const promptMessageId = Number(pending.promptMessageId || 0);
+      if (Number.isFinite(promptMessageId) && promptMessageId > 0) {
+        await deleteMessageSafely(ctx, promptMessageId);
       }
 
       // remove stored report
