@@ -2737,8 +2737,8 @@ function buildCaptchaChallenge(mode = 'emoji', displayName = 'пользоват
     };
   }
 
-  const emojis = ['🐶', '🐱', '🦊', '🐼'];
-  const target = emojis[Math.floor(Math.random() * emojis.length)];
+  const target = '🍌';
+  const emojis = [target, '🍎', '🍇', '🍉'];
   const options = emojis.filter((emoji) => emoji !== target);
   const shuffled = [...options].sort(() => Math.random() - 0.5);
   return {

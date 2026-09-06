@@ -668,6 +668,17 @@ test('buildCaptchaChallenge returns a math-mode prompt with a deterministic answ
   assert.equal(challenge.correctOption, '5');
 });
 
+test('buildCaptchaChallenge always requires the banana in emoji mode', () => {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const challenge = buildCaptchaChallenge('emoji', 'Алиса');
+
+    assert.match(challenge.prompt, /Выбери 🍌/);
+    assert.equal(challenge.correctOption, '🍌');
+    assert.equal(challenge.options.includes('🍌'), false);
+    assert.equal(new Set(challenge.options).size, challenge.options.length);
+  }
+});
+
 test('shouldStartCaptchaForChat respects the configured enable flag', () => {
   assert.equal(shouldStartCaptchaForChat(42, { isCaptchaEnabled: () => false }), false);
   assert.equal(shouldStartCaptchaForChat(42, { isCaptchaEnabled: () => true }), true);
