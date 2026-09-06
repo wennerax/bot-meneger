@@ -4278,9 +4278,9 @@ function createBot() {
     await Promise.all(toDelete.map((messageId) => deleteMessageSafely(ctx, messageId)));
   }
 
-  async function applyAutomaticMute(ctx, userId, durationHours, reason) {
+  async function applyAutomaticMute(ctx, userId, durationHours, reason, deleteWindowMinutes = 5) {
     const untilDate = Math.floor(Date.now() / 1000) + Math.round(durationHours * 3600);
-    await deleteRecentMessages(ctx, ctx.chat.id, userId, 5);
+    await deleteRecentMessages(ctx, ctx.chat.id, userId, deleteWindowMinutes);
 
     try {
       await ctx.telegram.restrictChatMember(ctx.chat.id, userId, buildMutePermissions(false), untilDate);
@@ -4397,7 +4397,7 @@ function createBot() {
     const now = Date.now();
     const chatTracker = spamActivity.get(chatId) || new Map();
     const userTracker = chatTracker.get(userId) || { messages: [] };
-    userTracker.messages = userTracker.messages.filter((item) => now - item.timestamp < 5000);
+    userTracker.messages = userTracker.messages.filter((item) => now - item.timestamp < 10 * 1000);
     userTracker.messages.push({ messageId: ctx.message.message_id, timestamp: now });
 
     if (userTracker.messages.length >= 5) {
@@ -10342,13 +10342,8 @@ function createBot() {
       recordRecentMessage(ctx);
       const shouldPunish = trackSpamActivity(ctx);
       if (shouldPunish) {
-        const recentMessages = spamActivity.get(ctx.chat.id)?.get(ctx.from.id)?.messages || [];
         queueBulkModerationSummary(ctx, ctx.from.id, 'Спам');
-        if (recentMessages.length) {
-          await Promise.all(recentMessages.map((item) => deleteMessageSafely(ctx, item.messageId)));
-        }
-        await deleteRecentMessages(ctx, ctx.chat.id, ctx.from.id, 1);
-        await applyAutomaticMute(ctx, ctx.from.id, 24, 'Спам');
+        await applyAutomaticMute(ctx, ctx.from.id, 24, 'Спам', 10 / 60);
         return;
       }
     }
