@@ -182,7 +182,13 @@ async function handleAgreementDecision(telegram, state, accepted) {
     return;
   }
 
-  await telegram.restrictChatMember(state.chatId, state.userId, buildMutePermissions(false));
+  const restrictUntil = Math.floor(Date.now() / 1000) + 24 * 60 * 60;
+  await telegram.restrictChatMember(state.chatId, state.userId, buildMutePermissions(false), restrictUntil);
+  try {
+    await telegram.kickChatMember(state.chatId, state.userId);
+    await telegram.unbanChatMember(state.chatId, state.userId, true);
+  } catch (error) {
+  }
   const rejectedMessage = await telegram.sendMessage(state.chatId, `Пользователь ${state.displayName} не согласился с правилами. Доступ к чату не выдан.`);
   scheduleDeleteMessage(telegram, state.chatId, rejectedMessage?.message_id);
 }
@@ -3718,7 +3724,13 @@ function createBot() {
       return;
     }
 
-    await telegram.restrictChatMember(state.chatId, state.userId, buildMutePermissions(false));
+    const restrictUntil = Math.floor(Date.now() / 1000) + 24 * 60 * 60;
+    await telegram.restrictChatMember(state.chatId, state.userId, buildMutePermissions(false), restrictUntil);
+    try {
+      await telegram.kickChatMember(state.chatId, state.userId);
+      await telegram.unbanChatMember(state.chatId, state.userId, true);
+    } catch (error) {
+    }
     const rejectedMessage = await telegram.sendMessage(state.chatId, `Пользователь ${state.displayName} не согласился с правилами. Доступ к чату не выдан.`);
     scheduleDeleteMessage(telegram, state.chatId, rejectedMessage?.message_id);
   }
@@ -3831,15 +3843,23 @@ function createBot() {
       return;
     }
 
+    const restrictUntil = Math.floor(Date.now() / 1000) + 24 * 60 * 60;
+    try {
+      await ctx.telegram.restrictChatMember(state.chatId, state.userId, buildMutePermissions(false), restrictUntil);
+    } catch (error) {
+      // continue with exclusion when the restriction cannot be applied
+    }
     try {
       await ctx.telegram.kickChatMember(state.chatId, state.userId);
+      await ctx.telegram.unbanChatMember(state.chatId, state.userId, true);
     } catch (error) {
-      // ignore if the user cannot be removed
+      // keep the user restricted for 24 hours when exclusion is unavailable
     }
 
     const failedGroupMessage = await ctx.telegram.sendMessage(state.chatId, `Пользователь ${state.displayName} не прошёл капчу и исключён из группы.`);
     scheduleDeleteMessage(ctx.telegram, state.chatId, failedGroupMessage?.message_id);
     scheduleDeleteMessage(ctx.telegram, state.chatId, state.pollMessageId);
+    scheduleDeleteMessage(ctx.telegram, state.chatId, state.instructionMessageId);
   }
 
   async function expirePunishment(punishment) {

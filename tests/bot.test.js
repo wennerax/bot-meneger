@@ -713,10 +713,11 @@ test('buildSettingsRulesMenuText includes the current rules text', () => {
   assert.match(text, /Соблюдайте уважение в чате/);
 });
 
-test('cleanupAgreementMessages removes agreement text and poll without banning on refusal', async () => {
+test('agreement refusal restricts for 24 hours and excludes the user without banning', async () => {
   const deleted = [];
   let kicked = false;
-  let restricted = false;
+  let unbanned = false;
+  let restrictionArgs;
   const telegram = {
     deleteMessage: async (chatId, messageId) => {
       deleted.push({ chatId, messageId });
@@ -724,8 +725,11 @@ test('cleanupAgreementMessages removes agreement text and poll without banning o
     kickChatMember: async () => {
       kicked = true;
     },
-    restrictChatMember: async () => {
-      restricted = true;
+    unbanChatMember: async (chatId, userId, onlyIfBanned) => {
+      unbanned = chatId === 123 && userId === 456 && onlyIfBanned === true;
+    },
+    restrictChatMember: async (...args) => {
+      restrictionArgs = args;
     },
     sendMessage: async (chatId, text) => ({ message_id: 900, chat: { id: chatId }, text }),
   };
@@ -740,8 +744,13 @@ test('cleanupAgreementMessages removes agreement text and poll without banning o
 
   await handleAgreementDecision(telegram, state, false);
 
-  assert.equal(kicked, false);
-  assert.equal(restricted, true);
+  assert.equal(kicked, true);
+  assert.equal(unbanned, true);
+  assert.equal(restrictionArgs[0], 123);
+  assert.equal(restrictionArgs[1], 456);
+  assert.equal(restrictionArgs[2].can_send_messages, false);
+  assert.ok(restrictionArgs[3] >= Math.floor(Date.now() / 1000) + 23 * 60 * 60);
+  assert.ok(restrictionArgs[3] <= Math.floor(Date.now() / 1000) + 24 * 60 * 60);
   assert.equal(deleted.some((item) => item.messageId === 111), true);
   assert.equal(deleted.some((item) => item.messageId === 222), true);
   assert.equal(deleted.some((item) => item.messageId === 777), true);
