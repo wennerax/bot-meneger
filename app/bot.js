@@ -4220,11 +4220,14 @@ function createBot() {
     try {
       await ctx.telegram.deleteMessage(ctx.chat.id, messageId);
     } catch (error) {
-      console.warn('deleteMessageSafely failed:', {
-        chatId: ctx.chat?.id,
-        messageId,
-        error: error?.response?.description || error?.message || error,
-      });
+      const description = error?.response?.description || error?.message || '';
+      if (!String(description).toLowerCase().includes('message to delete not found')) {
+        console.warn('deleteMessageSafely failed:', {
+          chatId: ctx.chat?.id,
+          messageId,
+          error: description || error,
+        });
+      }
     }
   }
 
