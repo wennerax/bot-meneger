@@ -4420,10 +4420,12 @@ function createBot() {
 
   }
 
-  async function applyAutomaticProtectionAction(ctx, userId, settings, reason, deleteWindowMinutes = 5) {
+  async function applyAutomaticProtectionAction(ctx, userId, settings, reason, deleteWindowMinutes = 5, deleteHistory = true) {
     const mode = settings?.punishmentMode || 'off';
     if (settings?.deleteMessages) {
-      await deleteRecentMessages(ctx, ctx.chat.id, userId, deleteWindowMinutes);
+      if (deleteHistory) {
+        await deleteRecentMessages(ctx, ctx.chat.id, userId, deleteWindowMinutes);
+      }
       await deleteMessageSafely(ctx, ctx.message?.message_id);
     }
     if (mode === 'off') {
@@ -10379,6 +10381,7 @@ function createBot() {
       }
       if (!ensureBotAdminCanUseSettingsCommand(ctx)) return;
       moderationService.disableSpamProtection(ctx.chat.id);
+      await deleteMessageSafely(ctx, ctx.message?.message_id);
       await replyAndScheduleDelete(ctx, '✅ Антиспам выключен.');
       return;
     }
@@ -10403,6 +10406,7 @@ function createBot() {
       }
       if (!ensureBotAdminCanUseSettingsCommand(ctx)) return;
       moderationService.disableFloodProtection(ctx.chat.id);
+      await deleteMessageSafely(ctx, ctx.message?.message_id);
       await replyAndScheduleDelete(ctx, '✅ Антифлуд выключен.');
       return;
     }
@@ -10534,7 +10538,7 @@ function createBot() {
       const floodSettings = moderationService.getFloodProtectionSettings(ctx.chat.id);
       if (isAntiFloodViolation(text, floodSettings.characterLimit)) {
         queueBulkModerationSummary(ctx, ctx.from.id, 'Антифлуд');
-        await applyAutomaticProtectionAction(ctx, ctx.from.id, floodSettings, 'Антифлуд');
+        await applyAutomaticProtectionAction(ctx, ctx.from.id, floodSettings, 'Антифлуд', 5, false);
         return;
       }
     }
