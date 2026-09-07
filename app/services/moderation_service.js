@@ -320,9 +320,27 @@ class ModerationService {
           : null,
       },
       spamProtectionEnabled: Boolean(chat.spamProtectionEnabled),
+      spamProtectionSettings: {
+        messageLimit: [2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20].includes(Number(chat.spamProtectionSettings?.messageLimit))
+          ? Number(chat.spamProtectionSettings.messageLimit) : 7,
+        timeWindowSeconds: [2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20].includes(Number(chat.spamProtectionSettings?.timeWindowSeconds))
+          ? Number(chat.spamProtectionSettings.timeWindowSeconds) : 3,
+        punishmentMode: ['off', 'kick', 'mute', 'ban'].includes(String(chat.spamProtectionSettings?.punishmentMode || '').toLowerCase())
+          ? String(chat.spamProtectionSettings.punishmentMode).toLowerCase() : 'off',
+        punishmentDurationHours: 4,
+        deleteMessages: chat.spamProtectionSettings?.deleteMessages !== false,
+      },
       linkProtectionEnabled: Boolean(chat.linkProtectionEnabled),
       moderatorWarningsEnabled: chat.moderatorWarningsEnabled === undefined ? true : Boolean(chat.moderatorWarningsEnabled),
       floodProtectionEnabled: Boolean(chat.floodProtectionEnabled),
+      floodProtectionSettings: {
+        characterLimit: [5, 10, 15, 20, 25, 30, 35].includes(Number(chat.floodProtectionSettings?.characterLimit))
+          ? Number(chat.floodProtectionSettings.characterLimit) : 5,
+        punishmentMode: ['off', 'mute', 'ban'].includes(String(chat.floodProtectionSettings?.punishmentMode || '').toLowerCase())
+          ? String(chat.floodProtectionSettings.punishmentMode).toLowerCase() : 'off',
+        punishmentDurationHours: 4,
+        deleteMessages: chat.floodProtectionSettings?.deleteMessages !== false,
+      },
       rulesEnabled: chat.rulesEnabled === undefined ? true : Boolean(chat.rulesEnabled),
       streaksEnabled: chat.streaksEnabled === undefined ? true : Boolean(chat.streaksEnabled),
       streaksLabel: typeof chat.streaksLabel === 'string' ? chat.streaksLabel.trim() || 'Серия' : 'Серия',
@@ -596,6 +614,18 @@ class ModerationService {
     return Boolean(this._getChat(chatId).spamProtectionEnabled);
   }
 
+  getSpamProtectionSettings(chatId) {
+    return { ...this._getChat(chatId).spamProtectionSettings };
+  }
+
+  setSpamProtectionSetting(chatId, key, value) {
+    const chat = this._getChat(chatId);
+    if (!Object.prototype.hasOwnProperty.call(chat.spamProtectionSettings, key)) return false;
+    chat.spamProtectionSettings[key] = value;
+    this._save();
+    return true;
+  }
+
   enableLinkProtection(chatId) {
     this._getChat(chatId).linkProtectionEnabled = true;
     this._save();
@@ -622,6 +652,18 @@ class ModerationService {
 
   isFloodProtectionEnabled(chatId) {
     return Boolean(this._getChat(chatId).floodProtectionEnabled);
+  }
+
+  getFloodProtectionSettings(chatId) {
+    return { ...this._getChat(chatId).floodProtectionSettings };
+  }
+
+  setFloodProtectionSetting(chatId, key, value) {
+    const chat = this._getChat(chatId);
+    if (!Object.prototype.hasOwnProperty.call(chat.floodProtectionSettings, key)) return false;
+    chat.floodProtectionSettings[key] = value;
+    this._save();
+    return true;
   }
 
   enableMediaAi(chatId) {
@@ -1668,8 +1710,8 @@ class ModerationService {
     const allSettings = [
       'rules', 'adminRules', 'adminRulesEnabled', 'greeting', 'filters', 'banWords', 'banwordSettings',
       'warnSettings', 'allowedLinks', 'linkExceptionUsers', 'allowedForwards', 'forwardsSettings', 'menu',
-      'gifCommands', 'agreement', 'spamProtectionEnabled', 'linkProtectionEnabled', 'moderatorWarningsEnabled',
-      'floodProtectionEnabled', 'rulesEnabled', 'streaksEnabled', 'streaksLabel', 'chatAccessMode',
+      'gifCommands', 'agreement', 'spamProtectionEnabled', 'spamProtectionSettings', 'linkProtectionEnabled', 'moderatorWarningsEnabled',
+      'floodProtectionEnabled', 'floodProtectionSettings', 'rulesEnabled', 'streaksEnabled', 'streaksLabel', 'chatAccessMode',
       'captchaEnabled', 'captchaMode', 'mediaAiEnabled', 'captchaTimeoutMinutes', 'mentionNotifications',
       'adminNotify', 'hideAnonymous', 'commandRights', 'commandDisabled', 'menuCommandAccess',
     ];

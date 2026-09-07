@@ -898,8 +898,8 @@ function buildSettingsAntiKeyboard(chatId) {
   return {
     inline_keyboard: [
       [
-        { text: spamEnabled ? 'Выключить антиспам' : 'Включить антиспам', callback_data: `settings:toggle_spam:${chatId}:${spamEnabled ? 'off' : 'on'}` },
-        { text: floodEnabled ? 'Выключить антифлуд' : 'Включить антифлуд', callback_data: `settings:toggle_flood:${chatId}:${floodEnabled ? 'off' : 'on'}` },
+        { text: `Антиспам ${spamEnabled ? '✅' : '❌'}`, callback_data: `settings:spam_menu:${chatId}` },
+        { text: `Антифлуд ${floodEnabled ? '✅' : '❌'}`, callback_data: `settings:flood_menu:${chatId}` },
       ],
       [
         { text: linksEnabled ? 'Выключить антиссылки' : 'Включить антиссылки', callback_data: `settings:toggle_links:${chatId}:${linksEnabled ? 'off' : 'on'}` },
@@ -908,6 +908,62 @@ function buildSettingsAntiKeyboard(chatId) {
         { text: '📨 Пересылки', callback_data: `settings:forwards_menu:${chatId}` },
       ],
       [{ text: 'Назад', callback_data: `settings:main:${chatId}` }],
+    ],
+  };
+}
+
+function buildProtectionPunishmentKeyboard(chatId, type) {
+  const settings = (activeModerationService || defaultModerationService)[type === 'spam'
+    ? 'getSpamProtectionSettings' : 'getFloodProtectionSettings'](chatId);
+  const prefix = type === 'spam' ? 'spam' : 'flood';
+  const modes = type === 'spam'
+    ? [['off', '🔴 Выкл'], ['kick', '🚪 Исключить'], ['mute', '🔇 Мут'], ['ban', '🚫 Бан']]
+    : [['off', '🔴 Выкл'], ['mute', '🔇 Мут'], ['ban', '🚫 Бан']];
+  return {
+    inline_keyboard: [
+      ...modes.map(([mode, label]) => [{
+        text: `${settings.punishmentMode === mode ? '✅ ' : ''}${label}`,
+        callback_data: `settings:set_${prefix}_punishment:${chatId}:${mode}`,
+      }]),
+      [{ text: 'Назад', callback_data: `settings:${prefix}_menu:${chatId}` }],
+    ],
+  };
+}
+
+function buildSettingsSpamKeyboard(chatId) {
+  const service = activeModerationService || defaultModerationService;
+  const settings = service.getSpamProtectionSettings(chatId);
+  return {
+    inline_keyboard: [
+      [{ text: service.isSpamProtectionEnabled(chatId) ? '✅ Выключить антиспам' : '❌ Включить антиспам', callback_data: `settings:toggle_spam:${chatId}:${service.isSpamProtectionEnabled(chatId) ? 'off' : 'on'}` }],
+      [{ text: `📨 Сообщения: ${settings.messageLimit}`, callback_data: `settings:spam_messages:${chatId}` }, { text: `🕒 Время: ${settings.timeWindowSeconds} сек.`, callback_data: `settings:spam_time:${chatId}` }],
+      [{ text: '⚠️ Наказание', callback_data: `settings:spam_punishment:${chatId}` }],
+      [{ text: `🗑️ Удалять сообщения ${settings.deleteMessages ? '✅' : '❌'}`, callback_data: `settings:spam_delete:${chatId}` }],
+      [{ text: 'Назад', callback_data: `settings:section:anti:${chatId}` }],
+    ],
+  };
+}
+
+function buildSettingsFloodKeyboard(chatId) {
+  const service = activeModerationService || defaultModerationService;
+  const settings = service.getFloodProtectionSettings(chatId);
+  return {
+    inline_keyboard: [
+      [{ text: service.isFloodProtectionEnabled(chatId) ? '✅ Выключить антифлуд' : '❌ Включить антифлуд', callback_data: `settings:toggle_flood:${chatId}:${service.isFloodProtectionEnabled(chatId) ? 'off' : 'on'}` }],
+      [{ text: `🔤 Символы: ${settings.characterLimit}`, callback_data: `settings:flood_symbols:${chatId}` }],
+      [{ text: '⚠️ Наказание', callback_data: `settings:flood_punishment:${chatId}` }],
+      [{ text: `🗑️ Удалять сообщения ${settings.deleteMessages ? '✅' : '❌'}`, callback_data: `settings:flood_delete:${chatId}` }],
+      [{ text: 'Назад', callback_data: `settings:section:anti:${chatId}` }],
+    ],
+  };
+}
+
+function buildProtectionValuesKeyboard(chatId, type, key, values) {
+  const prefix = type === 'spam' ? 'spam' : 'flood';
+  return {
+    inline_keyboard: [
+      ...values.map((value) => [{ text: String(value), callback_data: `settings:set_${prefix}_${key}:${chatId}:${value}` }]),
+      [{ text: 'Назад', callback_data: `settings:${prefix}_menu:${chatId}` }],
     ],
   };
 }
@@ -2047,6 +2103,30 @@ async function showSettingsAntiMenu(ctx, chatId) {
   await safeEditMessageText(ctx, text, { reply_markup: buildSettingsAntiKeyboard(chatId) });
 }
 
+async function showSettingsSpamMenu(ctx, chatId) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+  const service = activeModerationService || defaultModerationService;
+  const settings = service.getSpamProtectionSettings(chatId);
+  await safeEditMessageText(ctx, `🛡️ Настройки антиспама\n\nСтатус: ${service.isSpamProtectionEnabled(chatId) ? 'включён' : 'выключен'}\nСообщений: ${settings.messageLimit}\nИнтервал: ${settings.timeWindowSeconds} сек.\nНаказание: ${settings.punishmentMode}\nУдалять сообщения: ${settings.deleteMessages ? 'да' : 'нет'}`, {
+    reply_markup: buildSettingsSpamKeyboard(chatId),
+  });
+}
+
+async function showSettingsFloodMenu(ctx, chatId) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+  const service = activeModerationService || defaultModerationService;
+  const settings = service.getFloodProtectionSettings(chatId);
+  await safeEditMessageText(ctx, `🌊 Настройки антифлуда\n\nСтатус: ${service.isFloodProtectionEnabled(chatId) ? 'включён' : 'выключен'}\nСимволов: ${settings.characterLimit}\nНаказание: ${settings.punishmentMode}\nУдалять сообщения: ${settings.deleteMessages ? 'да' : 'нет'}`, {
+    reply_markup: buildSettingsFloodKeyboard(chatId),
+  });
+}
+
 async function showSettingsStreaksMenu(ctx, chatId) {
   if (!(await canManageGroupSettings(ctx, chatId))) {
     await ctx.reply('У вас нет прав менять настройки этой группы.');
@@ -2421,6 +2501,15 @@ function parseSettingsAction(action) {
     parsedChatId = Number(normalizedParts[1]) || 0;
     value = '';
   } else if (actionType === 'captcha_timeout' && normalizedParts.length >= 2) {
+    parsedChatId = Number(normalizedParts[1]) || 0;
+    value = '';
+  } else if (['spam_messages', 'spam_time', 'flood_symbols', 'spam_punishment', 'flood_punishment'].includes(actionType) && normalizedParts.length >= 2) {
+    parsedChatId = Number(normalizedParts[1]) || 0;
+    value = normalizedParts[2] || '';
+  } else if (['set_spam_messages', 'set_spam_time', 'set_flood_symbols', 'set_spam_punishment', 'set_flood_punishment'].includes(actionType) && normalizedParts.length >= 3) {
+    parsedChatId = Number(normalizedParts[1]) || 0;
+    value = normalizedParts[2] || '';
+  } else if (['spam_delete', 'flood_delete', 'spam_menu', 'flood_menu'].includes(actionType) && normalizedParts.length >= 2) {
     parsedChatId = Number(normalizedParts[1]) || 0;
     value = '';
   } else if (nonNumericRemaining.length > 0) {
@@ -3562,7 +3651,7 @@ function createBot() {
     return uppercaseCount / letters.length >= 0.7;
   }
 
-  function hasRepeatedCharacterFlood(text) {
+  function hasRepeatedCharacterFlood(text, characterLimit = 5) {
     if (!text || typeof text !== 'string') {
       return false;
     }
@@ -3578,11 +3667,11 @@ function createBot() {
       }
     }
 
-    return maxRun >= 7;
+    return maxRun >= characterLimit;
   }
 
-  function isAntiFloodViolation(text) {
-    return isCapsFlood(text) || hasRepeatedCharacterFlood(text);
+  function isAntiFloodViolation(text, characterLimit = 5) {
+    return isCapsFlood(text) || hasRepeatedCharacterFlood(text, characterLimit);
   }
 
   async function startCaptchaForUser(ctx, userId, joinUser = null) {
@@ -4301,9 +4390,11 @@ function createBot() {
     await Promise.all(toDelete.map((messageId) => deleteMessageSafely(ctx, messageId)));
   }
 
-  async function applyAutomaticMute(ctx, userId, durationHours, reason, deleteWindowMinutes = 5) {
+  async function applyAutomaticMute(ctx, userId, durationHours, reason, deleteWindowMinutes = 5, shouldDeleteMessages = true) {
     const untilDate = Math.floor(Date.now() / 1000) + Math.round(durationHours * 3600);
-    await deleteRecentMessages(ctx, ctx.chat.id, userId, deleteWindowMinutes);
+    if (shouldDeleteMessages) {
+      await deleteRecentMessages(ctx, ctx.chat.id, userId, deleteWindowMinutes);
+    }
 
     try {
       await ctx.telegram.restrictChatMember(ctx.chat.id, userId, buildMutePermissions(false), untilDate);
@@ -4327,6 +4418,36 @@ function createBot() {
       }, 12000);
     }
 
+  }
+
+  async function applyAutomaticProtectionAction(ctx, userId, settings, reason, deleteWindowMinutes = 5) {
+    const mode = settings?.punishmentMode || 'off';
+    if (settings?.deleteMessages) {
+      await deleteRecentMessages(ctx, ctx.chat.id, userId, deleteWindowMinutes);
+      await deleteMessageSafely(ctx, ctx.message?.message_id);
+    }
+    if (mode === 'off') {
+      return;
+    }
+    const durationHours = Number(settings.punishmentDurationHours) || 4;
+    const untilDate = Math.floor(Date.now() / 1000) + Math.round(durationHours * 3600);
+    if (mode === 'mute') {
+      await applyAutomaticMute(ctx, userId, durationHours, reason, deleteWindowMinutes, false);
+      return;
+    }
+    try {
+      if (mode === 'ban') {
+        await ctx.telegram.banChatMember(ctx.chat.id, userId, untilDate);
+      } else if (mode === 'kick') {
+        await ctx.telegram.kickChatMember(ctx.chat.id, userId);
+        await ctx.telegram.unbanChatMember(ctx.chat.id, userId, true);
+      }
+    } catch (error) {
+      return;
+    }
+    database.addPunishment(ctx.chat.id, userId, mode, reason, untilDate);
+    database.addActivePunishment(ctx.chat.id, userId, mode, reason, untilDate);
+    schedulePunishmentExpiry({ chatId: ctx.chat.id, userId, action: mode, untilAt: untilDate });
   }
 
   async function applyBanwordPunishment(ctx, userId, forbiddenWord) {
@@ -4408,7 +4529,7 @@ function createBot() {
     }
   }
 
-  function trackSpamActivity(ctx) {
+  function trackSpamActivity(ctx, messageLimit = 7, timeWindowSeconds = 3) {
     if (!isGroupChat(ctx)) {
       return false;
     }
@@ -4422,10 +4543,10 @@ function createBot() {
     const now = Date.now();
     const chatTracker = spamActivity.get(chatId) || new Map();
     const userTracker = chatTracker.get(userId) || { messages: [] };
-    userTracker.messages = userTracker.messages.filter((item) => now - item.timestamp < 10 * 1000);
+    userTracker.messages = userTracker.messages.filter((item) => now - item.timestamp < timeWindowSeconds * 1000);
     userTracker.messages.push({ messageId: ctx.message.message_id, timestamp: now });
 
-    if (userTracker.messages.length >= 5) {
+    if (userTracker.messages.length >= messageLimit) {
       chatTracker.set(userId, { messages: [] });
       spamActivity.set(chatId, chatTracker);
       return true;
@@ -8126,6 +8247,71 @@ function createBot() {
       return;
     }
 
+    if (parsed.target === 'spam_menu') {
+      await showSettingsSpamMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'flood_menu') {
+      await showSettingsFloodMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'spam_messages') {
+      await safeEditMessageText(ctx, 'Выберите максимальное количество сообщений за интервал:', {
+        reply_markup: buildProtectionValuesKeyboard(chatId, 'spam', 'messages', [2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20]),
+      });
+      return;
+    }
+
+    if (parsed.target === 'spam_time') {
+      await safeEditMessageText(ctx, 'Выберите интервал времени в секундах:', {
+        reply_markup: buildProtectionValuesKeyboard(chatId, 'spam', 'time', [2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20]),
+      });
+      return;
+    }
+
+    if (parsed.target === 'flood_symbols') {
+      await safeEditMessageText(ctx, 'Выберите количество символов:', {
+        reply_markup: buildProtectionValuesKeyboard(chatId, 'flood', 'symbols', [5, 10, 15, 20, 25, 30, 35]),
+      });
+      return;
+    }
+
+    if (parsed.target === 'spam_punishment' || parsed.target === 'flood_punishment') {
+      await safeEditMessageText(ctx, 'Выберите наказание:', {
+        reply_markup: buildProtectionPunishmentKeyboard(chatId, parsed.target.startsWith('spam') ? 'spam' : 'flood'),
+      });
+      return;
+    }
+
+    if (parsed.target === 'set_spam_messages' || parsed.target === 'set_spam_time' || parsed.target === 'set_flood_symbols') {
+      const key = parsed.target === 'set_spam_messages' ? 'messageLimit'
+        : parsed.target === 'set_spam_time' ? 'timeWindowSeconds' : 'characterLimit';
+      const service = activeModerationService || defaultModerationService;
+      service[parsed.target === 'set_flood_symbols' ? 'setFloodProtectionSetting' : 'setSpamProtectionSetting'](chatId, key, Number(parsed.value));
+      await (parsed.target === 'set_flood_symbols' ? showSettingsFloodMenu(ctx, chatId) : showSettingsSpamMenu(ctx, chatId));
+      return;
+    }
+
+    if (parsed.target === 'set_spam_punishment' || parsed.target === 'set_flood_punishment') {
+      const service = activeModerationService || defaultModerationService;
+      const type = parsed.target.startsWith('spam') ? 'spam' : 'flood';
+      service[type === 'spam' ? 'setSpamProtectionSetting' : 'setFloodProtectionSetting'](chatId, 'punishmentMode', parsed.value);
+      await safeEditMessageText(ctx, 'Выберите наказание:', { reply_markup: buildProtectionPunishmentKeyboard(chatId, type) });
+      return;
+    }
+
+    if (parsed.target === 'spam_delete' || parsed.target === 'flood_delete') {
+      const service = activeModerationService || defaultModerationService;
+      const type = parsed.target.startsWith('spam') ? 'spam' : 'flood';
+      const getter = type === 'spam' ? 'getSpamProtectionSettings' : 'getFloodProtectionSettings';
+      const setter = type === 'spam' ? 'setSpamProtectionSetting' : 'setFloodProtectionSetting';
+      service[setter](chatId, 'deleteMessages', !service[getter](chatId).deleteMessages);
+      await (type === 'spam' ? showSettingsSpamMenu(ctx, chatId) : showSettingsFloodMenu(ctx, chatId));
+      return;
+    }
+
     if (parsed.target === 'toggle_media_ai') {
       if (parsed.value === 'on') {
         moderationService.enableMediaAi(chatId);
@@ -10344,19 +10530,22 @@ function createBot() {
       return;
     }
 
-    if (isGroupChat(ctx) && moderationService.isFloodProtectionEnabled(ctx.chat.id) && hasRepeatedCharacterFlood(text)) {
-      queueBulkModerationSummary(ctx, ctx.from.id, 'Антифлуд');
-      await deleteMessageSafely(ctx, ctx.message.message_id);
-      await applyAutomaticMute(ctx, ctx.from.id, 1, 'Антифлуд');
-      return;
+    if (isGroupChat(ctx) && moderationService.isFloodProtectionEnabled(ctx.chat.id)) {
+      const floodSettings = moderationService.getFloodProtectionSettings(ctx.chat.id);
+      if (isAntiFloodViolation(text, floodSettings.characterLimit)) {
+        queueBulkModerationSummary(ctx, ctx.from.id, 'Антифлуд');
+        await applyAutomaticProtectionAction(ctx, ctx.from.id, floodSettings, 'Антифлуд');
+        return;
+      }
     }
 
     if (isGroupChat(ctx) && moderationService.isSpamProtectionEnabled(ctx.chat.id)) {
+      const spamSettings = moderationService.getSpamProtectionSettings(ctx.chat.id);
       recordRecentMessage(ctx);
-      const shouldPunish = trackSpamActivity(ctx);
+      const shouldPunish = trackSpamActivity(ctx, spamSettings.messageLimit, spamSettings.timeWindowSeconds);
       if (shouldPunish) {
         queueBulkModerationSummary(ctx, ctx.from.id, 'Спам');
-        await applyAutomaticMute(ctx, ctx.from.id, 24, 'Спам', 10 / 60);
+        await applyAutomaticProtectionAction(ctx, ctx.from.id, spamSettings, 'Спам', spamSettings.timeWindowSeconds / 60);
         return;
       }
     }
@@ -10527,6 +10716,11 @@ module.exports = {
   buildPunishmentListMessage,
   buildBotAdminListMessage,
   buildSettingsMainKeyboard,
+  buildSettingsAntiKeyboard,
+  buildSettingsSpamKeyboard,
+  buildSettingsFloodKeyboard,
+  buildProtectionPunishmentKeyboard,
+  buildProtectionValuesKeyboard,
   buildModerationLogsKeyboard,
   buildSettingsChatKeyboard,
   buildMenuKeyboard,
