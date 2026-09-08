@@ -3410,6 +3410,7 @@ function createBot() {
   const spamActivity = new Map();
   const messageHistory = new Map();
   const captchaStates = new Map();
+  const captchaTimers = new Map();
   const agreementStates = new Map();
   const captchaStartsInProgress = new Set();
   const cancelledCaptchaStarts = new Set();
@@ -3752,6 +3753,13 @@ function createBot() {
       instructionMessageId: instructionMessage?.message_id,
       createdAt: Date.now(),
     });
+    const captchaTimer = setTimeout(() => {
+      if (!captchaStates.has(pollId)) {
+        return;
+      }
+      void completeCaptcha({ telegram: ctx.telegram }, pollId, false).catch(() => {});
+    }, Math.max(1, timeoutMinutes * 60 * 1000));
+    captchaTimers.set(pollId, captchaTimer);
     captchaStartsInProgress.delete(captchaKey);
   }
 
@@ -3764,6 +3772,11 @@ function createBot() {
     for (const [pollId, state] of states) {
       captchaStates.delete(pollId);
       agreementStates.delete(pollId);
+      const captchaTimer = captchaTimers.get(pollId);
+      if (captchaTimer) {
+        clearTimeout(captchaTimer);
+        captchaTimers.delete(pollId);
+      }
       await cleanupAgreementMessages(telegram, chatId, [
         state.pollMessageId,
         state.instructionMessageId,
@@ -3884,6 +3897,11 @@ function createBot() {
     }
 
     captchaStates.delete(pollId);
+    const captchaTimer = captchaTimers.get(pollId);
+    if (captchaTimer) {
+      clearTimeout(captchaTimer);
+      captchaTimers.delete(pollId);
+    }
 
     if (passed) {
       const moderationService = activeModerationService || defaultModerationService;
