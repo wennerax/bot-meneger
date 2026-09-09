@@ -773,6 +773,7 @@ function formatModerationLogsText(chatId, limit = 10) {
       year: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
+      timeZone: 'Europe/Moscow',
     }) : '—';
 
     const action = String(log.action || 'action').toUpperCase();
@@ -782,8 +783,17 @@ function formatModerationLogsText(chatId, limit = 10) {
     const targetProfile = Number.isFinite(Number(log.targetId))
       ? activeDatabase?.getUserProfile?.(chatId, log.targetId)
       : null;
-    const actorName = actorProfile?.username || (Number.isFinite(Number(log.actorId)) ? log.actorId : 'система');
-    const targetName = targetProfile?.username || (Number.isFinite(Number(log.targetId)) ? log.targetId : '—');
+    const formatLogUser = (profile, userId, fallback) => {
+      const numericUserId = Number(userId);
+      if (!Number.isFinite(numericUserId)) {
+        return fallback;
+      }
+
+      const username = String(profile?.username || '').replace(/^@+/, '').trim();
+      return username ? `@${username} (ID: ${numericUserId})` : `ID: ${numericUserId}`;
+    };
+    const actorName = formatLogUser(actorProfile, log.actorId, 'система');
+    const targetName = formatLogUser(targetProfile, log.targetId, '—');
     const actor = `админ ${actorName}`;
     const target = `участник ${targetName}`;
     const reason = log.reason ? ` | причина: ${log.reason}` : '';
