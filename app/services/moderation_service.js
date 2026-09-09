@@ -1468,6 +1468,27 @@ class ModerationService {
     return true;
   }
 
+  updateMenuButton(chatId, rowIndex, buttonIndex, changes = {}) {
+    const chat = this._getChat(chatId);
+    const rows = Array.isArray(chat.menu.buttons) ? chat.menu.buttons : [];
+    const row = rows[rowIndex];
+    const button = Array.isArray(row) ? row[buttonIndex] : null;
+    if (!button || typeof button !== 'object') {
+      return false;
+    }
+
+    const text = changes.text === undefined ? button.text : String(changes.text || '').trim();
+    const url = changes.url === undefined ? button.url : String(changes.url || '').trim();
+    if (!text || !url) {
+      return false;
+    }
+
+    row[buttonIndex] = { ...button, text, url };
+    chat.menu.buttons = rows;
+    this._save();
+    return true;
+  }
+
   clearMenuButtons(chatId) {
     this._getChat(chatId).menu.buttons = [];
     this._save();

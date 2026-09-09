@@ -2539,6 +2539,10 @@ function parseSettingsAction(action) {
   } else if (['spam_delete', 'flood_delete', 'spam_menu', 'flood_menu'].includes(actionType) && normalizedParts.length >= 2) {
     parsedChatId = Number(normalizedParts[1]) || 0;
     value = '';
+  } else if (['first_button_row', 'first_button_edit', 'first_button_edit_text', 'first_button_edit_url', 'first_button_remove'].includes(actionType) && normalizedParts.length >= 3) {
+    parsedChatId = Number(normalizedParts[1]) || 0;
+    value = normalizedParts[2] || '';
+    extra = normalizedParts[3] || '';
   } else if (nonNumericRemaining.length > 0) {
     value = String(nonNumericRemaining[0] || '');
     extra = String(nonNumericRemaining[1] || '');
@@ -5998,6 +6002,31 @@ function createBot() {
       return true;
     }
 
+    if (['settings_message_button_text', 'settings_message_button_url'].includes(pending.action) && ctx.message.text) {
+      const value = String(ctx.message.text).trim();
+      const rowIndex = Number(pending.rowIndex);
+      const buttonIndex = Number(pending.buttonIndex);
+      const rows = moderationService.getMenuButtons(groupId);
+      const button = rows[rowIndex]?.[buttonIndex];
+      if (!value || !button) {
+        await ctx.reply('⚠️ Кнопка не найдена или значение пустое.');
+        clearPendingSettingsAction(ctx);
+        return true;
+      }
+
+      const changes = pending.action === 'settings_message_button_text'
+        ? { text: value }
+        : { url: value };
+      if (moderationService.updateMenuButton(groupId, rowIndex, buttonIndex, changes)) {
+        await ctx.reply('✅ Кнопка обновлена.');
+      } else {
+        await ctx.reply('⚠️ Не удалось обновить кнопку.');
+      }
+      await deleteMessageSafely(ctx, ctx.message.message_id);
+      clearPendingSettingsAction(ctx);
+      return true;
+    }
+
     if (pending.action === 'settings_message_media') {
       const payload = getMediaPayloadFromMessage(ctx);
       if (!payload) {
@@ -8761,15 +8790,69 @@ function createBot() {
       const rows = service.getMenuButtons(chatId);
       const row = Array.isArray(rows[rowIndex]) ? rows[rowIndex] : [];
       const rowLabel = row.length ? row.map((item) => item.text).join(', ') : 'пусто';
+      const buttonRows = row.map((button, buttonIndex) => ([{
+        text: `${buttonIndex + 1}. ${button.text}`,
+        callback_data: `settings:first_button_edit:${chatId}:${rowIndex}:${buttonIndex}`,
+      }]));
       await safeEditMessageText(ctx, `Ряд ${rowIndex + 1}: ${rowLabel}`, {
         reply_markup: {
           inline_keyboard: [
+            ...buttonRows,
             [{ text: 'Добавить кнопку в ряд', callback_data: `settings:first_button_add:${chatId}:${rowIndex}` }],
             [{ text: 'Удалить ряд', callback_data: `settings:first_button_remove_row:${chatId}:${rowIndex}` }],
             [{ text: 'Назад', callback_data: `settings:first_buttons:${chatId}` }],
           ],
         },
       });
+      return;
+    }
+
+    if (parsed.target === 'first_button_edit') {
+      const service = activeModerationService || defaultModerationService;
+      const rowIndex = Number(parsed.value);
+      const buttonIndex = Number(parsed.extra);
+      const button = service.getMenuButtons(chatId)[rowIndex]?.[buttonIndex];
+      if (!button) {
+        await ctx.reply('⚠️ Кнопка не найдена.');
+        await showSettingsFirstMessageButtonsMenu(ctx, chatId);
+        return;
+      }
+      await safeEditMessageText(ctx, `Кнопка ${buttonIndex + 1}\n\nНазвание: ${button.text}\nСсылка: ${button.url}`, {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'Изменить название', callback_data: `settings:first_button_edit_text:${chatId}:${rowIndex}:${buttonIndex}` }],
+            [{ text: 'Изменить ссылку', callback_data: `settings:first_button_edit_url:${chatId}:${rowIndex}:${buttonIndex}` }],
+            [{ text: 'Удалить кнопку', callback_data: `settings:first_button_remove:${chatId}:${rowIndex}:${buttonIndex}` }],
+            [{ text: 'Назад', callback_data: `settings:first_button_row:${chatId}:${rowIndex}` }],
+          ],
+        },
+      });
+      return;
+    }
+
+    if (parsed.target === 'first_button_edit_text' || parsed.target === 'first_button_edit_url') {
+      const rowIndex = Number(parsed.value);
+      const buttonIndex = Number(parsed.extra);
+      const action = parsed.target === 'first_button_edit_text'
+        ? 'settings_message_button_text'
+        : 'settings_message_button_url';
+      setPendingSettingsAction(ctx, { action, groupId: chatId, rowIndex, buttonIndex });
+      await ctx.reply(parsed.target === 'first_button_edit_text'
+        ? 'Отправьте новое название кнопки.'
+        : 'Отправьте новую ссылку кнопки.');
+      return;
+    }
+
+    if (parsed.target === 'first_button_remove') {
+      const service = activeModerationService || defaultModerationService;
+      const rowIndex = Number(parsed.value);
+      const buttonIndex = Number(parsed.extra);
+      if (service.removeMenuButton(chatId, rowIndex, buttonIndex)) {
+        await ctx.reply('✅ Кнопка удалена.');
+      } else {
+        await ctx.reply('⚠️ Не удалось удалить кнопку.');
+      }
+      await showSettingsFirstMessageButtonsMenu(ctx, chatId);
       return;
     }
 

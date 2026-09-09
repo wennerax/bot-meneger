@@ -507,6 +507,8 @@ test('menu buttons support row layout and persistence', () => {
 
   assert.equal(service.addMenuButton(100, 'Google', 'https://google.com', 0), true);
   assert.deepEqual(service.getMenuButtons(100), [[{ text: 'Google', url: 'https://google.com' }]]);
+  assert.equal(service.updateMenuButton(100, 0, 0, { text: 'Чат', url: 'https://chat.example' }), true);
+  assert.deepEqual(service.getMenuButtons(100), [[{ text: 'Чат', url: 'https://chat.example' }]]);
 
   assert.equal(service.addMenuRow(100), true);
   assert.equal(service.addMenuButton(100, 'Yandex', 'https://yandex.ru', 1), true);
