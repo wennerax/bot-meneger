@@ -200,6 +200,12 @@ const CUSTOM_EMOJI_IDS = {
     displayName: 'Премиум предупреждение'
   },
 
+  crash_ban: {
+    id: '5253690458453880525',
+    fallback: '💥',
+    displayName: 'Бан за краш'
+  },
+
   // Панель управления группой
   group_settings_panel: {
     id: '5413768867442889274',

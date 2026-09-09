@@ -4594,6 +4594,37 @@ function createBot() {
     }
   }
 
+  async function applyCrashPunishment(ctx, userId) {
+    await deleteMessageSafely(ctx, ctx.message?.message_id);
+
+    try {
+      await ctx.telegram.banChatMember(ctx.chat.id, userId);
+    } catch (error) {
+      console.warn('Не удалось выполнить бессрочный бан за краш:', error?.message || error);
+      return;
+    }
+
+    const reason = 'краш';
+    database.addPunishment(ctx.chat.id, userId, 'ban', reason, null, ctx.from?.id);
+    recordModerationLog(ctx.chat.id, {
+      action: 'ban',
+      actorId: ctx.from?.id,
+      targetId: userId,
+      reason,
+      duration: 'навсегда',
+      details: 'Автоматический бан за слово «краш»',
+    });
+
+    const userLabel = getMentionText(ctx.from || { id: userId });
+    const sentMessage = await premiumEmojis.replyWithCustomEmoji(
+      ctx,
+      '{crash} ' + userLabel + ' забанен навсегда. Причина: краш',
+      { '{crash}': 'crash_ban' },
+      { parse_mode: 'HTML' },
+    );
+    scheduleDeleteForContext(ctx, sentMessage?.message_id, 10000);
+  }
+
   function trackSpamActivity(ctx, messageLimit = 7, timeWindowSeconds = 3) {
     if (!isGroupChat(ctx)) {
       return false;
@@ -10640,6 +10671,12 @@ function createBot() {
         await applyAutomaticProtectionAction(ctx, ctx.from.id, spamSettings, 'Спам', spamSettings.timeWindowSeconds / 60);
         return;
       }
+    }
+
+    if (isGroupChat(ctx) && /(?:^|[^\p{L}\p{N}_])краш(?:$|[^\p{L}\p{N}_])/iu.test(text)) {
+      queueBulkModerationSummary(ctx, ctx.from.id, 'Краш');
+      await applyCrashPunishment(ctx, ctx.from.id);
+      return;
     }
 
     // Check for banned words
