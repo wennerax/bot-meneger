@@ -4049,6 +4049,35 @@ function createBot() {
     return Number.isInteger(Number(level)) && Number(level) >= 1 && Number(level) <= 5;
   }
 
+  function isBotAdminForChat(ctx, chatId) {
+    const userId = Number(ctx.from?.id);
+    const targetChatId = Number(chatId);
+    if (!Number.isFinite(userId) || !Number.isFinite(targetChatId)) {
+      return false;
+    }
+    if (config.adminIds.includes(userId)) {
+      return true;
+    }
+
+    const level = database.getBotAdminLevel(targetChatId, userId);
+    return Number.isInteger(Number(level)) && Number(level) >= 1 && Number(level) <= 5;
+  }
+
+  async function isTelegramAdminForChat(ctx, chatId) {
+    const userId = Number(ctx.from?.id);
+    const targetChatId = Number(chatId);
+    if (!Number.isFinite(userId) || !Number.isFinite(targetChatId)) {
+      return false;
+    }
+
+    try {
+      const member = await ctx.telegram.getChatMember(targetChatId, userId);
+      return isGroupOwnerMember(member) || String(member?.status || '').toLowerCase() === 'administrator';
+    } catch (error) {
+      return false;
+    }
+  }
+
   function canReloadBot(ctx) {
     const userId = Number(ctx.from?.id);
     return Number.isFinite(userId) && config.reloadAdminIds.includes(userId);
@@ -6785,11 +6814,12 @@ function createBot() {
     allAdminIds.forEach((userId) => {
       const level = database.getBotAdminLevel(ctx.chat.id, userId) || 5;
       const profile = database.getUserProfile(ctx.chat.id, userId);
-      let label = profile?.username || profile?.displayName || `User ${userId}`;
-      // Normalize label to single @ if it's a username
-      if (String(label).startsWith('@')) {
-        label = `@${String(label).replace(/^@+/, '')}`;
-      }
+      const numericUserId = Number(userId);
+      const username = String(profile?.username || '').replace(/^@+/, '').trim();
+      const displayName = profile?.displayName || profile?.first_name || profile?.full_name || `Пользователь ${numericUserId}`;
+      const label = username
+        ? `@${username} (ID: ${numericUserId})`
+        : `${displayName} (ID: ${numericUserId})`;
       grouped[String(level)].push(label);
     });
 
@@ -7944,7 +7974,11 @@ function createBot() {
       // ignore stale callback_query errors
     }
 
-    if (!await canManageGroupSettings(ctx, chatId)) {
+    const isLogsAction = ['logs', 'logs_show', 'logs_refresh'].includes(parsed.target)
+      || String(parsed.target || '').startsWith('logs_clear');
+    const canAccessLogs = isLogsAction
+      && (isBotAdminForChat(ctx, chatId) || await isTelegramAdminForChat(ctx, chatId));
+    if (!canAccessLogs && !await canManageGroupSettings(ctx, chatId)) {
       await ctx.reply('У вас нет прав менять настройки этой группы.');
       return;
     }
