@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildBulkModerationSummaryMessage, buildFunReply, getTicTacToeWinner, buildTicTacToeKeyboard, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildModerationLogsKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildWarningsListText, buildSettingsWarnsListText, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage, shouldFailClosedForMedia, cleanupAgreementMessages, handleAgreementDecision, isPollAnswerForTarget, buildBotMediaSend, buildReloadStatusMessage, parseBotCommandKey, isKnownCommandText, formatAdminReportText, formatUserIdentityText, buildActivityChartSvg, applyWarnLimitPunishment } = require('../app/bot');
+const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildBulkModerationSummaryMessage, buildFunReply, getTicTacToeWinner, buildTicTacToeKeyboard, parsePageNumber, buildPunishmentListMessage, buildPunishmentListKeyboard, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildModerationLogsKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildWarningsListText, buildSettingsWarnsListText, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage, shouldFailClosedForMedia, cleanupAgreementMessages, handleAgreementDecision, isPollAnswerForTarget, buildBotMediaSend, buildReloadStatusMessage, parseBotCommandKey, isKnownCommandText, formatAdminReportText, formatUserIdentityText, buildActivityChartSvg, applyWarnLimitPunishment } = require('../app/bot');
 const { buildAiRequestPayload, normalizeMultimodalInputForResponses } = require('../app/ai');
 const premiumEmojis = require('../app/premium_emojis');
 
@@ -8,6 +8,12 @@ test('parsePunishmentDetails extracts duration and reason', () => {
   const result = parsePunishmentDetails('1d реклама', false);
 
   assert.deepEqual(result, { durationHours: 24, reason: 'реклама' });
+});
+
+test('punishment list keyboard closes the list message', () => {
+  assert.deepEqual(buildPunishmentListKeyboard(), {
+    inline_keyboard: [[{ text: 'Закрыть', callback_data: 'punishment_list:close' }]],
+  });
 });
 
 test('parseBotCommandKey recognizes plus and minus punishment commands', () => {
