@@ -34,3 +34,20 @@ test('resolveUsernameTarget resolves a stored username to a target object', asyn
     remainingArgs: '',
   });
 });
+
+test('resolveUsernameTarget resolves a numeric user ID and preserves punishment arguments', async () => {
+  const ctx = {
+    chat: { id: 100 },
+    message: { entities: [], text: '123456 2h спам' },
+    telegram: {},
+  };
+
+  const result = await resolveUsernameTarget(ctx, '123456 2h спам', '/warn ID причина', {
+    resolveUsername: () => null,
+  });
+
+  assert.deepEqual(result, {
+    target: { id: 123456 },
+    remainingArgs: '2h спам',
+  });
+});

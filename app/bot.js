@@ -4039,6 +4039,35 @@ function createBot() {
     return Number.isInteger(Number(level)) && Number(level) >= 1 && Number(level) <= 5;
   }
 
+  async function canAcceptAdminReport(ctx, report) {
+    if (isBotAdmin(ctx)) {
+      return true;
+    }
+
+    const reportChatId = Number(report?.chatId);
+    const currentChatId = Number(ctx.chat?.id);
+    if (!Number.isFinite(reportChatId) || !Number.isFinite(currentChatId)) {
+      return false;
+    }
+
+    const service = activeModerationService || defaultModerationService;
+    const configuredNotificationGroupId = service.getAdminNotifyGroupId(reportChatId);
+    const notificationGroupId = configuredNotificationGroupId || ADMIN_NOTIFICATION_GROUP_ID;
+
+    if (currentChatId === notificationGroupId) {
+      try {
+        const member = await ctx.telegram.getChatMember(currentChatId, ctx.from.id);
+        const status = String(member?.status || '').toLowerCase();
+        return ['creator', 'administrator', 'member'].includes(status)
+          || (status === 'restricted' && member?.is_member === true);
+      } catch (error) {
+        return false;
+      }
+    }
+
+    return currentChatId === reportChatId && await canManageGroupSettings(ctx, reportChatId);
+  }
+
   function canReloadBot(ctx) {
     const userId = Number(ctx.from?.id);
     return Number.isFinite(userId) && config.reloadAdminIds.includes(userId);
@@ -7838,8 +7867,7 @@ function createBot() {
         ctx.callbackQuery.data = migratedCallbackData;
       }
     }
-    const isAdminCallback = callbackData.startsWith('admin_report:')
-      || callbackData.startsWith('warn:')
+    const isAdminCallback = callbackData.startsWith('warn:')
       || callbackData.startsWith('punishment:')
       || callbackData.startsWith('stats:clear_history:');
 
@@ -8853,14 +8881,14 @@ function createBot() {
       return;
     }
 
-    if (!isBotAdmin(ctx)) {
-      await ctx.reply('Эта команда доступна только администраторам.');
-      return;
-    }
-
     const report = adminReports.get(reportId);
     if (!report || Number(report.chatId) !== reportChatId) {
       await ctx.reply('Эта жалоба больше недоступна.');
+      return;
+    }
+
+    if (!await canAcceptAdminReport(ctx, report)) {
+      await ctx.reply('Принять жалобу можно только в админ-группе или исходной группе администратором.');
       return;
     }
 
