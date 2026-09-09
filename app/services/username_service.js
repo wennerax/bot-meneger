@@ -31,6 +31,13 @@ async function resolveUsernameTarget(ctx, input, usage, database) {
 
   const first = parts[0];
   const normalized = normalizeUsername(first);
+  if (/^\d+$/.test(first)) {
+    return {
+      target: { id: Number(first) },
+      remainingArgs: parts.slice(1).join(' '),
+    };
+  }
+
   if (/^[a-z0-9_]{1,32}$/i.test(normalized)) {
     const username = `@${normalized}`;
     const resolved = database.resolveUsername(ctx.chat.id, username);
