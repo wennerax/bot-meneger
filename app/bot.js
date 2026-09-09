@@ -319,7 +319,7 @@ async function canManageGroupSettings(ctx, targetChatId) {
 
   try {
     const member = await ctx.telegram.getChatMember(chatId, userId);
-    if (isGroupOwnerMember(member) || isGroupMemberWithProfileChangePermission(member)) {
+    if (isGroupOwnerMember(member) || isGroupMemberWithManageRights(member)) {
       return true;
     }
   } catch (error) {
@@ -338,7 +338,7 @@ async function canManageGroupSettings(ctx, targetChatId) {
   try {
     const administrators = await ctx.telegram.getChatAdministrators(chatId);
     const member = administrators.find((entry) => Number(entry.user?.id) === userId);
-    return isGroupMemberWithProfileChangePermission(member);
+    return isGroupMemberWithManageRights(member);
   } catch (error) {
     return false;
   }
@@ -537,7 +537,7 @@ async function getManagedGroupsForUser(ctx) {
   if (ctx.chat?.id && ctx.chat?.type !== 'private') {
     try {
       const member = await ctx.telegram.getChatMember(ctx.chat.id, userId);
-      if (isGroupMemberWithProfileChangePermission(member)) {
+      if (isGroupMemberWithManageRights(member)) {
         addGroup(ctx.chat.id, ctx.chat.title || String(ctx.chat.id));
       }
     } catch (error) {
@@ -565,7 +565,7 @@ async function getManagedGroupsForUser(ctx) {
 
     try {
       const member = await ctx.telegram.getChatMember(chatId, userId);
-      if (isGroupMemberWithProfileChangePermission(member)) {
+      if (isGroupMemberWithManageRights(member)) {
         addGroup(chatId, group.title || String(chatId));
       }
     } catch (error) {
