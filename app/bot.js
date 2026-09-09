@@ -10683,8 +10683,7 @@ function createBot() {
       }
     }
 
-    if (isGroupChat(ctx) && (containsCrashEmoji(ctx.message)
-      || /(?:^|[^\p{L}\p{N}_])краш(?:$|[^\p{L}\p{N}_])/iu.test(text))) {
+    if (isGroupChat(ctx) && containsCrashEmoji(ctx.message)) {
       queueBulkModerationSummary(ctx, ctx.from.id, 'Краш');
       await applyCrashPunishment(ctx, ctx.from.id);
       return;
