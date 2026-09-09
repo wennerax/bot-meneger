@@ -6608,6 +6608,18 @@ function createBot() {
       .replace(/\r?\n/g, ' ');
   }
 
+  function formatJoinedAt(value) {
+    const date = new Date(value);
+    if (!value || Number.isNaN(date.getTime())) {
+      return 'неизвестно';
+    }
+
+    return date.toLocaleString('ru-RU', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+    });
+  }
+
   async function statsCommand(ctx, args) {
     ensureGroup(ctx);
 
@@ -6627,6 +6639,7 @@ function createBot() {
     const streakLabel = moderationService.getStreaksLabel(ctx.chat.id);
     const username = profile.username || getMentionText(targetUser);
     const description = profile.description ? profile.description : 'нет';
+    const joinedAt = formatJoinedAt(profile.joinedAt);
     const topLabel = profile.topPosition ? `${profile.topPosition} место` : 'не в топе';
     const streakBadgeText = premiumEmojis.getStreakBadge(profile.streak);
     const streakInfo = premiumEmojis.getStreakBadgeInfo(profile.streak);
@@ -6662,6 +6675,7 @@ function createBot() {
       trophy_premium: '%%TROPHY_EMOJI%%',
       stats_id: '%%STATS_ID_EMOJI%%',
       stats_name: '%%STATS_NAME_EMOJI%%',
+      stats_first_joined: '%%STATS_FIRST_JOINED_EMOJI%%',
       stats_chat_status: '%%STATS_CHAT_STATUS_EMOJI%%',
       stats_bot_status: '%%STATS_BOT_STATUS_EMOJI%%',
       stats_description: '%%STATS_DESCRIPTION_EMOJI%%',
@@ -6673,6 +6687,7 @@ function createBot() {
       `${customEmojiPlaceholders.trophy_premium} Анкета пользователя ${escapeCaptionText(username)}`,
       `${customEmojiPlaceholders.stats_name} Имя: ${escapeCaptionText(profile.displayName || targetUser.first_name || targetUser.username || targetUser.id)}`,
       `${customEmojiPlaceholders.stats_id} Id: ${escapeCaptionText(targetUser.id)}`,
+      `${customEmojiPlaceholders.stats_first_joined} Первый вход: ${escapeCaptionText(joinedAt)}`,
       `${customEmojiPlaceholders.stats_chat_status} Статус в чате: ${escapeCaptionText(chatStatus)}`,
       `${customEmojiPlaceholders.stats_bot_status} Статус в боте: ${escapeCaptionText(botStatus)}`,
       `${customEmojiPlaceholders.stats_description} Описание: ${escapeCaptionText(description)}`,
@@ -6688,6 +6703,7 @@ function createBot() {
       trophy_premium: 'trophy_premium',
       stats_id: 'stats_id',
       stats_name: 'stats_name',
+      stats_first_joined: 'stats_first_joined',
       stats_chat_status: 'stats_chat_status',
       stats_bot_status: 'stats_bot_status',
       stats_description: 'stats_description',
