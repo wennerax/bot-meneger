@@ -3092,12 +3092,6 @@ function buildPunishmentListMessage(kind, punishments, page, pageSize = 10, chat
   return `${title} (страница ${safePage}/${totalPages})\n${lines.join('\n')}`;
 }
 
-function buildPunishmentListKeyboard() {
-  return {
-    inline_keyboard: [[{ text: 'Закрыть', callback_data: 'punishment_list:close' }]],
-  };
-}
-
 function buildBotAdminListMessage(primaryAdminLabel, auxiliaryAdminLabels = []) {
   // Backwards-compatible: if called with two args (primaryLabel, auxLabelsArray)
   if (typeof primaryAdminLabel === 'string' && Array.isArray(auxiliaryAdminLabels)) {
@@ -4043,35 +4037,6 @@ function createBot() {
 
     const level = database.getBotAdminLevel(ctx.chat.id, userId);
     return Number.isInteger(Number(level)) && Number(level) >= 1 && Number(level) <= 5;
-  }
-
-  async function canAcceptAdminReport(ctx, report) {
-    if (isBotAdmin(ctx)) {
-      return true;
-    }
-
-    const reportChatId = Number(report?.chatId);
-    const currentChatId = Number(ctx.chat?.id);
-    if (!Number.isFinite(reportChatId) || !Number.isFinite(currentChatId)) {
-      return false;
-    }
-
-    const service = activeModerationService || defaultModerationService;
-    const configuredNotificationGroupId = service.getAdminNotifyGroupId(reportChatId);
-    const notificationGroupId = configuredNotificationGroupId || ADMIN_NOTIFICATION_GROUP_ID;
-
-    if (currentChatId === notificationGroupId) {
-      try {
-        const member = await ctx.telegram.getChatMember(currentChatId, ctx.from.id);
-        const status = String(member?.status || '').toLowerCase();
-        return ['creator', 'administrator', 'member'].includes(status)
-          || (status === 'restricted' && member?.is_member === true);
-      } catch (error) {
-        return false;
-      }
-    }
-
-    return currentChatId === reportChatId && await canManageGroupSettings(ctx, reportChatId);
   }
 
   function canReloadBot(ctx) {
@@ -6781,11 +6746,10 @@ function createBot() {
     });
   }
 
-  async function listPunishmentsCommand(ctx, kind, args = '') {
+  function listPunishmentsCommand(ctx, kind, args = '') {
     ensureGroup(ctx);
-    scheduleDeleteForContext(ctx, ctx.message?.message_id);
     if (!isBotAdmin(ctx)) {
-      await replyWithAutoDelete(ctx, 'Эта команда доступна только администраторам.');
+      ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
 
@@ -6794,9 +6758,7 @@ function createBot() {
       ? database.getActivePunishments(ctx.chat.id).filter((item) => item.action === 'mute')
       : database.getActivePunishments(ctx.chat.id).filter((item) => item.action === 'ban');
 
-    await ctx.reply(buildPunishmentListMessage(kind, punishments, page, 10, ctx.chat.id, database), {
-      reply_markup: buildPunishmentListKeyboard(),
-    });
+    ctx.reply(buildPunishmentListMessage(kind, punishments, page, 10, ctx.chat.id, database));
   }
 
   function listBotAdminsCommand(ctx) {
@@ -7089,7 +7051,7 @@ function createBot() {
     }
 
     const messageText = buildWarningsListText(ctx.chat.id, moderationService, database);
-    await ctx.reply(messageText, { reply_markup: buildPunishmentListKeyboard() });
+    await replyWithAutoDelete(ctx, messageText);
   }
 
   async function unwarnCommand(ctx, args) {
@@ -7792,10 +7754,10 @@ function createBot() {
         topCommand(ctx);
         return true;
       case 'баны':
-        await listPunishmentsCommand(ctx, 'ban', args);
+        listPunishmentsCommand(ctx, 'ban', args);
         return true;
       case 'муты':
-        await listPunishmentsCommand(ctx, 'mute', args);
+        listPunishmentsCommand(ctx, 'mute', args);
         return true;
       case 'админы':
         listBotAdminsCommand(ctx);
@@ -7876,9 +7838,9 @@ function createBot() {
         ctx.callbackQuery.data = migratedCallbackData;
       }
     }
-    const isAdminCallback = callbackData.startsWith('warn:')
+    const isAdminCallback = callbackData.startsWith('admin_report:')
+      || callbackData.startsWith('warn:')
       || callbackData.startsWith('punishment:')
-      || callbackData.startsWith('punishment_list:')
       || callbackData.startsWith('stats:clear_history:');
 
     if (isAdminCallback && !isBotAdmin(ctx)) {
@@ -7899,15 +7861,6 @@ function createBot() {
       await ctx.deleteMessage();
     } catch (error) {
       // Ignore stale or already deleted messages.
-    }
-  });
-
-  bot.action('punishment_list:close', async (ctx) => {
-    await safeAnswerCbQuery(ctx);
-    try {
-      await ctx.deleteMessage();
-    } catch (error) {
-      // Ignore stale or already deleted list messages.
     }
   });
 
@@ -8900,14 +8853,14 @@ function createBot() {
       return;
     }
 
-    const report = adminReports.get(reportId);
-    if (!report || Number(report.chatId) !== reportChatId) {
-      await ctx.reply('Эта жалоба больше недоступна.');
+    if (!isBotAdmin(ctx)) {
+      await ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
 
-    if (!await canAcceptAdminReport(ctx, report)) {
-      await ctx.reply('Принять жалобу можно только в админ-группе или исходной группе администратором.');
+    const report = adminReports.get(reportId);
+    if (!report || Number(report.chatId) !== reportChatId) {
+      await ctx.reply('Эта жалоба больше недоступна.');
       return;
     }
 
@@ -9697,12 +9650,12 @@ function createBot() {
 
   bot.command(['bans', 'banlist', 'баны'], (ctx) => {
     const args = ctx.message.text.replace(/^\/(?:bans|banlist|баны)\s*/i, '');
-    return listPunishmentsCommand(ctx, 'ban', args);
+    listPunishmentsCommand(ctx, 'ban', args);
   });
 
   bot.command(['mutes', 'mutelist', 'муты'], (ctx) => {
     const args = ctx.message.text.replace(/^\/(?:mutes|mutelist|муты)\s*/i, '');
-    return listPunishmentsCommand(ctx, 'mute', args);
+    listPunishmentsCommand(ctx, 'mute', args);
   });
 
   bot.command(['menu'], async (ctx) => {
@@ -10783,7 +10736,6 @@ module.exports = {
   buildTicTacToeKeyboard,
   parsePageNumber,
   buildPunishmentListMessage,
-  buildPunishmentListKeyboard,
   buildBotAdminListMessage,
   buildSettingsMainKeyboard,
   buildSettingsAntiKeyboard,
