@@ -790,10 +790,13 @@ function formatModerationLogsText(chatId, limit = 10) {
       }
 
       const username = String(profile?.username || '').replace(/^@+/, '').trim();
-      return username ? `@${username} (ID: ${numericUserId})` : `ID: ${numericUserId}`;
+      const displayName = String(profile?.displayName || profile?.first_name || profile?.full_name || '').trim();
+      return username
+        ? `@${username} (ID: ${numericUserId})`
+        : displayName ? `${displayName} (ID: ${numericUserId})` : `ID: ${numericUserId}`;
     };
-    const actorName = formatLogUser(actorProfile, log.actorId, 'система');
-    const targetName = formatLogUser(targetProfile, log.targetId, '—');
+    const actorName = formatLogUser({ ...(actorProfile || {}), username: actorProfile?.username || log.actorUsername }, log.actorId, 'система');
+    const targetName = formatLogUser({ ...(targetProfile || {}), username: targetProfile?.username || log.targetUsername }, log.targetId, '—');
     const actor = `админ ${actorName}`;
     const target = `участник ${targetName}`;
     const reason = log.reason ? ` | причина: ${log.reason}` : '';
@@ -816,10 +819,14 @@ function recordModerationLog(chatId, payload = {}) {
   }
 
   const service = activeModerationService || defaultModerationService;
+  const actorProfile = activeDatabase?.getUserProfile?.(chatId, payload.actorId) || {};
+  const targetProfile = activeDatabase?.getUserProfile?.(chatId, payload.targetId) || {};
   return service.addModerationLog(Number(chatId), {
     action,
     actorId: Number(payload.actorId) || null,
     targetId: Number(payload.targetId) || null,
+    actorUsername: payload.actorUsername || actorProfile.username || null,
+    targetUsername: payload.targetUsername || targetProfile.username || null,
     reason: String(payload.reason || '').trim(),
     duration: String(payload.duration || '').trim(),
     details: String(payload.details || '').trim(),
@@ -9237,6 +9244,10 @@ function createBot() {
     const botMessageChatId = botMessageMatch ? Number(botMessageMatch[1] || chatId) : 0;
     const isCommandRightsAction = action === 'command_rights'
       || action.startsWith('command_rights:');
+    const isLogsAction = ['logs', 'logs_show', 'logs_refresh'].includes(String(action).split(':')[0])
+      || String(action).startsWith('logs_clear');
+    const canAccessLogs = isLogsAction
+      && (isBotAdminForChat(ctx, chatId) || await isTelegramAdminForChat(ctx, chatId));
     if (botMessageMatch) {
       if (!(await canManageGroupSettings(ctx, botMessageChatId))) {
         await ctx.reply('У вас нет прав администратора группы с правом менять профиль группы.');
@@ -9245,7 +9256,7 @@ function createBot() {
     } else if (isCommandRightsAction && !(await canManageGroupSettings(ctx, chatId))) {
       await ctx.reply('У вас нет прав менять настройки этой группы.');
       return;
-    } else if (!(await canManageGroupSettings(ctx, chatId))) {
+    } else if (!canAccessLogs && !(await canManageGroupSettings(ctx, chatId))) {
       await ctx.reply('У вас нет прав администратора группы с правом менять профиль группы.');
       return;
     }

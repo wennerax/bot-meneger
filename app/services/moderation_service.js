@@ -543,6 +543,8 @@ class ModerationService {
       action: String(logEntry.action || 'action').toLowerCase(),
       actorId: Number(logEntry.actorId) || null,
       targetId: Number(logEntry.targetId) || null,
+      actorUsername: String(logEntry.actorUsername || '').replace(/^@+/, '').trim() || null,
+      targetUsername: String(logEntry.targetUsername || '').replace(/^@+/, '').trim() || null,
       reason: String(logEntry.reason || '').trim(),
       duration: String(logEntry.duration || '').trim(),
       details: String(logEntry.details || '').trim(),
