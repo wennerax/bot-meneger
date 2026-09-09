@@ -21,6 +21,7 @@ const adminReports = new Map();
 const reloadLockPath = path.join(__dirname, '..', 'data', 'bot-reload.lock');
 const reloadLockMaxAgeMs = 2 * 60 * 1000;
 const reloadCommandClaimMaxAgeMs = 10 * 60 * 1000;
+const CRASH_EMOJI_ID = '5253690458453880525';
 
 // Установите сюда ID группы модераторов, в которую будут приходить уведомления при включенном уведомлении администраторов.
 // Пример: const ADMIN_NOTIFICATION_GROUP_ID = -1001234567890;
@@ -91,6 +92,15 @@ function isAnonymousSenderMessage(message = {}) {
   const hasAuthorSignature = Boolean(message.author_signature);
 
   return hasSenderChat || hasAuthorSignature;
+}
+
+function containsCrashEmoji(message = {}) {
+  const entities = [
+    ...(Array.isArray(message.entities) ? message.entities : []),
+    ...(Array.isArray(message.caption_entities) ? message.caption_entities : []),
+  ];
+  return entities.some((entity) => entity?.type === 'custom_emoji'
+    && String(entity.custom_emoji_id || '') === CRASH_EMOJI_ID);
 }
 
 function detectForwardedMessageCategory(message = {}) {
@@ -10673,7 +10683,8 @@ function createBot() {
       }
     }
 
-    if (isGroupChat(ctx) && /(?:^|[^\p{L}\p{N}_])краш(?:$|[^\p{L}\p{N}_])/iu.test(text)) {
+    if (isGroupChat(ctx) && (containsCrashEmoji(ctx.message)
+      || /(?:^|[^\p{L}\p{N}_])краш(?:$|[^\p{L}\p{N}_])/iu.test(text))) {
       queueBulkModerationSummary(ctx, ctx.from.id, 'Краш');
       await applyCrashPunishment(ctx, ctx.from.id);
       return;
@@ -10867,6 +10878,7 @@ module.exports = {
   buildBotMediaSend,
   buildSettingsAnonymousKeyboard,
   isAnonymousSenderMessage,
+  containsCrashEmoji,
   isChannelPostInGroupMessage,
   shouldFailClosedForMedia,
   parseSettingsAction,
