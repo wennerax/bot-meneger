@@ -2635,19 +2635,15 @@ function parsePunishmentDetails(args, hasReply) {
   let durationHours = null;
   let reasonParts = parts;
 
-  if (!hasReply && parts.length > 0) {
-    reasonParts = parts.slice(1);
-  }
-
   const durationToken = parts[0];
-  if (durationToken && /^\d+[mhd]$/i.test(durationToken)) {
+  if (durationToken && /^\d+[mhdмчд]$/i.test(durationToken)) {
     const amount = Number(durationToken.slice(0, -1));
     const unit = durationToken.at(-1).toLowerCase();
-    if (unit === 'm') {
+    if (unit === 'm' || unit === 'м') {
       durationHours = amount / 60;
-    } else if (unit === 'h') {
+    } else if (unit === 'h' || unit === 'ч') {
       durationHours = amount;
-    } else if (unit === 'd') {
+    } else if (unit === 'd' || unit === 'д') {
       durationHours = amount * 24;
     }
     reasonParts = parts.slice(1);

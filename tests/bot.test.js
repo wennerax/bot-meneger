@@ -10,6 +10,13 @@ test('parsePunishmentDetails extracts duration and reason', () => {
   assert.deepEqual(result, { durationHours: 24, reason: 'реклама' });
 });
 
+test('parsePunishmentDetails accepts Russian duration units', () => {
+  assert.deepEqual(parsePunishmentDetails('7д 1.1', false), {
+    durationHours: 168,
+    reason: '1.1',
+  });
+});
+
 test('parseBotCommandKey recognizes plus and minus punishment commands', () => {
   assert.equal(parseBotCommandKey('+варн @alice причина'), 'warn');
   assert.equal(parseBotCommandKey('-варн @alice'), 'warn');
@@ -65,6 +72,12 @@ test('parsePunishmentDetails returns default reason when none provided', () => {
   const result = parsePunishmentDetails('2h', false);
 
   assert.deepEqual(result, { durationHours: 2, reason: 'Без причины' });
+});
+
+test('parsePunishmentDetails keeps a reason that looks like a number', () => {
+  const result = parsePunishmentDetails('1.3', false);
+
+  assert.deepEqual(result, { durationHours: null, reason: '1.3' });
 });
 
 test('short !пред warning command is recognized and mapped to warn', () => {
