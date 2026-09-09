@@ -118,21 +118,24 @@ function main() {
         const successText = typeof reloadStatus.successText === 'string' && reloadStatus.successText
           ? reloadStatus.successText
           : '✅ Бот успешно перезапустился.';
-        await bot.telegram.editMessageText(
-          reloadStatus.chatId,
-          Number(reloadStatus.messageId),
-          undefined,
-          successText,
-        );
-        clearReloadStatus(reloadStatusClaim.path);
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        try {
+          await bot.telegram.editMessageText(
+            reloadStatus.chatId,
+            Number(reloadStatus.messageId),
+            undefined,
+            successText,
+          );
+        } catch (error) {
+          console.warn('Failed to update reload status message:', error?.message || error);
+        }
         try {
           await bot.telegram.deleteMessage(reloadStatus.chatId, Number(reloadStatus.messageId));
         } catch (error) {
           console.warn('Failed to delete reload status message:', error?.message || error);
         }
+        clearReloadStatus(reloadStatusClaim.path);
       } catch (error) {
-        console.warn('Failed to update reload status message:', error?.message || error);
+        console.warn('Failed to clean up reload status message:', error?.message || error);
         clearReloadStatus(reloadStatusClaim.path);
       }
     }

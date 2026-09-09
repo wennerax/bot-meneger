@@ -9,7 +9,11 @@
     }
   },
   "groupAdmins": {},
-  "botAdmins": {},
+  "botAdmins": {
+    "-1002485675560": {
+      "7288555779": 2
+    }
+  },
   "botAdminWarnings": {},
   "punishments": [],
   "activePunishments": [],
