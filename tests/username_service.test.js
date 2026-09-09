@@ -34,3 +34,22 @@ test('resolveUsernameTarget resolves a stored username to a target object', asyn
     remainingArgs: '',
   });
 });
+
+  test('resolveUsernameTarget finds an administrator by username through Telegram administrators', async () => {
+    const ctx = {
+      chat: { id: 100 },
+      message: { entities: [], text: '@alice' },
+      telegram: {
+        getChatAdministrators: async () => [{ user: { id: 42, username: 'Alice', first_name: 'Alice' } }],
+      },
+    };
+
+    const result = await resolveUsernameTarget(ctx, 'alice', '/addadmin @username', {
+      resolveUsername: () => null,
+    });
+
+    assert.deepEqual(result, {
+      target: { id: 42, first_name: 'Alice', username: 'alice' },
+      remainingArgs: '',
+    });
+  });

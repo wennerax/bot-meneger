@@ -30,9 +30,10 @@ async function resolveUsernameTarget(ctx, input, usage, database) {
   }
 
   const first = parts[0];
-  if (first.startsWith('@')) {
-    const resolved = database.resolveUsername(ctx.chat.id, first);
-    const normalized = normalizeUsername(first);
+  const normalized = normalizeUsername(first);
+  if (/^[a-z0-9_]{1,32}$/i.test(normalized)) {
+    const username = `@${normalized}`;
+    const resolved = database.resolveUsername(ctx.chat.id, username);
     if (resolved) {
       return {
         target: { id: Number(resolved.userId), first_name: resolved.displayName, username: normalized },
@@ -41,8 +42,9 @@ async function resolveUsernameTarget(ctx, input, usage, database) {
     }
 
     try {
-      const member = await ctx.telegram.getChatMember(ctx.chat.id, normalized);
-      if (member?.user) {
+      const administrators = await ctx.telegram.getChatAdministrators(ctx.chat.id);
+      const member = administrators.find((entry) => normalizeUsername(entry?.user?.username) === normalized);
+      if (member?.user?.id) {
         return {
           target: {
             id: member.user.id,
@@ -56,7 +58,7 @@ async function resolveUsernameTarget(ctx, input, usage, database) {
       // ignore and fallback to usage message
     }
 
-    ctx.reply(`Не удалось найти пользователя ${first} в этой группе. Используйте ${usage}`);
+    ctx.reply(`Не удалось найти пользователя ${username} среди известных мне участников группы. Ответьте на его сообщение или укажите ID. Используйте ${usage}`);
     return null;
   }
 
