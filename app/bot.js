@@ -3622,6 +3622,9 @@ function createBot() {
     await handleChatMigration(ctx);
     const message = ctx.message;
     const commandText = message?.text || '';
+    if (message && ctx.chat?.type !== 'private' && ctx.from && !ctx.from.is_bot) {
+      database.recordUserJoin(ctx.chat.id, ctx.from.id, getDisplayName(ctx), ctx.from.username);
+    }
     if (message && ctx.chat?.type !== 'private' && ctx.from && !ctx.from.is_bot && /^\/\S+/.test(commandText)) {
       database.recordMessage(ctx.chat.id, ctx.from.id, getDisplayName(ctx), ctx.from.username);
     }
