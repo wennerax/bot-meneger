@@ -771,7 +771,8 @@ function buildModerationLogsKeyboard(chatId, returnCallback = 'menu:overview') {
 }
 
 function buildHiddenPunishmentsKeyboard(chatId, pageIndex = 0, returnCallback = 'menu:overview') {
-  const count = database.getHiddenPunishmentCount(chatId);
+  const db = activeDatabase;
+  const count = db?.getHiddenPunishmentCount ? db.getHiddenPunishmentCount(chatId) : 0;
   const pageSize = 10;
   const totalPages = Math.max(1, Math.ceil(count / pageSize));
   const safePage = Math.min(Math.max(0, Number(pageIndex) || 0), Math.max(totalPages - 1, 0));
@@ -791,9 +792,14 @@ function buildHiddenPunishmentsKeyboard(chatId, pageIndex = 0, returnCallback = 
 }
 
 function buildHiddenPunishmentsText(chatId, pageIndex = 0) {
+  const db = activeDatabase;
+  if (!db?.getHiddenPunishments) {
+    return '📦 Скрытые наказания временно недоступны.';
+  }
+
   const page = Math.max(0, Number(pageIndex) || 0);
   const pageSize = 10;
-  const items = database.getHiddenPunishments(chatId, pageSize, page);
+  const items = db.getHiddenPunishments(chatId, pageSize, page);
   if (!items.length) {
     return '📦 Скрытые наказания пусты.';
   }
