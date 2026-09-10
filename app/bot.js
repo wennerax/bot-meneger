@@ -752,7 +752,7 @@ function buildMenuKeyboard(chatId) {
 
 function encodeReturnCallback(returnCallback = 'menu:overview') {
   if (!returnCallback || returnCallback === 'menu:overview') {
-    return 'overview';
+    return 'menu:overview';
   }
   if (returnCallback.startsWith('settings:main:')) {
     const match = String(returnCallback).match(/^settings:main:(-?\d+)$/);
@@ -763,8 +763,8 @@ function encodeReturnCallback(returnCallback = 'menu:overview') {
   return returnCallback;
 }
 
-function decodeReturnCallback(returnCallback = 'overview') {
-  if (!returnCallback || returnCallback === 'overview') {
+function decodeReturnCallback(returnCallback = 'menu:overview') {
+  if (!returnCallback || returnCallback === 'menu:overview') {
     return 'menu:overview';
   }
   if (returnCallback.startsWith('settings:')) {
@@ -778,17 +778,22 @@ function decodeReturnCallback(returnCallback = 'overview') {
 
 function buildModerationLogsKeyboard(chatId, returnCallback = 'menu:overview') {
   const safeReturn = returnCallback || 'menu:overview';
+  const encodedReturn = encodeReturnCallback(safeReturn);
+  const hiddenReturn = safeReturn === 'menu:overview'
+    ? `menu:logs_show:${chatId}`
+    : encodedReturn;
+
   return {
     inline_keyboard: [
       [
-        { text: 'Логи', callback_data: `menu:logs_show:${chatId}` },
-        { text: 'Обновить логи', callback_data: `menu:logs_refresh:${chatId}` },
+        { text: 'Логи', callback_data: `menu:logs_show:${chatId}:${encodedReturn}` },
+        { text: 'Обновить логи', callback_data: `menu:logs_refresh:${chatId}:${encodedReturn}` },
       ],
       [
-        { text: 'Очистить логи', callback_data: `menu:logs_clear:${chatId}` },
+        { text: 'Очистить логи', callback_data: `menu:logs_clear:${chatId}:${encodedReturn}` },
       ],
       [
-        { text: 'Скрытые наказания', callback_data: `menu:hidden_punishments:${chatId}:0:${encodeReturnCallback(safeReturn)}` },
+        { text: 'Скрытые наказания', callback_data: `menu:hidden_punishments:${chatId}:0:${hiddenReturn}` },
       ],
       [
         { text: 'Назад', callback_data: safeReturn },
@@ -9652,18 +9657,20 @@ function createBot() {
       return;
     }
 
-    if (action === 'logs_show' || action === 'logs_refresh') {
-      const actionParts = action.split(':');
+    if (action.startsWith('logs_show:') || action.startsWith('logs_refresh:')) {
+      const actionParts = String(action).split(':');
       const targetChatId = Number(actionParts[1] || chatId) || chatId;
-      const returnCallback = actionParts.slice(2).join(':') || 'menu:overview';
+      const encodedReturn = actionParts.slice(2).join(':') || 'menu:overview';
+      const returnCallback = decodeReturnCallback(encodedReturn);
       await safeEditMessageText(ctx, formatModerationLogsText(targetChatId, 10), { reply_markup: buildModerationLogsKeyboard(targetChatId, returnCallback) });
       return;
     }
 
-    if (action.startsWith('logs_clear')) {
-      const actionParts = action.split(':');
+    if (action.startsWith('logs_clear:')) {
+      const actionParts = String(action).split(':');
       const targetChatId = Number(actionParts[1] || chatId) || chatId;
-      const returnCallback = actionParts.slice(2).join(':') || 'menu:overview';
+      const encodedReturn = actionParts.slice(2).join(':') || 'menu:overview';
+      const returnCallback = decodeReturnCallback(encodedReturn);
       moderationService.clearModerationLogs(targetChatId);
       await safeEditMessageText(ctx, '✅ Логи модерации очищены.', { reply_markup: buildModerationLogsKeyboard(targetChatId, returnCallback) });
       return;
