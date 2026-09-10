@@ -824,10 +824,12 @@ test('detectForbiddenWord catches drugs and self-harm variants', () => {
   assert.equal(detectForbiddenWord('я люблю курить траву весь день'), 'курить траву');
   // Exact word match
   assert.equal(detectForbiddenWord('героин это плохо'), 'героин');
-  // Prefix match (obfuscation) - word with extra characters
-  assert.equal(detectForbiddenWord('наркоыыыыыы'), 'нарко');
+  // Arbitrary word endings are not treated as a match.
+  assert.equal(detectForbiddenWord('наркоыыыыыы'), null);
   assert.equal(detectForbiddenWord('героинчик мне нужен'), 'героин');
   assert.equal(detectForbiddenWord('хочу самоубийство'), 'самоубийство');
+  assert.equal(detectForbiddenWord('метеорит'), null);
+  assert.equal(detectForbiddenWord('металлургия'), null);
   // Should not match when word is not found
   assert.equal(detectForbiddenWord('доброе утро друзья'), null);
 });

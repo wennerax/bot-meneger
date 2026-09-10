@@ -59,6 +59,7 @@ const DEFAULT_ALLOWED_LINKS = readJsonList(path.join(__dirname, '..', 'data', 'a
   't.me/digitalmusikbot?start=from_inline_caption', 't.me/wwhisbot?start=faq'
 ]);
 const DEFAULT_ALLOWED_ANONYMOUS_CHANNELS = ['-1001598468726'];
+const DIMINUTIVE_SUFFIXES = ['чик', 'чек', 'ик', 'ек', 'очка', 'ечка', 'онька', 'енька', 'ушка', 'юшка', 'онок', 'енок'];
 
 function normalizeAllowedUrl(value) {
   return String(value || '').trim().toLowerCase()
@@ -997,20 +998,21 @@ class ModerationService {
       return normB.length - normA.length;
     });
     
-    // Strategy 1: Check for multi-word phrases as substring (e.g., "курить траву")
+    // Strategy 1: Check for multi-word phrases as whole token sequences.
     for (const word of sortedBanWords) {
       const normalized = normalizeWord(word);
       if (!normalized || normalized.length < 3) continue;
       
       if (normalized.includes(' ')) {
-        // Multi-word phrase - search as substring in raw text
-        if (rawText.includes(normalized)) {
+        const phraseTokens = normalized.match(/[a-zа-яё0-9]+/gi) || [];
+        const phrasePattern = new RegExp(`(^|[^a-zа-яё0-9])${phraseTokens.join('[^a-zа-яё0-9]+')}($|[^a-zа-яё0-9])`, 'i');
+        if (phraseTokens.length > 0 && phrasePattern.test(rawText)) {
           return word;
         }
       }
     }
     
-    // Strategy 2: For single words, extract tokens and check for exact and prefix matches
+    // Strategy 2: For single words, check exact matches and known diminutive forms.
     const tokens = rawText.match(/[a-zа-яё0-9]+/gi) || [];
     const normalizedTokens = tokens.map(t => normalizeWord(t));
     
@@ -1025,14 +1027,10 @@ class ModerationService {
         if (token === normalized) {
           return word;
         }
-        
-        // Prefix match - ban word is at the start of the token with extra chars (obfuscation)
-        if (token.startsWith(normalized) && token.length > normalized.length) {
-          // Make sure it's not just a normal word form
-          // Allow if ban word is at least 3 chars and token has at least 2 extra chars
-          if (normalized.length >= 3 && token.length >= normalized.length + 2) {
-            return word;
-          }
+
+        const suffix = token.startsWith(normalized) ? token.slice(normalized.length) : '';
+        if (suffix && DIMINUTIVE_SUFFIXES.includes(suffix)) {
+          return word;
         }
       }
     }

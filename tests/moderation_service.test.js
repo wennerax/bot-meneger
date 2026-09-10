@@ -278,6 +278,16 @@ test('chat starts with the default hidden-user channel exception', () => {
   assert.equal(service.getAllowedAnonymousChannels(100).includes('-1001598468726'), true);
 });
 
+test('ban words match whole words without matching other word endings', () => {
+  const service = new ModerationService();
+
+  service.addBanWord(100, 'мет');
+
+  assert.equal(service.findBanWord(100, 'мет'), 'мет');
+  assert.equal(service.findBanWord(100, 'мет.'), 'мет');
+  assert.equal(service.findBanWord(100, 'метеорит'), null);
+});
+
 test('link protection exceptions can be managed per user', () => {
   const service = new ModerationService();
 
@@ -440,17 +450,17 @@ test('agreement settings can be enabled and configured', () => {
   assert.equal(service.getAgreementMedia(100), null);
 });
 
-test('ban words are detected with suffixes and shortened variations', () => {
+test('ban words match exact words and diminutive forms', () => {
   const service = new ModerationService();
 
-  // Prefix match - word with extra characters at the end (obfuscation)
-  assert.equal(service.findBanWord(100, 'наркомыы'), 'нарко');
+  assert.equal(service.findBanWord(100, 'наркомыы'), null);
   assert.equal(service.findBanWord(100, 'мефедрончик'), 'мефедрон');
   // Exact match
   assert.equal(service.findBanWord(100, 'я хочу вздернусь прямо сейчас'), 'вздернусь');
   assert.equal(service.findBanWord(100, 'самоубийство это тот путь'), 'самоубийство');
-  // Prefix match
   assert.equal(service.findBanWord(100, 'тут метадончик ответ'), 'метадон');
+  assert.equal(service.findBanWord(100, 'метеорит'), null);
+  assert.equal(service.findBanWord(100, 'металлургия'), null);
 });
 
 test('moderation settings persist across restarts', () => {
@@ -527,13 +537,13 @@ test('menu buttons support row layout and persistence', () => {
   assert.deepEqual(service.getMenuButtons(100), []);
 });
 
-test('banned words are detected when they are prefixed with extra characters', () => {
+test('banned words do not match tokens with extra characters', () => {
   const service = new ModerationService();
   service.addBanWord(100, 'нарко');
   service.addBanWord(100, 'меф');
 
-  assert.equal(service.findBanWord(100, 'наркоывф'), 'нарко');
-  assert.equal(service.findBanWord(100, 'мефылзщ'), 'меф');
+  assert.equal(service.findBanWord(100, 'наркоывф'), null);
+  assert.equal(service.findBanWord(100, 'мефылзщ'), null);
 });
 
 test('message text can render clickable link labels', () => {
