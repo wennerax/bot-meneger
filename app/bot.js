@@ -4072,6 +4072,8 @@ function createBot() {
       return;
     }
 
+    await cleanupAgreementMessages(ctx.telegram, state.chatId, [state.pollMessageId, state.instructionMessageId]);
+
     const restrictUntil = Math.floor(Date.now() / 1000) + 24 * 60 * 60;
     try {
       await ctx.telegram.restrictChatMember(state.chatId, state.userId, buildMutePermissions(false), restrictUntil);
@@ -4087,8 +4089,6 @@ function createBot() {
 
     const failedGroupMessage = await ctx.telegram.sendMessage(state.chatId, `Пользователь ${state.displayName} не прошёл капчу и исключён из группы.`);
     scheduleDeleteMessage(ctx.telegram, state.chatId, failedGroupMessage?.message_id);
-    scheduleDeleteMessage(ctx.telegram, state.chatId, state.pollMessageId);
-    scheduleDeleteMessage(ctx.telegram, state.chatId, state.instructionMessageId);
   }
 
   async function expirePunishment(punishment) {
