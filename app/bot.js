@@ -754,17 +754,17 @@ function buildModerationLogsKeyboard(chatId, returnCallback = 'menu:overview') {
   return {
     inline_keyboard: [
       [
-        { text: 'Логи', callback_data: `menu:logs_show:${chatId}` },
-        { text: 'Обновить логи', callback_data: `menu:logs_refresh:${chatId}` },
+        { text: 'Логи', callback_data: `menu:logs_show:${chatId}:${returnCallback}` },
+        { text: 'Обновить логи', callback_data: `menu:logs_refresh:${chatId}:${returnCallback}` },
       ],
       [
-        { text: 'Очистить логи', callback_data: `menu:logs_clear:${chatId}` },
+        { text: 'Очистить логи', callback_data: `menu:logs_clear:${chatId}:${returnCallback}` },
       ],
       [
-        { text: 'Скрытые наказания', callback_data: `menu:hidden_punishments:${chatId}` },
+        { text: 'Скрытые наказания', callback_data: `menu:hidden_punishments:${chatId}:0:${returnCallback}` },
       ],
       [
-        { text: 'Назад', callback_data: 'menu:overview' },
+        { text: 'Назад', callback_data: returnCallback },
       ],
     ],
   };
@@ -779,15 +779,15 @@ function buildHiddenPunishmentsKeyboard(chatId, pageIndex = 0, returnCallback = 
   const rows = [];
   const nav = [];
   if (safePage > 0) {
-    nav.push({ text: '⬅️ Назад', callback_data: `menu:hidden_punishments:${chatId}:${safePage - 1}` });
+    nav.push({ text: '⬅️ Назад', callback_data: `menu:hidden_punishments:${chatId}:${safePage - 1}:${returnCallback}` });
   }
   if (safePage + 1 < totalPages) {
-    nav.push({ text: 'Вперёд ➡️', callback_data: `menu:hidden_punishments:${chatId}:${safePage + 1}` });
+    nav.push({ text: 'Вперёд ➡️', callback_data: `menu:hidden_punishments:${chatId}:${safePage + 1}:${returnCallback}` });
   }
   if (nav.length) {
     rows.push(nav);
   }
-  rows.push([{ text: 'Назад', callback_data: 'menu:overview' }]);
+  rows.push([{ text: 'Назад', callback_data: returnCallback }]);
   return { inline_keyboard: rows };
 }
 
