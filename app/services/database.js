@@ -72,6 +72,7 @@ class Database {
         botAdminWarnings: parsed.botAdminWarnings || {},
         punishments: parsed.punishments || [],
         activePunishments: parsed.activePunishments || [],
+        hiddenPunishments: parsed.hiddenPunishments || [],
         blacklist: parsed.blacklist || [],
         messageCounts: parsed.messageCounts || {},
         groupUsers: parsed.groupUsers || {},
@@ -92,6 +93,7 @@ class Database {
       botAdminWarnings: {},
       punishments: [],
       activePunishments: [],
+      hiddenPunishments: [],
       blacklist: [],
       messageCounts: {},
       groupUsers: {},
@@ -506,6 +508,7 @@ class Database {
     const counts = this.data.messageCounts[id]?.[user] || null;
     const punishments = this.data.punishments.filter((item) => item.chatId === id && item.userId === user);
     const activePunishments = this.data.activePunishments.filter((item) => item.chatId === id && item.userId === user);
+    const hiddenPunishments = this.data.hiddenPunishments?.filter?.((item) => item.chatId === id && item.userId === user) || [];
     const mergedPunishments = [...punishments, ...activePunishments].filter((item, index, items) => {
       const signature = [
         Number(item.chatId),
@@ -602,6 +605,37 @@ class Database {
   linkTriggerEnabled(chatId) {
     const id = Number(chatId);
     return Boolean(this.data.groups[id]?.linkTrigger);
+  }
+
+  addHiddenPunishment(chatId, userId, action, reason, untilAt = null, actorId = null, actorUsername = null, targetUsername = null) {
+    const entry = {
+      chatId: Number(chatId),
+      userId: Number(userId),
+      action,
+      reason,
+      untilAt,
+      actorId: actorId === null || actorId === undefined ? null : Number(actorId),
+      actorUsername: typeof actorUsername === 'string' ? actorUsername.replace(/^@+/, '').trim() : null,
+      targetUsername: typeof targetUsername === 'string' ? targetUsername.replace(/^@+/, '').trim() : null,
+      createdAt: this._now(),
+      hidden: true,
+    };
+    this.data.hiddenPunishments.push(entry);
+    this._save();
+    return entry;
+  }
+
+  getHiddenPunishments(chatId, limit = 10, page = 0) {
+    const id = Number(chatId);
+    const pageSize = Number.isFinite(Number(limit)) && Number(limit) > 0 ? Number(limit) : 10;
+    const pageIndex = Number.isFinite(Number(page)) && Number(page) > 0 ? Number(page) : 0;
+    const items = this.data.hiddenPunishments.filter((item) => item.chatId === id);
+    return items.slice(pageIndex * pageSize, pageIndex * pageSize + pageSize);
+  }
+
+  getHiddenPunishmentCount(chatId) {
+    const id = Number(chatId);
+    return this.data.hiddenPunishments.filter((item) => item.chatId === id).length;
   }
 
   addPunishment(chatId, userId, action, reason, untilAt = null, actorId = null) {

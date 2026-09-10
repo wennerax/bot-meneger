@@ -86,6 +86,15 @@ test('short !пред warning command is recognized and mapped to warn', () => {
   assert.equal(isKnownCommandText('!пред @alice причина'), true);
 });
 
+test('silent slash punishment commands are parsed and recognized as known commands', () => {
+  assert.equal(parseBotCommandKey('/sban @alice 1d spam'), 'sban');
+  assert.equal(parseBotCommandKey('/swarn @alice spam'), 'swarn');
+  assert.equal(parseBotCommandKey('/smute @alice 1d spam'), 'smute');
+  assert.equal(isKnownCommandText('/sban @alice 1d spam'), true);
+  assert.equal(isKnownCommandText('/swarn @alice spam'), true);
+  assert.equal(isKnownCommandText('/smute @alice 1d spam'), true);
+});
+
 test('id command is recognized as a restricted helper command', () => {
   assert.equal(isKnownCommandText('/id'), true);
   assert.equal(isKnownCommandText('/айди'), true);

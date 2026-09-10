@@ -762,10 +762,61 @@ function buildModerationLogsKeyboard(chatId, returnCallback = 'menu:overview') {
         { text: 'Очистить логи', callback_data: `menu:logs_clear:${chatId}${callbackSuffix}` },
       ],
       [
+        { text: 'Скрытые наказания', callback_data: `menu:hidden_punishments:${chatId}${callbackSuffix}` },
+      ],
+      [
         { text: 'Назад', callback_data: returnCallback },
       ],
     ],
   };
+}
+
+function buildHiddenPunishmentsKeyboard(chatId, pageIndex = 0, returnCallback = 'menu:overview') {
+  const callbackSuffix = returnCallback === 'menu:overview' ? '' : `:${returnCallback}`;
+  const count = database.getHiddenPunishmentCount(chatId);
+  const pageSize = 10;
+  const totalPages = Math.max(1, Math.ceil(count / pageSize));
+  const safePage = Math.min(Math.max(0, Number(pageIndex) || 0), Math.max(totalPages - 1, 0));
+  const rows = [];
+  const nav = [];
+  if (safePage > 0) {
+    nav.push({ text: '⬅️ Назад', callback_data: `menu:hidden_punishments:${chatId}:${safePage - 1}${callbackSuffix}` });
+  }
+  if (safePage + 1 < totalPages) {
+    nav.push({ text: 'Вперёд ➡️', callback_data: `menu:hidden_punishments:${chatId}:${safePage + 1}${callbackSuffix}` });
+  }
+  if (nav.length) {
+    rows.push(nav);
+  }
+  rows.push([{ text: 'Назад', callback_data: returnCallback }]);
+  return { inline_keyboard: rows };
+}
+
+function buildHiddenPunishmentsText(chatId, pageIndex = 0) {
+  const page = Math.max(0, Number(pageIndex) || 0);
+  const pageSize = 10;
+  const items = database.getHiddenPunishments(chatId, pageSize, page);
+  if (!items.length) {
+    return '📦 Скрытые наказания пусты.';
+  }
+
+  const lines = ['📦 Скрытые наказания', ''];
+  items.forEach((item, offset) => {
+    const index = page * pageSize + offset + 1;
+    const actorId = Number(item.actorId) || null;
+    const actorUsername = String(item.actorUsername || '').trim();
+    const actorLabel = actorId ? `${actorUsername ? '@' + actorUsername : 'админ'} (ID: ${actorId})` : actorUsername ? `@${actorUsername}` : 'система';
+    const targetId = Number(item.userId) || null;
+    const targetUsername = String(item.targetUsername || '').trim();
+    const targetLabel = targetId ? `${targetUsername ? '@' + targetUsername : 'пользователь'} (ID: ${targetId})` : '—';
+    const action = getPunishmentActionLabel(item.action || 'punishment');
+    const reason = item.reason || 'Без причины';
+    const duration = item.untilAt ? ` | срок: ${formatMoscowDate(new Date(Number(item.untilAt) * 1000))}` : ' | срок: без срока';
+    const stamp = item.createdAt ? formatMoscowDate(item.createdAt) : '—';
+    lines.push(`${index}. ${stamp} | ${action} | мод: ${actorLabel} | user: ${targetLabel} | причина: ${reason}${duration}`);
+  });
+
+  return lines.join('\n');
 }
 
 function formatModerationLogsText(chatId, limit = 10) {
@@ -820,6 +871,10 @@ function formatModerationLogsText(chatId, limit = 10) {
 
 function recordModerationLog(chatId, payload = {}) {
   if (!Number.isFinite(Number(chatId)) || Number(chatId) === 0) {
+    return null;
+  }
+
+  if (payload?.silent || payload?.hidden) {
     return null;
   }
 
@@ -6752,7 +6807,6 @@ function createBot() {
     const captionLines = [
       `${customEmojiPlaceholders.trophy_premium} Анкета пользователя ${escapeCaptionText(username)}`,
       `${customEmojiPlaceholders.stats_name} Имя: ${escapeCaptionText(profile.displayName || targetUser.first_name || targetUser.username || targetUser.id)}`,
-      `${customEmojiPlaceholders.stats_id} Id: ${escapeCaptionText(targetUser.id)}`,
       `${customEmojiPlaceholders.stats_first_joined} Первый вход: ${escapeCaptionText(joinedAt)}`,
       `${customEmojiPlaceholders.stats_chat_status} Статус в чате: ${escapeCaptionText(chatStatus)}`,
       `${customEmojiPlaceholders.stats_bot_status} Статус в боте: ${escapeCaptionText(botStatus)}`,
@@ -6767,7 +6821,6 @@ function createBot() {
 
     const customEmojiMap = {
       trophy_premium: 'trophy_premium',
-      stats_id: 'stats_id',
       stats_name: 'stats_name',
       stats_first_joined: 'stats_first_joined',
       stats_chat_status: 'stats_chat_status',
@@ -6925,6 +6978,9 @@ function createBot() {
     }
     if (['ban', 'unban', 'delban'].includes(normalizedAction)) {
       return 4;
+    }
+    if (['swarn', 'sunwarn', 'smute', 'sunmute', 'sdelwarn', 'sdelmute', 'sban', 'sunban', 'sdelban', 'skick'].includes(normalizedAction)) {
+      return 2;
     }
     if (['clear_history', 'clearpunishmenthistory'].includes(normalizedAction)) {
       return 2;
@@ -7084,14 +7140,15 @@ function createBot() {
     }
   }
 
-  async function warnCommand(ctx, args, deleteTargetMessage = false) {
+  async function warnCommand(ctx, args, deleteTargetMessage = false, silent = false) {
     ensureGroup(ctx);
     scheduleDeleteForContext(ctx, ctx.message?.message_id);
     if (!isBotAdmin(ctx)) {
       await replyWithAutoDelete(ctx, 'Эта команда доступна только администраторам.');
       return;
     }
-    if (!ensureBotAdminCanUsePunishmentCommand(ctx, deleteTargetMessage ? 'delwarn' : 'warn')) {
+    const requiredAction = deleteTargetMessage ? (silent ? 'sdelwarn' : 'delwarn') : (silent ? 'swarn' : 'warn');
+    if (!ensureBotAdminCanUsePunishmentCommand(ctx, requiredAction)) {
       return;
     }
 
@@ -7105,35 +7162,49 @@ function createBot() {
       return;
     }
 
-    if (!ensureBotAdminCanPunishTarget(ctx, targetData.target.id, 'warn')) {
+    if (!ensureBotAdminCanPunishTarget(ctx, targetData.target.id, requiredAction)) {
       return;
     }
 
     const details = parsePunishmentDetails(targetData.remainingArgs, !!ctx.message.reply_to_message);
-    moderationService.addWarning(ctx.chat.id, targetData.target.id);
-    database.addPunishment(ctx.chat.id, targetData.target.id, 'warn', details.reason, null, ctx.from.id);
-    recordModerationLog(ctx.chat.id, {
-      action: 'warn',
-      actorId: ctx.from.id,
-      targetId: targetData.target.id,
-      reason: details.reason,
-      details: `Выдано предупреждение ${moderationService.getWarnings(ctx.chat.id, targetData.target.id)}/${moderationService.getWarnLimit(ctx.chat.id)}`,
-    });
+    const warningCountNow = moderationService.addWarning(ctx.chat.id, targetData.target.id);
+    if (silent) {
+      database.addHiddenPunishment(ctx.chat.id, targetData.target.id, 'warn', details.reason, null, ctx.from.id, ctx.from.username || null, targetData.target.username || null);
+      recordModerationLog(ctx.chat.id, {
+        action: 'warn',
+        actorId: ctx.from.id,
+        targetId: targetData.target.id,
+        actorUsername: ctx.from.username || null,
+        targetUsername: targetData.target.username || null,
+        reason: details.reason,
+        details: `Выдано предупреждение ${warningCountNow}/${moderationService.getWarnLimit(ctx.chat.id)}`,
+        silent: true,
+        hidden: true,
+      });
+    } else {
+      database.addPunishment(ctx.chat.id, targetData.target.id, 'warn', details.reason, null, ctx.from.id);
+      recordModerationLog(ctx.chat.id, {
+        action: 'warn',
+        actorId: ctx.from.id,
+        targetId: targetData.target.id,
+        reason: details.reason,
+        details: `Выдано предупреждение ${warningCountNow}/${moderationService.getWarnLimit(ctx.chat.id)}`,
+      });
+    }
     const warningCount = moderationService.getWarnings(ctx.chat.id, targetData.target.id);
     const warnLimit = moderationService.getWarnLimit(ctx.chat.id);
-    
-    // Никнейм и причина без экранирования (репливитьКастомЭмоджи использует entities, а не parse_mode)
-    const userName = targetData.target.first_name || targetData.target.username || String(targetData.target.id);
-    const reasonEscaped = details.reason;
-    
+
     if (warningCount >= warnLimit) {
-      const applied = await applyWarnLimitPunishment(ctx, targetData.target.id, details.reason, warningCount, moderationService, database);
-      if (!applied) {
+      const applied = await applyWarnLimitPunishment(ctx, targetData.target.id, details.reason, warningCount, moderationService, database, silent);
+      if (!applied && !silent) {
+        const userName = targetData.target.first_name || targetData.target.username || String(targetData.target.id);
         const sentMsg3 = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} Не удалось выполнить наказание для ${userName} после ${warnLimit} предупреждений.`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML' });
         scheduleDeleteForContext(ctx, sentMsg3?.message_id, 5000);
         return;
       }
-    } else {
+    } else if (!silent) {
+      const userName = targetData.target.first_name || targetData.target.username || String(targetData.target.id);
+      const reasonEscaped = details.reason;
       const sentMsg5 = await premiumEmojis.replyWithCustomEmoji(ctx, `{alert} Предупреждение для ${userName}: ${warningCount}/${warnLimit}. Причина: ${reasonEscaped}`, { '{alert}': 'warning_alert' }, { parse_mode: 'HTML', reply_markup: buildWarnCancelKeyboard(ctx.chat.id, targetData.target.id) });
       scheduleDeleteForContext(ctx, sentMsg5?.message_id, 10000);
     }
@@ -7223,14 +7294,15 @@ function createBot() {
     await replyWithAutoDelete(ctx, `Снято 1 предупреждение у ${targetData.target.first_name || targetData.target.username || targetData.target.id}. Осталось: ${nextWarnings}.`);
   }
 
-  async function muteCommand(ctx, args, deleteTargetMessage = false) {
+  async function muteCommand(ctx, args, deleteTargetMessage = false, silent = false) {
     ensureGroup(ctx);
     scheduleDeleteForContext(ctx, ctx.message?.message_id);
     if (!isBotAdmin(ctx)) {
       await replyWithAutoDelete(ctx, 'Эта команда доступна только администраторам.');
       return;
     }
-    if (!ensureBotAdminCanUsePunishmentCommand(ctx, deleteTargetMessage ? 'delmute' : 'mute')) {
+    const requiredAction = deleteTargetMessage ? (silent ? 'sdelmute' : 'delmute') : (silent ? 'smute' : 'mute');
+    if (!ensureBotAdminCanUsePunishmentCommand(ctx, requiredAction)) {
       return;
     }
 
@@ -7244,7 +7316,7 @@ function createBot() {
       return;
     }
 
-    if (!ensureBotAdminCanPunishTarget(ctx, targetData.target.id, 'mute')) {
+    if (!ensureBotAdminCanPunishTarget(ctx, targetData.target.id, requiredAction)) {
       return;
     }
 
@@ -7258,17 +7330,33 @@ function createBot() {
       return;
     }
 
-    database.addPunishment(ctx.chat.id, targetData.target.id, 'mute', details.reason, untilDate || null, ctx.from.id);
-    database.addActivePunishment(ctx.chat.id, targetData.target.id, 'mute', details.reason, untilDate || null, ctx.from.id);
-    recordModerationLog(ctx.chat.id, {
-      action: 'mute',
-      actorId: ctx.from.id,
-      targetId: targetData.target.id,
-      reason: details.reason,
-      duration: formatDurationLabel(details.durationHours),
-      details: `Выдан мут${untilDate ? ` до ${new Date(untilDate * 1000).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ' бессрочно'}`,
-    });
-    if (untilDate) {
+    if (silent) {
+      database.addHiddenPunishment(ctx.chat.id, targetData.target.id, 'mute', details.reason, untilDate || null, ctx.from.id, ctx.from.username || null, targetData.target.username || null);
+      recordModerationLog(ctx.chat.id, {
+        action: 'mute',
+        actorId: ctx.from.id,
+        targetId: targetData.target.id,
+        actorUsername: ctx.from.username || null,
+        targetUsername: targetData.target.username || null,
+        reason: details.reason,
+        duration: formatDurationLabel(details.durationHours),
+        details: `Выдан мут${untilDate ? ` до ${new Date(untilDate * 1000).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ' бессрочно'}`,
+        silent: true,
+        hidden: true,
+      });
+    } else {
+      database.addPunishment(ctx.chat.id, targetData.target.id, 'mute', details.reason, untilDate || null, ctx.from.id);
+      database.addActivePunishment(ctx.chat.id, targetData.target.id, 'mute', details.reason, untilDate || null, ctx.from.id);
+      recordModerationLog(ctx.chat.id, {
+        action: 'mute',
+        actorId: ctx.from.id,
+        targetId: targetData.target.id,
+        reason: details.reason,
+        duration: formatDurationLabel(details.durationHours),
+        details: `Выдан мут${untilDate ? ` до ${new Date(untilDate * 1000).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ' бессрочно'}`,
+      });
+    }
+    if (!silent && untilDate) {
       schedulePunishmentExpiry({
         chatId: ctx.chat.id,
         userId: targetData.target.id,
@@ -7277,10 +7365,12 @@ function createBot() {
       });
     }
 
-    const targetLabel = getMentionText(targetData.target);
-    const durationLabel = formatDurationLabel(details.durationHours);
-    const sentMsg = await premiumEmojis.replyWithCustomEmoji(ctx, `{lock} ${targetLabel} получил mute на ${durationLabel}. Причина: ${details.reason}`, { '{lock}': 'mute_lock' }, { reply_markup: buildPunishmentCancelKeyboard('mute', ctx.chat.id, targetData.target.id) });
-    scheduleDeleteForContext(ctx, sentMsg?.message_id, 10000);
+    if (!silent) {
+      const targetLabel = getMentionText(targetData.target);
+      const durationLabel = formatDurationLabel(details.durationHours);
+      const sentMsg = await premiumEmojis.replyWithCustomEmoji(ctx, `{lock} ${targetLabel} получил mute на ${durationLabel}. Причина: ${details.reason}`, { '{lock}': 'mute_lock' }, { reply_markup: buildPunishmentCancelKeyboard('mute', ctx.chat.id, targetData.target.id) });
+      scheduleDeleteForContext(ctx, sentMsg?.message_id, 10000);
+    }
     if (deleteTargetMessage) {
       await deleteMessageSafely(ctx, ctx.message.reply_to_message.message_id);
     }
@@ -7325,14 +7415,15 @@ function createBot() {
     await replyWithAutoDelete(ctx, `Ограничения с пользователя ${targetData.target.first_name || targetData.target.username || targetData.target.id} сняты.`);
   }
 
-  async function banCommand(ctx, args) {
+  async function banCommand(ctx, args, silent = false) {
     ensureGroup(ctx);
     scheduleDeleteForContext(ctx, ctx.message?.message_id);
     if (!isBotAdmin(ctx)) {
       await replyWithAutoDelete(ctx, 'Эта команда доступна только администраторам.');
       return;
     }
-    if (!ensureBotAdminCanUsePunishmentCommand(ctx, 'ban')) {
+    const requiredAction = silent ? 'sban' : 'ban';
+    if (!ensureBotAdminCanUsePunishmentCommand(ctx, requiredAction)) {
       return;
     }
 
@@ -7341,7 +7432,7 @@ function createBot() {
       return;
     }
 
-    if (!ensureBotAdminCanPunishTarget(ctx, targetData.target.id, 'ban')) {
+    if (!ensureBotAdminCanPunishTarget(ctx, targetData.target.id, requiredAction)) {
       return;
     }
 
@@ -7355,17 +7446,33 @@ function createBot() {
       return;
     }
 
-    database.addPunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, untilDate || null, ctx.from.id);
-    database.addActivePunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, untilDate || null, ctx.from.id);
-    recordModerationLog(ctx.chat.id, {
-      action: 'ban',
-      actorId: ctx.from.id,
-      targetId: targetData.target.id,
-      reason: details.reason,
-      duration: formatDurationLabel(details.durationHours),
-      details: `Выдан бан${untilDate ? ` до ${new Date(untilDate * 1000).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ' бессрочно'}`,
-    });
-    if (untilDate) {
+    if (silent) {
+      database.addHiddenPunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, untilDate || null, ctx.from.id, ctx.from.username || null, targetData.target.username || null);
+      recordModerationLog(ctx.chat.id, {
+        action: 'ban',
+        actorId: ctx.from.id,
+        targetId: targetData.target.id,
+        actorUsername: ctx.from.username || null,
+        targetUsername: targetData.target.username || null,
+        reason: details.reason,
+        duration: formatDurationLabel(details.durationHours),
+        details: `Выдан бан${untilDate ? ` до ${new Date(untilDate * 1000).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ' бессрочно'}`,
+        silent: true,
+        hidden: true,
+      });
+    } else {
+      database.addPunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, untilDate || null, ctx.from.id);
+      database.addActivePunishment(ctx.chat.id, targetData.target.id, 'ban', details.reason, untilDate || null, ctx.from.id);
+      recordModerationLog(ctx.chat.id, {
+        action: 'ban',
+        actorId: ctx.from.id,
+        targetId: targetData.target.id,
+        reason: details.reason,
+        duration: formatDurationLabel(details.durationHours),
+        details: `Выдан бан${untilDate ? ` до ${new Date(untilDate * 1000).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ' бессрочно'}`,
+      });
+    }
+    if (!silent && untilDate) {
       schedulePunishmentExpiry({
         chatId: ctx.chat.id,
         userId: targetData.target.id,
@@ -7374,11 +7481,13 @@ function createBot() {
       });
     }
 
-    const targetLabel = getMentionText(targetData.target);
-    const durationLabel = formatDurationLabel(details.durationHours);
-    await replyWithAutoDelete(ctx, `⛔ ${targetLabel} получил ban на ${durationLabel}. Причина: ${details.reason}`, {
-      reply_markup: buildPunishmentCancelKeyboard('ban', ctx.chat.id, targetData.target.id),
-    }, 10000);
+    if (!silent) {
+      const targetLabel = getMentionText(targetData.target);
+      const durationLabel = formatDurationLabel(details.durationHours);
+      await replyWithAutoDelete(ctx, `⛔ ${targetLabel} получил ban на ${durationLabel}. Причина: ${details.reason}`, {
+        reply_markup: buildPunishmentCancelKeyboard('ban', ctx.chat.id, targetData.target.id),
+      }, 10000);
+    }
   }
 
   async function delBanCommand(ctx, args) {
@@ -9383,7 +9492,7 @@ function createBot() {
     const botMessageChatId = botMessageMatch ? Number(botMessageMatch[1] || chatId) : 0;
     const isCommandRightsAction = action === 'command_rights'
       || action.startsWith('command_rights:');
-    const isLogsAction = ['logs', 'logs_show', 'logs_refresh'].includes(String(action).split(':')[0])
+    const isLogsAction = ['logs', 'logs_show', 'logs_refresh', 'hidden_punishments'].includes(String(action).split(':')[0])
       || String(action).startsWith('logs_clear');
     const canAccessLogs = isLogsAction
       && (isBotAdminForChat(ctx, chatId) || await isTelegramAdminForChat(ctx, chatId));
@@ -9486,6 +9595,15 @@ function createBot() {
 
     if (action === 'logs') {
       await safeEditMessageText(ctx, formatModerationLogsText(chatId, 10), { reply_markup: buildModerationLogsKeyboard(chatId) });
+      return;
+    }
+
+    if (action === 'hidden_punishments' || String(action).startsWith('hidden_punishments:')) {
+      const parts = String(action).split(':');
+      const targetChatId = Number(parts[1] || chatId) || chatId;
+      const page = Number(parts[2] || 0);
+      const returnCallback = parts.slice(3).join(':') || 'menu:overview';
+      await safeEditMessageText(ctx, buildHiddenPunishmentsText(targetChatId, page), { reply_markup: buildHiddenPunishmentsKeyboard(targetChatId, page, returnCallback) });
       return;
     }
 
@@ -10130,6 +10248,14 @@ function createBot() {
     await muteCommand(ctx, ctx.message.text.replace(/^\/(?:mute|мут)\s*/i, ''));
   });
 
+  bot.command(['smute', 'скрытый_мут'], async (ctx) => {
+    await muteCommand(ctx, ctx.message.text.replace(/^\/s(?:mute|smute)\s*/i, ''), false, true);
+  });
+
+  bot.command(['sdelmute', 'скрытый_делмут'], async (ctx) => {
+    await muteCommand(ctx, ctx.message.text.replace(/^\/sdelmute\s*/i, ''), true, true);
+  });
+
   bot.command('delmute', async (ctx) => {
     await muteCommand(ctx, ctx.message.text.replace(/^\/delmute(?:@[\w_]+)?\s*/i, ''), true);
   });
@@ -10140,6 +10266,14 @@ function createBot() {
 
   bot.command(['ban', 'бан'], async (ctx) => {
     await banCommand(ctx, ctx.message.text.replace(/^\/(?:ban|бан)\s*/i, ''));
+  });
+
+  bot.command(['sban', 'скрытый_бан'], async (ctx) => {
+    await banCommand(ctx, ctx.message.text.replace(/^\/s(?:ban|sban)\s*/i, ''), true);
+  });
+
+  bot.command(['sdelban', 'скрытый_делбан'], async (ctx) => {
+    await delBanCommand(ctx, ctx.message.text.replace(/^\/sdelban\s*/i, ''), true);
   });
 
   bot.command('delban', async (ctx) => {
