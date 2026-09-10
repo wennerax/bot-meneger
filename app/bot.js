@@ -750,21 +750,48 @@ function buildMenuKeyboard(chatId) {
   };
 }
 
+function encodeReturnCallback(returnCallback = 'menu:overview') {
+  if (!returnCallback || returnCallback === 'menu:overview') {
+    return 'overview';
+  }
+  if (returnCallback.startsWith('settings:main:')) {
+    const match = String(returnCallback).match(/^settings:main:(-?\d+)$/);
+    if (match) {
+      return `settings:${match[1]}`;
+    }
+  }
+  return returnCallback;
+}
+
+function decodeReturnCallback(returnCallback = 'overview') {
+  if (!returnCallback || returnCallback === 'overview') {
+    return 'menu:overview';
+  }
+  if (returnCallback.startsWith('settings:')) {
+    const match = String(returnCallback).match(/^settings:(-?\d+)$/);
+    if (match) {
+      return `settings:main:${match[1]}`;
+    }
+  }
+  return returnCallback;
+}
+
 function buildModerationLogsKeyboard(chatId, returnCallback = 'menu:overview') {
+  const safeReturn = returnCallback || 'menu:overview';
   return {
     inline_keyboard: [
       [
-        { text: 'Логи', callback_data: `menu:logs_show:${chatId}:${returnCallback}` },
-        { text: 'Обновить логи', callback_data: `menu:logs_refresh:${chatId}:${returnCallback}` },
+        { text: 'Логи', callback_data: `menu:logs_show:${chatId}` },
+        { text: 'Обновить логи', callback_data: `menu:logs_refresh:${chatId}` },
       ],
       [
-        { text: 'Очистить логи', callback_data: `menu:logs_clear:${chatId}:${returnCallback}` },
+        { text: 'Очистить логи', callback_data: `menu:logs_clear:${chatId}` },
       ],
       [
-        { text: 'Скрытые наказания', callback_data: `menu:hidden_punishments:${chatId}:0:${returnCallback}` },
+        { text: 'Скрытые наказания', callback_data: `menu:hidden_punishments:${chatId}:0:${encodeReturnCallback(safeReturn)}` },
       ],
       [
-        { text: 'Назад', callback_data: returnCallback },
+        { text: 'Назад', callback_data: safeReturn },
       ],
     ],
   };
@@ -778,11 +805,12 @@ function buildHiddenPunishmentsKeyboard(chatId, pageIndex = 0, returnCallback = 
   const safePage = Math.min(Math.max(0, Number(pageIndex) || 0), Math.max(totalPages - 1, 0));
   const rows = [];
   const nav = [];
+  const encodedReturn = encodeReturnCallback(returnCallback);
   if (safePage > 0) {
-    nav.push({ text: '⬅️ Назад', callback_data: `menu:hidden_punishments:${chatId}:${safePage - 1}:${returnCallback}` });
+    nav.push({ text: '⬅️ Назад', callback_data: `menu:hidden_punishments:${chatId}:${safePage - 1}:${encodedReturn}` });
   }
   if (safePage + 1 < totalPages) {
-    nav.push({ text: 'Вперёд ➡️', callback_data: `menu:hidden_punishments:${chatId}:${safePage + 1}:${returnCallback}` });
+    nav.push({ text: 'Вперёд ➡️', callback_data: `menu:hidden_punishments:${chatId}:${safePage + 1}:${encodedReturn}` });
   }
   if (nav.length) {
     rows.push(nav);
@@ -9618,7 +9646,8 @@ function createBot() {
       const parts = String(action).split(':');
       const targetChatId = Number(parts[1] || chatId) || chatId;
       const page = Number(parts[2] || 0);
-      const returnCallback = parts.slice(3).join(':') || 'menu:overview';
+      const encodedReturn = parts.slice(3).join(':') || 'overview';
+      const returnCallback = decodeReturnCallback(encodedReturn);
       await safeEditMessageText(ctx, buildHiddenPunishmentsText(targetChatId, page), { reply_markup: buildHiddenPunishmentsKeyboard(targetChatId, page, returnCallback) });
       return;
     }
