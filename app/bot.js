@@ -751,28 +751,26 @@ function buildMenuKeyboard(chatId) {
 }
 
 function buildModerationLogsKeyboard(chatId, returnCallback = 'menu:overview') {
-  const callbackSuffix = returnCallback === 'menu:overview' ? '' : `:${returnCallback}`;
   return {
     inline_keyboard: [
       [
-        { text: 'Логи', callback_data: `menu:logs_show:${chatId}${callbackSuffix}` },
-        { text: 'Обновить логи', callback_data: `menu:logs_refresh:${chatId}${callbackSuffix}` },
+        { text: 'Логи', callback_data: `menu:logs_show:${chatId}` },
+        { text: 'Обновить логи', callback_data: `menu:logs_refresh:${chatId}` },
       ],
       [
-        { text: 'Очистить логи', callback_data: `menu:logs_clear:${chatId}${callbackSuffix}` },
+        { text: 'Очистить логи', callback_data: `menu:logs_clear:${chatId}` },
       ],
       [
-        { text: 'Скрытые наказания', callback_data: `menu:hidden_punishments:${chatId}${callbackSuffix}` },
+        { text: 'Скрытые наказания', callback_data: `menu:hidden_punishments:${chatId}` },
       ],
       [
-        { text: 'Назад', callback_data: returnCallback },
+        { text: 'Назад', callback_data: 'menu:overview' },
       ],
     ],
   };
 }
 
 function buildHiddenPunishmentsKeyboard(chatId, pageIndex = 0, returnCallback = 'menu:overview') {
-  const callbackSuffix = returnCallback === 'menu:overview' ? '' : `:${returnCallback}`;
   const count = database.getHiddenPunishmentCount(chatId);
   const pageSize = 10;
   const totalPages = Math.max(1, Math.ceil(count / pageSize));
@@ -780,15 +778,15 @@ function buildHiddenPunishmentsKeyboard(chatId, pageIndex = 0, returnCallback = 
   const rows = [];
   const nav = [];
   if (safePage > 0) {
-    nav.push({ text: '⬅️ Назад', callback_data: `menu:hidden_punishments:${chatId}:${safePage - 1}${callbackSuffix}` });
+    nav.push({ text: '⬅️ Назад', callback_data: `menu:hidden_punishments:${chatId}:${safePage - 1}` });
   }
   if (safePage + 1 < totalPages) {
-    nav.push({ text: 'Вперёд ➡️', callback_data: `menu:hidden_punishments:${chatId}:${safePage + 1}${callbackSuffix}` });
+    nav.push({ text: 'Вперёд ➡️', callback_data: `menu:hidden_punishments:${chatId}:${safePage + 1}` });
   }
   if (nav.length) {
     rows.push(nav);
   }
-  rows.push([{ text: 'Назад', callback_data: returnCallback }]);
+  rows.push([{ text: 'Назад', callback_data: 'menu:overview' }]);
   return { inline_keyboard: rows };
 }
 
@@ -3243,7 +3241,7 @@ function shouldFailClosedForMedia(payload, errorMessage = '', normalizedAnswer =
 }
 
 function isKnownCommandText(text) {
-  const slashCommand = /^(?:\/(start|help|bot|id|айди|about|whoami|кто_я|stats|rules|arule|аправила|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|монетка|dice|кубик|fate|вопрос|compliment|комплимент|insult|инсульт|top|топ|admins|админы|banlist|баны|mutelist|муты|setrules|установить_правила|warn|варн|пред|предупреждение|delwarn|warns|warnings|варны|unwarn|снять_предупреждение|анварн|анпред|mute|мут|delmute|unmute|размут|размутить|говори|ban|бан|delban|unban|разбан|разбанить|kick|кик|del|delete|дел|setgreeting|установить_приветствие|addadmin|добавить_админа|removeadmin|снять_админа|promote|повышение|demote|разжалование|clearhistory|сбросистории|сброс_истории|clear_history|miniapp|миниприложение|admincom|ai|modstats|статистика_модерации|ttt|крестики|крестики-нолики))(?:@[\w_]+)?(\s|$)/i;
+  const slashCommand = /^(?:\/(start|help|bot|id|айди|about|whoami|кто_я|stats|rules|arule|аправила|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|монетка|dice|кубик|fate|вопрос|compliment|комплимент|insult|инсульт|top|топ|admins|админы|banlist|баны|mutelist|муты|setrules|установить_правила|warn|варн|пред|предупреждение|delwarn|warns|warnings|варны|unwarn|снять_предупреждение|анварн|анпред|mute|мут|delmute|unmute|размут|размутить|говори|ban|бан|delban|unban|разбан|разбанить|kick|кик|del|delete|дел|setgreeting|установить_приветствие|addadmin|добавить_админа|removeadmin|снять_админа|promote|повышение|demote|разжалование|clearhistory|сбросистории|сброс_истории|clear_history|miniapp|миниприложение|admincom|ai|modstats|статистика_модерации|ttt|крестики|крестики-нолики|swarn|sdelwarn|smute|sdelmute|sban|sdelban|sunwarn|sunmute|sunban))(?:@[\w_]+)?(\s|$)/i;
   const bangCommand = /^!(delban|delmute|delwarn|начало|помощь|айди|информация|кто\s*я|статистика|правила|аправила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|инсульт|пред|предупреждение|варны|мут|размут|размутить|бан|разбан|разбанить|кик|топ|анпред|анварн|говори|дел|рел)(\s|$)/i;
   const plusMinusCommand = /^(?:\+(?:антиспам|antispam|антифлуд|antiflood|ссылки|links|варн|warn|предупреждение|мут|mute|бан|ban|кик|kick)|[+-](?:размут|размутить|unmute|разбан|разбанить|unban|анварн)|\+описание|\+description|\+rules(?=\s+\S)|\+правила(?=\s+\S)|\+greeting(?=\s+\S)|\+приветствие(?=\s+\S))(\s|$)/i;
   return slashCommand.test(text) || bangCommand.test(text) || plusMinusCommand.test(text);
@@ -7142,6 +7140,9 @@ function createBot() {
 
   async function warnCommand(ctx, args, deleteTargetMessage = false, silent = false) {
     ensureGroup(ctx);
+    if (silent) {
+      await deleteMessageSafely(ctx, ctx.message?.message_id);
+    }
     scheduleDeleteForContext(ctx, ctx.message?.message_id);
     if (!isBotAdmin(ctx)) {
       await replyWithAutoDelete(ctx, 'Эта команда доступна только администраторам.');
@@ -7296,6 +7297,9 @@ function createBot() {
 
   async function muteCommand(ctx, args, deleteTargetMessage = false, silent = false) {
     ensureGroup(ctx);
+    if (silent) {
+      await deleteMessageSafely(ctx, ctx.message?.message_id);
+    }
     scheduleDeleteForContext(ctx, ctx.message?.message_id);
     if (!isBotAdmin(ctx)) {
       await replyWithAutoDelete(ctx, 'Эта команда доступна только администраторам.');
@@ -7417,6 +7421,9 @@ function createBot() {
 
   async function banCommand(ctx, args, silent = false) {
     ensureGroup(ctx);
+    if (silent) {
+      await deleteMessageSafely(ctx, ctx.message?.message_id);
+    }
     scheduleDeleteForContext(ctx, ctx.message?.message_id);
     if (!isBotAdmin(ctx)) {
       await replyWithAutoDelete(ctx, 'Эта команда доступна только администраторам.');
@@ -7490,8 +7497,11 @@ function createBot() {
     }
   }
 
-  async function delBanCommand(ctx, args) {
+  async function delBanCommand(ctx, args, deleteTargetMessage = false, silent = false) {
     ensureGroup(ctx);
+    if (silent) {
+      await deleteMessageSafely(ctx, ctx.message?.message_id);
+    }
     scheduleDeleteForContext(ctx, ctx.message?.message_id);
     if (!isBotAdmin(ctx)) {
       await replyWithAutoDelete(ctx, 'Эта команда доступна только администраторам.');
@@ -10211,6 +10221,14 @@ function createBot() {
     await warnCommand(ctx, ctx.message.text.replace(/^\/(?:warn|варн|пред|предупреждение)\s*/i, ''));
   });
 
+  bot.command(['swarn', 'скрытый_варн'], async (ctx) => {
+    await warnCommand(ctx, ctx.message.text.replace(/^\/s(?:warn|swarn)\s*/i, ''), false, true);
+  });
+
+  bot.command(['sdelwarn', 'скрытый_делварн'], async (ctx) => {
+    await warnCommand(ctx, ctx.message.text.replace(/^\/sdelwarn\s*/i, ''), true, true);
+  });
+
   bot.command(['del', 'delete', 'дел'], async (ctx) => {
     ensureGroup(ctx);
     scheduleDeleteForContext(ctx, ctx.message?.message_id);
@@ -10273,7 +10291,7 @@ function createBot() {
   });
 
   bot.command(['sdelban', 'скрытый_делбан'], async (ctx) => {
-    await delBanCommand(ctx, ctx.message.text.replace(/^\/sdelban\s*/i, ''), true);
+    await delBanCommand(ctx, ctx.message.text.replace(/^\/sdelban\s*/i, ''), true, true);
   });
 
   bot.command('delban', async (ctx) => {
