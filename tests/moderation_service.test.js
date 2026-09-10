@@ -285,7 +285,12 @@ test('ban words match whole words without matching other word endings', () => {
 
   assert.equal(service.findBanWord(100, 'мет'), 'мет');
   assert.equal(service.findBanWord(100, 'мет.'), 'мет');
+  assert.equal(service.findBanWord(100, 'мeт'), 'мет');
+  assert.equal(service.findBanWord(100, 'мeтчик'), 'мет');
+  assert.equal(service.findBanWord(100, 'кoкаин'), 'кокаин');
+  assert.equal(service.findBanWord(100, 'cпaйс'), 'спайс');
   assert.equal(service.findBanWord(100, 'метеорит'), null);
+  assert.equal(service.findBanWord(100, 'мeтеорит'), null);
 });
 
 test('link protection exceptions can be managed per user', () => {

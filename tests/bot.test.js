@@ -824,6 +824,9 @@ test('detectForbiddenWord catches drugs and self-harm variants', () => {
   assert.equal(detectForbiddenWord('я люблю курить траву весь день'), 'курить траву');
   // Exact word match
   assert.equal(detectForbiddenWord('героин это плохо'), 'героин');
+  assert.equal(detectForbiddenWord('гeроин это плохо'), 'героин');
+  assert.equal(detectForbiddenWord('кoкаин это плохо'), 'кокаин');
+  assert.equal(detectForbiddenWord('cпaйс это плохо'), 'спайс');
   // Arbitrary word endings are not treated as a match.
   assert.equal(detectForbiddenWord('наркоыыыыыы'), null);
   assert.equal(detectForbiddenWord('героинчик мне нужен'), 'героин');

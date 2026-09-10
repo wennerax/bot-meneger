@@ -60,6 +60,24 @@ const DEFAULT_ALLOWED_LINKS = readJsonList(path.join(__dirname, '..', 'data', 'a
 ]);
 const DEFAULT_ALLOWED_ANONYMOUS_CHANNELS = ['-1001598468726'];
 const DIMINUTIVE_SUFFIXES = ['чик', 'чек', 'ик', 'ек', 'очка', 'ечка', 'онька', 'енька', 'ушка', 'юшка', 'онок', 'енок'];
+const CYRILLIC_HOMOGLYPHS = {
+  a: 'а',
+  b: 'в',
+  c: 'с',
+  e: 'е',
+  h: 'н',
+  k: 'к',
+  m: 'м',
+  o: 'о',
+  p: 'р',
+  t: 'т',
+  x: 'х',
+  y: 'у',
+};
+
+function normalizeBanText(value) {
+  return String(value || '').trim().toLowerCase().replace(/[abcehkmoptxy]/g, (character) => CYRILLIC_HOMOGLYPHS[character] || character);
+}
 
 function normalizeAllowedUrl(value) {
   return String(value || '').trim().toLowerCase()
@@ -982,8 +1000,8 @@ class ModerationService {
   }
 
   findBanWord(chatId, text) {
-    const normalizeWord = (word) => String(word || '').trim().toLowerCase();
-    const rawText = String(text || '').toLowerCase();
+    const normalizeWord = normalizeBanText;
+    const rawText = normalizeBanText(text);
     
     if (!rawText) {
       return null;
