@@ -203,6 +203,10 @@ async function handleAgreementDecision(telegram, state, accepted) {
   scheduleDeleteMessage(telegram, state.chatId, rejectedMessage?.message_id);
 }
 
+async function handleAgreementTimeout(telegram, state) {
+  return handleAgreementDecision(telegram, state, false);
+}
+
 function scheduleDeleteMessage(telegram, chatId, messageId, delay = 5000) {
   if (!telegram || !chatId || !messageId) {
     return;
@@ -3531,6 +3535,7 @@ function createBot() {
   const captchaStates = new Map();
   const captchaTimers = new Map();
   const agreementStates = new Map();
+  const agreementTimers = new Map();
   const captchaStartsInProgress = new Set();
   const cancelledCaptchaStarts = new Set();
   const pendingMenuActions = new Map();
@@ -3899,6 +3904,11 @@ function createBot() {
         clearTimeout(captchaTimer);
         captchaTimers.delete(pollId);
       }
+      const agreementTimer = agreementTimers.get(pollId);
+      if (agreementTimer) {
+        clearTimeout(agreementTimer);
+        agreementTimers.delete(pollId);
+      }
       await cleanupAgreementMessages(telegram, chatId, [
         state.pollMessageId,
         state.instructionMessageId,
@@ -4050,14 +4060,28 @@ function createBot() {
           }
         );
 
-        agreementStates.set(agreementPoll?.poll?.id, {
+        const agreementPollId = agreementPoll?.poll?.id;
+        const agreementState = {
           chatId: state.chatId,
           userId: state.userId,
           displayName: state.displayName,
           pollMessageId: agreementPoll?.message_id,
           agreementMessageIds: agreementMessage?.message_id ? [agreementMessage.message_id] : [],
           createdAt: Date.now(),
-        });
+        };
+
+        agreementStates.set(agreementPollId, agreementState);
+
+        const agreementPollTimer = setTimeout(async () => {
+          if (!agreementStates.has(agreementPollId)) {
+            return;
+          }
+          const pending = agreementStates.get(agreementPollId);
+          agreementStates.delete(agreementPollId);
+          agreementTimers.delete(agreementPollId);
+          await handleAgreementTimeout(ctx.telegram, pending);
+        }, 300 * 1000);
+        agreementTimers.set(agreementPollId, agreementPollTimer);
 
         scheduleDeleteMessage(ctx.telegram, state.chatId, state.pollMessageId);
         scheduleDeleteMessage(ctx.telegram, state.chatId, state.instructionMessageId);
@@ -10211,14 +10235,21 @@ function createBot() {
       return;
     }
 
-    const agreementState = agreementStates.get(pollAnswer.poll_id);
+    const agreementPollId = pollAnswer.poll_id;
+    const agreementTimer = agreementTimers.get(agreementPollId);
+    if (agreementTimer) {
+      clearTimeout(agreementTimer);
+      agreementTimers.delete(agreementPollId);
+    }
+
+    const agreementState = agreementStates.get(agreementPollId);
     if (agreementState) {
       if (!isPollAnswerForTarget(pollAnswer, agreementState.userId)) {
         return;
       }
 
       const selectedOption = (pollAnswer.option_ids || [])[0];
-      agreementStates.delete(pollAnswer.poll_id);
+      agreementStates.delete(agreementPollId);
 
       if (selectedOption === 0) {
         await handleAgreementDecision(ctx.telegram, agreementState, true);
@@ -11169,6 +11200,7 @@ module.exports = {
   startBot,
   cleanupAgreementMessages,
   handleAgreementDecision,
+  handleAgreementTimeout,
   isPollAnswerForTarget,
   buildReloadStatusMessage,
   parseBotCommandKey,

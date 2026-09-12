@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildBulkModerationSummaryMessage, buildFunReply, getTicTacToeWinner, buildTicTacToeKeyboard, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildModerationLogsKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildWarningsListText, buildSettingsWarnsListText, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage, shouldFailClosedForMedia, cleanupAgreementMessages, handleAgreementDecision, isPollAnswerForTarget, buildBotMediaSend, buildReloadStatusMessage, parseBotCommandKey, isKnownCommandText, formatAdminReportText, formatUserIdentityText, buildActivityChartSvg, applyWarnLimitPunishment } = require('../app/bot');
+const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildBulkModerationSummaryMessage, buildFunReply, getTicTacToeWinner, buildTicTacToeKeyboard, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildModerationLogsKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildWarningsListText, buildSettingsWarnsListText, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage, shouldFailClosedForMedia, cleanupAgreementMessages, handleAgreementDecision, handleAgreementTimeout, isPollAnswerForTarget, buildBotMediaSend, buildReloadStatusMessage, parseBotCommandKey, isKnownCommandText, formatAdminReportText, formatUserIdentityText, buildActivityChartSvg, applyWarnLimitPunishment } = require('../app/bot');
 const { buildAiRequestPayload, normalizeMultimodalInputForResponses } = require('../app/ai');
 const premiumEmojis = require('../app/premium_emojis');
 
@@ -777,6 +777,47 @@ test('agreement refusal restricts for 24 hours and excludes the user without ban
   assert.equal(deleted.some((item) => item.messageId === 222), true);
   assert.equal(deleted.some((item) => item.messageId === 777), true);
   assert.equal(deleted.some((item) => item.messageId === 900), false);
+});
+
+test('handleAgreementTimeout routes a silent agreement poll through the same refusal path', async () => {
+  const deleted = [];
+  let kicked = false;
+  let unbanned = false;
+  let restrictionArgs;
+  const telegram = {
+    deleteMessage: async (chatId, messageId) => {
+      deleted.push({ chatId, messageId });
+    },
+    kickChatMember: async () => {
+      kicked = true;
+    },
+    unbanChatMember: async (chatId, userId, onlyIfBanned) => {
+      unbanned = chatId === 123 && userId === 456 && onlyIfBanned === true;
+    },
+    restrictChatMember: async (...args) => {
+      restrictionArgs = args;
+    },
+    sendMessage: async (chatId, text) => ({ message_id: 900, chat: { id: chatId }, text }),
+  };
+
+  const state = {
+    chatId: 123,
+    userId: 456,
+    displayName: 'Алиса',
+    pollMessageId: 777,
+    agreementMessageIds: [111, 222],
+  };
+
+  await handleAgreementTimeout(telegram, state);
+
+  assert.equal(kicked, true);
+  assert.equal(unbanned, true);
+  assert.equal(restrictionArgs[0], 123);
+  assert.equal(restrictionArgs[1], 456);
+  assert.equal(restrictionArgs[2].can_send_messages, false);
+  assert.ok(deleted.some((item) => item.messageId === 111));
+  assert.ok(deleted.some((item) => item.messageId === 222));
+  assert.ok(deleted.some((item) => item.messageId === 777));
 });
 
 test('parseSettingsAction extracts chat access mode changes', () => {
