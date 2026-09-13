@@ -103,6 +103,12 @@ function containsCrashEmoji(message = {}) {
     && String(entity.custom_emoji_id || '') === CRASH_EMOJI_ID);
 }
 
+function isTelegramBotNotMemberChatError(error = {}) {
+  const description = String(error?.response?.description || error?.description || '');
+  const errorCode = Number(error?.response?.error_code || error?.error_code || 0);
+  return errorCode === 403 && /bot is not a member of the (supergroup|group|chat)/i.test(description);
+}
+
 function detectForwardedMessageCategory(message = {}) {
   if (!message || typeof message !== 'object') {
     return null;
@@ -3520,6 +3526,20 @@ async function buildActivityChartPng(activity = []) {
 function createBot() {
   const config = loadConfig();
   const bot = new Telegraf(config.botToken || '');
+  let botUserId = null;
+
+  bot.telegram.getMe().then((me) => {
+    botUserId = Number(me?.id) || null;
+  }).catch((error) => {
+    console.warn('Unable to resolve bot id for self-protection guard:', error?.message || error);
+  });
+
+  const originalLeaveChat = bot.telegram.leaveChat.bind(bot.telegram);
+  bot.telegram.leaveChat = async function (...args) {
+    console.warn('Blocked bot self-exit attempt via Telegram leaveChat:', args?.[0] || 'unknown chat');
+    throw new Error('Bot self-protection: leaveChat is disabled for this bot runtime.');
+  };
+
   const storageDir = path.dirname(config.databasePath || 'data/bot.json');
   const moderationStoragePath = path.join(storageDir, 'moderation.json');
   const userStoragePath = path.join(storageDir, 'users.json');
@@ -3977,9 +3997,17 @@ function createBot() {
   }
 
   async function replyWithAutoDelete(ctx, text, extra = {}, delay = 5000) {
-    const sentMessage = await ctx.reply(text, extra);
-    scheduleDeleteForContext(ctx, sentMessage?.message_id, delay);
-    return sentMessage;
+    try {
+      const sentMessage = await ctx.reply(text, extra);
+      scheduleDeleteForContext(ctx, sentMessage?.message_id, delay);
+      return sentMessage;
+    } catch (error) {
+      if (isTelegramBotNotMemberChatError(error)) {
+        console.warn('Ignoring reply in chat where bot is no longer a member:', ctx?.chat?.id || 'unknown');
+        return null;
+      }
+      throw error;
+    }
   }
 
   const bulkModerationReports = new Map();
@@ -7086,9 +7114,32 @@ function createBot() {
     return false;
   }
 
+  function isTargetingBotIdentity(ctx, targetUserId) {
+    const targetId = Number(targetUserId);
+    if (!Number.isFinite(targetId)) {
+      return false;
+    }
+    if (!Number.isFinite(botUserId)) {
+      return false;
+    }
+    return targetId === botUserId;
+  }
+
+  function ensureBotSelfProtection(ctx, targetUserId, actionLabel = 'наказывать') {
+    if (isTargetingBotIdentity(ctx, targetUserId)) {
+      ctx.reply('Нельзя дать боту самому себя наказание, снять права или выйти из чата.');
+      return false;
+    }
+    return true;
+  }
+
   function ensureBotAdminCanPunishTarget(ctx, targetUserId, actionName) {
     if (canSelfClearPunishmentHistory(ctx, targetUserId, actionName)) {
       return true;
+    }
+
+    if (!ensureBotSelfProtection(ctx, targetUserId, 'наказывать')) {
+      return false;
     }
 
     if (!database.isBotAdmin(ctx.chat.id, targetUserId)) {
@@ -7727,6 +7778,16 @@ function createBot() {
       return;
     }
 
+    if (isTargetingBotIdentity(ctx, targetData.target.id)) {
+      ctx.reply('Нельзя назначать бота администратором бота или давать ему собственные права.');
+      return;
+    }
+
+    const target = targetData.target;
+    if (!targetData) {
+      return;
+    }
+
     const target = targetData.target;
     const argRest = (targetData.remainingArgs || '').trim();
     const requestedLevel = argRest ? Number(argRest.split(/\s+/)[0]) : null;
@@ -7796,6 +7857,16 @@ function createBot() {
       return;
     }
 
+    if (isTargetingBotIdentity(ctx, targetData.target.id)) {
+      ctx.reply('Нельзя снять бота с роли администратора бота.');
+      return;
+    }
+
+    const target = targetData.target;
+    if (!targetData) {
+      return;
+    }
+
     const target = targetData.target;
     const isPrimary = database.isPrimaryBotAdmin(ctx.chat.id, ctx.from.id);
     const actorLevel = isPrimary ? 1 : database.getBotAdminLevel(ctx.chat.id, ctx.from.id);
@@ -7842,6 +7913,15 @@ function createBot() {
     }
 
     const targetData = await resolveCommandTarget(ctx, args, `/${action} @юз [уровень]`);
+    if (!targetData) {
+      return;
+    }
+
+    if (isTargetingBotIdentity(ctx, targetData.target.id)) {
+      ctx.reply('Нельзя изменять уровень бота как собственного администратора бота.');
+      return;
+    }
+
     if (!targetData) return;
     const target = targetData.target;
     const argRest = (targetData.remainingArgs || '').trim();
@@ -10741,6 +10821,8 @@ function createBot() {
       report.notifications = [];
       adminReports.set(reportId, report);
 
+      const moderationService = activeModerationService || defaultModerationService;
+
       try {
         const mode = moderationService.getAdminNotifyMode(ctx.chat.id);
         // if mode is 'staff' we avoid posting the report in the origin chat
@@ -10754,7 +10836,6 @@ function createBot() {
         console.error('Failed to post admin report in origin chat:', error?.message || error);
       }
 
-      const moderationService = activeModerationService || defaultModerationService;
       const shouldNotifyAdmins = moderationService.getAdminNotifyAdmins(ctx.chat.id);
       const configuredNotificationGroupId = moderationService.getAdminNotifyGroupId(ctx.chat.id);
       const notificationGroupId = configuredNotificationGroupId || ADMIN_NOTIFICATION_GROUP_ID;
@@ -11210,6 +11291,7 @@ module.exports = {
   formatUserIdentityText,
   buildActivityChartSvg,
   buildActivityChartPng,
+  isTelegramBotNotMemberChatError,
 };
 
 2
