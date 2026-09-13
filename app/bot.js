@@ -7784,11 +7784,6 @@ function createBot() {
     }
 
     const target = targetData.target;
-    if (!targetData) {
-      return;
-    }
-
-    const target = targetData.target;
     const argRest = (targetData.remainingArgs || '').trim();
     const requestedLevel = argRest ? Number(argRest.split(/\s+/)[0]) : null;
     const isPrimary = database.isPrimaryBotAdmin(ctx.chat.id, ctx.from.id);
@@ -7863,11 +7858,6 @@ function createBot() {
     }
 
     const target = targetData.target;
-    if (!targetData) {
-      return;
-    }
-
-    const target = targetData.target;
     const isPrimary = database.isPrimaryBotAdmin(ctx.chat.id, ctx.from.id);
     const actorLevel = isPrimary ? 1 : database.getBotAdminLevel(ctx.chat.id, ctx.from.id);
 
@@ -7922,7 +7912,6 @@ function createBot() {
       return;
     }
 
-    if (!targetData) return;
     const target = targetData.target;
     const argRest = (targetData.remainingArgs || '').trim();
     const requestedLevel = argRest ? Number(argRest.split(/\s+/)[0]) : null;
