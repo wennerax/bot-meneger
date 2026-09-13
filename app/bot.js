@@ -82,6 +82,15 @@ function isChannelPostInGroupMessage(message = {}) {
   return false;
 }
 
+function isChatMemberStillInGroup(member = {}) {
+  if (!member || typeof member !== 'object') {
+    return false;
+  }
+
+  const status = String(member.status || '').toLowerCase();
+  return ['creator', 'administrator', 'member', 'restricted'].includes(status);
+}
+
 function isAnonymousSenderMessage(message = {}) {
   if (!message || typeof message !== 'object') {
     return false;
@@ -3289,15 +3298,24 @@ function shouldFailClosedForMedia(payload, errorMessage = '', normalizedAnswer =
   return false;
 }
 
+function stripBotMentionFromCommandText(text) {
+  return String(text || '').trim()
+    .replace(/^\/(\S+?)(?:@[\w_]+)(\s|$)/i, '/$1$2')
+    .replace(/^!(\S+?)(?:@[\w_]+)(\s|$)/i, '!$1$2')
+    .replace(/^\+(\S+?)(?:@[\w_]+)(\s|$)/i, '+$1$2')
+    .replace(/^-(\S+?)(?:@[\w_]+)(\s|$)/i, '-$1$2');
+}
+
 function isKnownCommandText(text) {
-  const slashCommand = /^(?:\/(start|help|bot|id|айди|about|whoami|кто_я|stats|rules|arule|аправила|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|монетка|dice|кубик|fate|вопрос|compliment|комплимент|insult|инсульт|top|топ|admins|админы|banlist|баны|mutelist|муты|setrules|установить_правила|warn|варн|пред|предупреждение|delwarn|warns|warnings|варны|unwarn|снять_предупреждение|анварн|анпред|mute|мут|delmute|unmute|размут|размутить|говори|ban|бан|delban|unban|разбан|разбанить|kick|кик|del|delete|дел|setgreeting|установить_приветствие|addadmin|добавить_админа|removeadmin|снять_админа|promote|повышение|demote|разжалование|clearhistory|сбросистории|сброс_истории|clear_history|miniapp|миниприложение|admincom|ai|modstats|статистика_модерации|ttt|крестики|крестики-нолики|swarn|sdelwarn|smute|sdelmute|sban|sdelban|sunwarn|sunmute|sunban))(?:@[\w_]+)?(\s|$)/i;
+  const normalizedText = stripBotMentionFromCommandText(text);
+  const slashCommand = /^(?:\/(start|help|bot|id|айди|about|whoami|кто_я|stats|rules|arule|аправила|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|монетка|dice|кубик|fate|вопрос|compliment|комплимент|insult|инсульт|top|топ|admins|админы|banlist|баны|mutelist|муты|setrules|установить_правила|warn|варн|пред|предупреждение|delwarn|warns|warnings|варны|unwarn|снять_предупреждение|анварн|анпред|mute|мут|delmute|unmute|размут|размутить|говори|ban|бан|delban|unban|разбан|разбанить|kick|кик|del|delete|дел|setgreeting|установить_приветствие|addadmin|добавить_админа|removeadmin|снять_админа|promote|повышение|demote|разжалование|clearhistory|сбросистории|сброс_истории|clear_history|miniapp|миниприложение|admincom|ai|modstats|статистика_модерации|ttt|крестики|крестики-нолики|swarn|sdelwarn|smute|sdelmute|sban|sdelban|sunwarn|sunmute|sunban))(\s|$)/i;
   const bangCommand = /^!(delban|delmute|delwarn|начало|помощь|айди|информация|кто\s*я|статистика|правила|аправила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|инсульт|пред|предупреждение|варны|мут|размут|размутить|бан|разбан|разбанить|кик|топ|анпред|анварн|говори|дел|рел)(\s|$)/i;
   const plusMinusCommand = /^(?:\+(?:антиспам|antispam|антифлуд|antiflood|ссылки|links|варн|warn|предупреждение|мут|mute|бан|ban|кик|kick)|[+-](?:размут|размутить|unmute|разбан|разбанить|unban|анварн)|\+описание|\+description|\+rules(?=\s+\S)|\+правила(?=\s+\S)|\+greeting(?=\s+\S)|\+приветствие(?=\s+\S))(\s|$)/i;
-  return slashCommand.test(text) || bangCommand.test(text) || plusMinusCommand.test(text);
+  return slashCommand.test(normalizedText) || bangCommand.test(normalizedText) || plusMinusCommand.test(normalizedText);
 }
 
 function parseBotCommandKey(text) {
-  const normalized = String(text || '').trim();
+  const normalized = stripBotMentionFromCommandText(String(text || '').trim());
   const plusMinusMatch = normalized.match(/^[+-](антиспам|antispam|антифлуд|antiflood|ссылки|links|варн|warn|предупреждение|мут|mute|бан|ban|кик|kick|размут|размутить|unmute|разбан|разбанить|unban|анварн)\b/i);
   if (plusMinusMatch) {
     const command = plusMinusMatch[1].toLowerCase();
@@ -7700,12 +7718,24 @@ function createBot() {
       await ctx.telegram.unbanChatMember(ctx.chat.id, targetData.target.id, true);
       database.removeActivePunishment(ctx.chat.id, targetData.target.id, 'ban');
       clearScheduledPunishment(ctx.chat.id, targetData.target.id, 'ban');
+
+      let kickedFromGroup = false;
+      try {
+        const targetMember = await ctx.telegram.getChatMember(ctx.chat.id, targetData.target.id).catch(() => null);
+        if (isChatMemberStillInGroup(targetMember)) {
+          await ctx.telegram.kickChatMember(ctx.chat.id, targetData.target.id);
+          kickedFromGroup = true;
+        }
+      } catch (memberCheckError) {
+        kickedFromGroup = false;
+      }
+
       recordModerationLog(ctx.chat.id, {
         action: 'unban',
         actorId: ctx.from.id,
         targetId: targetData.target.id,
         reason: 'Снятие бана',
-        details: 'Блокировка пользователя снята',
+        details: kickedFromGroup ? 'Блокировка пользователя снята и он исключён из группы' : 'Блокировка пользователя снята',
       });
     } catch (error) {
       await replyWithAutoDelete(ctx, 'Не удалось снять ban: у бота нет прав администратора.');
@@ -11278,6 +11308,7 @@ module.exports = {
   resolveIdCommandTarget,
   formatAdminReportText,
   formatUserIdentityText,
+  isChatMemberStillInGroup,
   buildActivityChartSvg,
   buildActivityChartPng,
   isTelegramBotNotMemberChatError,
