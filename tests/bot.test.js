@@ -751,6 +751,40 @@ test('buildSettingsRulesMenuText includes the current rules text', () => {
   assert.match(text, /Соблюдайте уважение в чате/);
 });
 
+test('agreement acceptance removes all related messages including the instruction message', async () => {
+  const deleted = [];
+  let restrictionArgs;
+  const telegram = {
+    deleteMessage: async (chatId, messageId) => {
+      deleted.push({ chatId, messageId });
+    },
+    restrictChatMember: async (...args) => {
+      restrictionArgs = args;
+    },
+    sendMessage: async (chatId, text) => ({ message_id: 900, chat: { id: chatId }, text }),
+  };
+
+  const state = {
+    chatId: 123,
+    userId: 456,
+    displayName: 'Алиса',
+    pollMessageId: 777,
+    instructionMessageId: 333,
+    agreementMessageIds: [111, 222],
+  };
+
+  await handleAgreementDecision(telegram, state, true);
+
+  assert.equal(restrictionArgs[0], 123);
+  assert.equal(restrictionArgs[1], 456);
+  assert.equal(restrictionArgs[2].can_send_messages, true);
+  assert.equal(deleted.some((item) => item.messageId === 111), true);
+  assert.equal(deleted.some((item) => item.messageId === 222), true);
+  assert.equal(deleted.some((item) => item.messageId === 333), true);
+  assert.equal(deleted.some((item) => item.messageId === 777), true);
+  assert.equal(deleted.some((item) => item.messageId === 900), false);
+});
+
 test('agreement refusal restricts for 24 hours and excludes the user without banning', async () => {
   const deleted = [];
   let kicked = false;

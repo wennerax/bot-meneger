@@ -197,6 +197,9 @@ async function handleAgreementDecision(telegram, state, accepted) {
   if (state.pollMessageId) {
     messageIds.push(state.pollMessageId);
   }
+  if (state.instructionMessageId) {
+    messageIds.push(state.instructionMessageId);
+  }
 
   await cleanupAgreementMessages(telegram, state.chatId, messageIds);
 
@@ -3982,9 +3985,12 @@ function createBot() {
       return;
     }
 
-    const messageIds = Array.isArray(state.agreementMessageIds) ? state.agreementMessageIds : [];
+    const messageIds = Array.isArray(state.agreementMessageIds) ? [...state.agreementMessageIds] : [];
     if (state.pollMessageId) {
       messageIds.push(state.pollMessageId);
+    }
+    if (state.instructionMessageId) {
+      messageIds.push(state.instructionMessageId);
     }
 
     await cleanupAgreementMessages(telegram, state.chatId, messageIds);
@@ -4112,6 +4118,7 @@ function createBot() {
           userId: state.userId,
           displayName: state.displayName,
           pollMessageId: agreementPoll?.message_id,
+          instructionMessageId: state.instructionMessageId,
           agreementMessageIds: agreementMessage?.message_id ? [agreementMessage.message_id] : [],
           createdAt: Date.now(),
         };

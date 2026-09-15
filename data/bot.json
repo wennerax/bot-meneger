@@ -17,6 +17,7 @@
   "botAdminWarnings": {},
   "punishments": [],
   "activePunishments": [],
+  "hiddenPunishments": [],
   "blacklist": [],
   "messageCounts": {},
   "groupUsers": {},
