@@ -74,9 +74,12 @@ function isChannelPostInGroupMessage(message = {}) {
   }
 
   const isAutomaticForwardFromChannel = message.is_automatic_forward === true;
+  const senderChatType = String(message.sender_chat?.type || '').toLowerCase();
+  const forwardChatType = String(message.forward_from_chat?.type || message.forward_origin?.chat?.type || '').toLowerCase();
 
-  // Telegram may include `from` on automatic channel posts in discussion topics.
-  if (isAutomaticForwardFromChannel) {
+  // Telegram may include `from` on automatic channel posts in discussion topics,
+  // and channel-authored posts keep the sender identified as a `sender_chat`.
+  if (isAutomaticForwardFromChannel || senderChatType === 'channel' || forwardChatType === 'channel') {
     return true;
   }
 
@@ -11181,9 +11184,6 @@ function createBot() {
   });
 
   bot.on('message', async (ctx, next) => {
-    if (isDuplicateMediaGroupMessage(ctx)) {
-      return;
-    }
     if (isGroupChat(ctx) && (ctx.message?.new_chat_members || ctx.message?.left_chat_member || ctx.message?.pinned_message)) {
       await deleteMessageSafely(ctx, ctx.message.message_id);
       return;
@@ -11196,9 +11196,6 @@ function createBot() {
   });
 
   bot.on('channel_post', async (ctx) => {
-    if (isDuplicateMediaGroupMessage(ctx)) {
-      return;
-    }
     let linkedChatId = 0;
     try {
       linkedChatId = Number((await ctx.telegram.getChat(ctx.chat.id))?.linked_chat_id || 0);

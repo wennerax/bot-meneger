@@ -53,6 +53,12 @@ test('isChatMemberStillInGroup recognizes active chat membership states', () => 
   assert.equal(isChatMemberStillInGroup({ status: 'kicked' }), false);
 });
 
+test('isChannelPostInGroupMessage recognizes channel-authored posts with sender_chat', () => {
+  assert.equal(isChannelPostInGroupMessage({ sender_chat: { type: 'channel' }, chat: { type: 'supergroup' } }), true);
+  assert.equal(isChannelPostInGroupMessage({ forward_origin: { type: 'channel', chat: { type: 'channel' } }, chat: { type: 'supergroup' } }), true);
+  assert.equal(isChannelPostInGroupMessage({ from: { id: 42 }, chat: { type: 'supergroup' } }), false);
+});
+
 test('buildBotMediaSend maps media to Telegram send methods and preserves captions', () => {
   assert.deepEqual(buildBotMediaSend({ sticker: { file_id: 'sticker-1' } }), {
     method: 'sendSticker',
