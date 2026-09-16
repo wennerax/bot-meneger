@@ -54,8 +54,18 @@ test('isChatMemberStillInGroup recognizes active chat membership states', () => 
 });
 
 test('isChannelPostInGroupMessage recognizes channel-authored posts with sender_chat', () => {
-  assert.equal(isChannelPostInGroupMessage({ sender_chat: { type: 'channel' }, chat: { type: 'supergroup' } }), true);
-  assert.equal(isChannelPostInGroupMessage({ forward_origin: { type: 'channel', chat: { type: 'channel' } }, chat: { type: 'supergroup' } }), true);
+  assert.equal(isChannelPostInGroupMessage({
+    sender_chat: { type: 'channel' },
+    is_automatic_forward: true,
+    chat: { type: 'supergroup' },
+  }), true);
+  assert.equal(isChannelPostInGroupMessage({ sender_chat: { type: 'channel' }, chat: { type: 'supergroup' } }), false);
+  assert.equal(isChannelPostInGroupMessage({
+    sender_chat: { type: 'channel' },
+    is_automatic_forward: true,
+    reply_to_message: { message_id: 100 },
+  }), false);
+  assert.equal(isChannelPostInGroupMessage({ forward_origin: { type: 'channel', chat: { type: 'channel' } }, chat: { type: 'supergroup' } }), false);
   assert.equal(isChannelPostInGroupMessage({ from: { id: 42 }, chat: { type: 'supergroup' } }), false);
 });
 

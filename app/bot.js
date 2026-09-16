@@ -74,16 +74,9 @@ function isChannelPostInGroupMessage(message = {}) {
   }
 
   const isAutomaticForwardFromChannel = message.is_automatic_forward === true;
-  const senderChatType = String(message.sender_chat?.type || '').toLowerCase();
-  const forwardChatType = String(message.forward_from_chat?.type || message.forward_origin?.chat?.type || '').toLowerCase();
-
-  // Telegram may include `from` on automatic channel posts in discussion topics,
-  // and channel-authored posts keep the sender identified as a `sender_chat`.
-  if (isAutomaticForwardFromChannel || senderChatType === 'channel' || forwardChatType === 'channel') {
-    return true;
-  }
-
-  return false;
+  // Comments posted by a channel also have `sender_chat.type === 'channel'`.
+  // Only Telegram's automatic forward marks the original discussion post.
+  return isAutomaticForwardFromChannel && !message.reply_to_message;
 }
 
 function isChatMemberStillInGroup(member = {}) {
