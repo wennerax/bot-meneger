@@ -127,39 +127,18 @@ function isDuplicateMediaGroupMessage(ctx) {
   }
 
   const mediaGroupId = String(message.media_group_id || '').trim();
-  const fallbackSignature = (() => {
-    const senderId = Number(message.sender_chat?.id || message.from?.id || 0);
-    const dateKey = Number(message.date || 0);
-    const caption = String(message.caption || message.text || '').trim();
-    const mediaKind = Array.isArray(message.photo) ? 'photo' : message.video ? 'video' : message.document ? 'document' : message.animation ? 'animation' : message.audio ? 'audio' : message.voice ? 'voice' : message.sticker ? 'sticker' : message.video_note ? 'video_note' : 'other';
-    if (!senderId || !dateKey || !caption || mediaKind === 'other') {
-      return null;
-    }
-    return `${chatId}:${senderId}:${dateKey}:${caption}:${mediaKind}`;
-  })();
-
-  if (mediaGroupId) {
-    const now = Date.now();
-    const key = `${chatId}:${mediaGroupId}`;
-    const lastSeenAt = mediaGroupMessageCache.get(key) || 0;
-    if (lastSeenAt && now - lastSeenAt < 15000) {
-      return true;
-    }
-    mediaGroupMessageCache.set(key, now);
-    return false;
-  }
-
-  if (!fallbackSignature) {
+  if (!mediaGroupId) {
     return false;
   }
 
   const now = Date.now();
-  const lastSeenAt = mediaGroupMessageCache.get(`fallback:${fallbackSignature}`) || 0;
+  const key = `${chatId}:${mediaGroupId}`;
+  const lastSeenAt = mediaGroupMessageCache.get(key) || 0;
   if (lastSeenAt && now - lastSeenAt < 15000) {
     return true;
   }
 
-  mediaGroupMessageCache.set(`fallback:${fallbackSignature}`, now);
+  mediaGroupMessageCache.set(key, now);
   return false;
 }
 
