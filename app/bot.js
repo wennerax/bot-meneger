@@ -121,20 +121,45 @@ function isTelegramBotNotMemberChatError(error = {}) {
 
 function isDuplicateMediaGroupMessage(ctx) {
   const message = ctx?.message || {};
-  const mediaGroupId = String(message.media_group_id || '').trim();
   const chatId = Number(ctx?.chat?.id);
-  if (!mediaGroupId || !Number.isFinite(chatId)) {
+  if (!Number.isFinite(chatId)) {
+    return false;
+  }
+
+  const mediaGroupId = String(message.media_group_id || '').trim();
+  const fallbackSignature = (() => {
+    const senderId = Number(message.sender_chat?.id || message.from?.id || 0);
+    const dateKey = Number(message.date || 0);
+    const caption = String(message.caption || message.text || '').trim();
+    const mediaKind = Array.isArray(message.photo) ? 'photo' : message.video ? 'video' : message.document ? 'document' : message.animation ? 'animation' : message.audio ? 'audio' : message.voice ? 'voice' : message.sticker ? 'sticker' : message.video_note ? 'video_note' : 'other';
+    if (!senderId || !dateKey || !caption || mediaKind === 'other') {
+      return null;
+    }
+    return `${chatId}:${senderId}:${dateKey}:${caption}:${mediaKind}`;
+  })();
+
+  if (mediaGroupId) {
+    const now = Date.now();
+    const key = `${chatId}:${mediaGroupId}`;
+    const lastSeenAt = mediaGroupMessageCache.get(key) || 0;
+    if (lastSeenAt && now - lastSeenAt < 15000) {
+      return true;
+    }
+    mediaGroupMessageCache.set(key, now);
+    return false;
+  }
+
+  if (!fallbackSignature) {
     return false;
   }
 
   const now = Date.now();
-  const key = `${chatId}:${mediaGroupId}`;
-  const lastSeenAt = mediaGroupMessageCache.get(key) || 0;
+  const lastSeenAt = mediaGroupMessageCache.get(`fallback:${fallbackSignature}`) || 0;
   if (lastSeenAt && now - lastSeenAt < 15000) {
     return true;
   }
 
-  mediaGroupMessageCache.set(key, now);
+  mediaGroupMessageCache.set(`fallback:${fallbackSignature}`, now);
   return false;
 }
 
@@ -5629,6 +5654,9 @@ function createBot() {
   }
 
   async function sendMenuReplyForChannelPost(ctx, targetChatId = null, replyToPost = true) {
+    if (isDuplicateMediaGroupMessage(ctx)) {
+      return null;
+    }
     const chatId = Number(targetChatId || ctx.chat.id);
     if (!targetChatId && !isChannelPostInGroup(ctx) && isAllowedAnonymousChannel(ctx, chatId)) {
       return null;
@@ -11174,6 +11202,9 @@ function createBot() {
   });
 
   bot.on('message', async (ctx, next) => {
+    if (isDuplicateMediaGroupMessage(ctx)) {
+      return;
+    }
     if (isGroupChat(ctx) && (ctx.message?.new_chat_members || ctx.message?.left_chat_member || ctx.message?.pinned_message)) {
       await deleteMessageSafely(ctx, ctx.message.message_id);
       return;
@@ -11186,6 +11217,9 @@ function createBot() {
   });
 
   bot.on('channel_post', async (ctx) => {
+    if (isDuplicateMediaGroupMessage(ctx)) {
+      return;
+    }
     let linkedChatId = 0;
     try {
       linkedChatId = Number((await ctx.telegram.getChat(ctx.chat.id))?.linked_chat_id || 0);

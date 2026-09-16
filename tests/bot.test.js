@@ -78,13 +78,17 @@ test('buildBotMediaSend maps media to Telegram send methods and preserves captio
 test('duplicate media group items are ignored so album photos are processed once', () => {
   const { isDuplicateMediaGroupMessage } = require('../app/bot');
 
-  const first = { chat: { id: -1001 }, message: { media_group_id: 'album-42' } };
-  const second = { chat: { id: -1001 }, message: { media_group_id: 'album-42' } };
-  const otherAlbum = { chat: { id: -1001 }, message: { media_group_id: 'album-43' } };
+  const first = { chat: { id: -1001 }, message: { media_group_id: 'album-42', caption: 'test', date: 1700000000 } };
+  const second = { chat: { id: -1001 }, message: { media_group_id: 'album-42', caption: 'test', date: 1700000000 } };
+  const otherAlbum = { chat: { id: -1001 }, message: { media_group_id: 'album-43', caption: 'test', date: 1700000000 } };
+  const sameCaptionWithoutGroupId = { chat: { id: -1001 }, message: { caption: 'test', date: 1700000000, from: { id: 42 }, photo: [{ file_id: 'one' }] } };
+  const sameCaptionWithoutGroupIdSecond = { chat: { id: -1001 }, message: { caption: 'test', date: 1700000000, from: { id: 42 }, photo: [{ file_id: 'two' }] } };
 
   assert.equal(isDuplicateMediaGroupMessage(first), false);
   assert.equal(isDuplicateMediaGroupMessage(second), true);
   assert.equal(isDuplicateMediaGroupMessage(otherAlbum), false);
+  assert.equal(isDuplicateMediaGroupMessage(sameCaptionWithoutGroupId), false);
+  assert.equal(isDuplicateMediaGroupMessage(sameCaptionWithoutGroupIdSecond), true);
 });
 
 test('parsePunishmentDetails returns default reason when none provided', () => {
