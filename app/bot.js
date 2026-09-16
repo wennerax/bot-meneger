@@ -18,6 +18,7 @@ let activeDatabase = null;
 let activeModerationService = null;
 let activeConfig = null;
 const adminReports = new Map();
+const mediaGroupMessageCache = new Map();
 const reloadLockPath = path.join(__dirname, '..', 'data', 'bot-reload.lock');
 const reloadLockMaxAgeMs = 2 * 60 * 1000;
 const reloadCommandClaimMaxAgeMs = 10 * 60 * 1000;
@@ -116,6 +117,25 @@ function isTelegramBotNotMemberChatError(error = {}) {
   const description = String(error?.response?.description || error?.description || '');
   const errorCode = Number(error?.response?.error_code || error?.error_code || 0);
   return errorCode === 403 && /bot is not a member of the (supergroup|group|chat)/i.test(description);
+}
+
+function isDuplicateMediaGroupMessage(ctx) {
+  const message = ctx?.message || {};
+  const mediaGroupId = String(message.media_group_id || '').trim();
+  const chatId = Number(ctx?.chat?.id);
+  if (!mediaGroupId || !Number.isFinite(chatId)) {
+    return false;
+  }
+
+  const now = Date.now();
+  const key = `${chatId}:${mediaGroupId}`;
+  const lastSeenAt = mediaGroupMessageCache.get(key) || 0;
+  if (lastSeenAt && now - lastSeenAt < 15000) {
+    return true;
+  }
+
+  mediaGroupMessageCache.set(key, now);
+  return false;
 }
 
 function detectForwardedMessageCategory(message = {}) {
@@ -11180,6 +11200,10 @@ function createBot() {
   });
 
   bot.on(['text', 'photo', 'video', 'document', 'animation', 'audio', 'voice', 'sticker', 'video_note'], async (ctx) => {
+    if (isDuplicateMediaGroupMessage(ctx)) {
+      return;
+    }
+
     if (ctx.chat && getPendingSettingsAction(ctx)) {
       const handled = await processPendingSettingsAction(ctx);
       if (handled) {
@@ -11292,6 +11316,7 @@ module.exports = {
   buildBotMediaSend,
   buildSettingsAnonymousKeyboard,
   isAnonymousSenderMessage,
+  isDuplicateMediaGroupMessage,
   containsCrashEmoji,
   isChannelPostInGroupMessage,
   shouldFailClosedForMedia,
