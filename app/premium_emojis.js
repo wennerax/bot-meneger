@@ -500,6 +500,27 @@ function getCustomEmojiFallback(emojiName) {
 }
 
 /**
+ * Подготовить название кнопки с custom emoji.
+ * Telegram Bot API не поддерживает entities внутри InlineKeyboardButton,
+ * поэтому custom emoji заменяются на fallback-символы.
+ * Поддерживаются {heart_purple} и emoji:id(5328145443106873128).
+ */
+function formatCustomEmojiButtonText(text) {
+  if (typeof text !== 'string' || !text) {
+    return text;
+  }
+
+  const namedEmojiText = text.replace(/\{([a-z0-9_]+)\}/gi, (match, emojiName) => {
+    return hasCustomEmoji(emojiName) ? getCustomEmojiFallback(emojiName) : match;
+  });
+
+  return namedEmojiText.replace(/emoji:id\((\d+)\)/g, (match, emojiId) => {
+    const info = Object.values(CUSTOM_EMOJI_IDS).find((emoji) => emoji.id === emojiId);
+    return info ? info.fallback : '💬';
+  });
+}
+
+/**
  * Создать Text Entity для custom emoji (для Telegraf)
  * Используется в ctx.reply с параметром entities
  * 
@@ -720,6 +741,7 @@ module.exports = {
   getCustomEmojiInfo,
   getCustomEmojiId,
   getCustomEmojiFallback,
+  formatCustomEmojiButtonText,
   createCustomEmojiEntity,
   replyWithCustomEmoji,
   addCustomEmoji,

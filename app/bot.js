@@ -5647,7 +5647,10 @@ function createBot() {
       .filter((row) => Array.isArray(row) && row.length)
       .map((row) => row
         .filter((item) => isValidTelegramButtonUrl(item.url))
-        .map((item) => ({ text: item.text, url: item.url })))
+        .map((item) => ({
+          text: premiumEmojis.formatCustomEmojiButtonText(item.text),
+          url: item.url,
+        })))
       .filter((row) => row.length) : [];
     const keyboard = keyboardRows.length ? { inline_keyboard: keyboardRows } : null;
     const { text: formattedText, entities } = moderationService.formatTextWithLinks(menuTextPayload);

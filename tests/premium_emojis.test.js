@@ -16,6 +16,7 @@ const {
   getCustomEmojiInfo,
   getCustomEmojiId,
   getCustomEmojiFallback,
+  formatCustomEmojiButtonText,
   createCustomEmojiEntity,
   replyWithCustomEmoji,
   addCustomEmoji,
@@ -331,6 +332,18 @@ test('custom emoji fallbacks are valid', () => {
     assert.ok(info.fallback, `${name} should have fallback`);
     assert.ok(typeof info.fallback === 'string', `${name} fallback should be string`);
   }
+});
+
+test('formatCustomEmojiButtonText replaces named and direct custom emoji syntax', () => {
+  assert.equal(
+    formatCustomEmojiButtonText('{heart_purple} Правила'),
+    '💜 Правила'
+  );
+  assert.equal(
+    formatCustomEmojiButtonText('emoji:id(5328145443106873128) Правила'),
+    '💜 Правила'
+  );
+  assert.equal(formatCustomEmojiButtonText('{unknown} Правила'), '{unknown} Правила');
 });
 
 // ==================== ТЕСТЫ ДЛЯ ПАРСИНГА emoji:id() ====================
