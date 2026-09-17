@@ -88,6 +88,16 @@ function isChatMemberStillInGroup(member = {}) {
   return ['creator', 'administrator', 'member', 'restricted'].includes(status);
 }
 
+function isChatMemberJoining(member = {}) {
+  if (!member || typeof member !== 'object') {
+    return false;
+  }
+
+  const status = String(member.status || '').toLowerCase();
+  return status === 'member'
+    || (status === 'restricted' && member.is_member !== false);
+}
+
 function isAnonymousSenderMessage(message = {}) {
   if (!message || typeof message !== 'object') {
     return false;
@@ -10353,9 +10363,7 @@ function createBot() {
       return;
     }
 
-    const joinedStatuses = ['member', 'restricted'];
-    const oldStatus = ctx.chatMember?.old_chat_member?.status;
-    if (joinedStatuses.includes(member.status) && !joinedStatuses.includes(oldStatus)) {
+    if (isChatMemberJoining(member) && !isChatMemberJoining(ctx.chatMember?.old_chat_member)) {
       database.recordUserJoin(ctx.chat.id, userId, member.user?.first_name || member.user?.username, member.user?.username);
       await startCaptchaForUser(ctx, userId, member.user);
       return;
@@ -11393,6 +11401,7 @@ module.exports = {
   formatAdminReportText,
   formatUserIdentityText,
   isChatMemberStillInGroup,
+  isChatMemberJoining,
   buildActivityChartSvg,
   buildActivityChartPng,
   isTelegramBotNotMemberChatError,
