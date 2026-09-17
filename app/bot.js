@@ -5650,6 +5650,9 @@ function createBot() {
         .map((item) => ({
           text: premiumEmojis.formatCustomEmojiButtonText(item.text),
           url: item.url,
+          ...(item.custom_emoji_id
+            ? { icon_custom_emoji_id: String(item.custom_emoji_id) }
+            : {}),
         })))
       .filter((row) => row.length) : [];
     const keyboard = keyboardRows.length ? { inline_keyboard: keyboardRows } : null;
@@ -6187,7 +6190,12 @@ function createBot() {
         await deleteMessageSafely(ctx, ctx.message.message_id);
         return true;
       }
-      if (!moderationService.addMenuButton(groupId, title, url, typeof pending.rowIndex === 'number' ? pending.rowIndex : null)) {
+      const buttonData = premiumEmojis.normalizeCustomEmojiButton(title, ctx.message.entities);
+      if (!buttonData.text) {
+        await ctx.reply('⚠️ Укажите текст кнопки после эмодзи.');
+        return true;
+      }
+      if (!moderationService.addMenuButton(groupId, buttonData.text, url, typeof pending.rowIndex === 'number' ? pending.rowIndex : null, buttonData.custom_emoji_id)) {
         await ctx.reply('⚠️ Не удалось добавить кнопку.');
       } else {
         await ctx.reply(`✅ Кнопка добавлена: ${title} → ${url}`);
@@ -6210,7 +6218,9 @@ function createBot() {
       }
 
       const changes = pending.action === 'settings_message_button_text'
-        ? { text: value }
+        ? {
+          ...premiumEmojis.normalizeCustomEmojiButton(value, ctx.message.entities),
+        }
         : { url: value };
       if (moderationService.updateMenuButton(groupId, rowIndex, buttonIndex, changes)) {
         await ctx.reply('✅ Кнопка обновлена.');
@@ -6351,7 +6361,13 @@ function createBot() {
         await deleteMessageSafely(ctx, ctx.message.message_id);
         return true;
       }
-      if (!moderationService.addMenuButton(ctx.chat.id, title, url, rowIndex)) {
+      const buttonData = premiumEmojis.normalizeCustomEmojiButton(title, ctx.message.entities);
+      if (!buttonData.text) {
+        await ctx.reply('⚠️ Укажите текст кнопки после эмодзи.');
+        await deleteMessageSafely(ctx, ctx.message.message_id);
+        return true;
+      }
+      if (!moderationService.addMenuButton(ctx.chat.id, buttonData.text, url, rowIndex, buttonData.custom_emoji_id)) {
         await ctx.reply('⚠️ Не удалось добавить кнопку. Проверьте ряд и формат.');
       } else {
         await ctx.reply(`✅ Кнопка добавлена: ${title} → ${url}`);

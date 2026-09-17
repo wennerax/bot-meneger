@@ -520,6 +520,34 @@ function formatCustomEmojiButtonText(text) {
   });
 }
 
+function normalizeCustomEmojiButton(text, entities = []) {
+  let buttonText = typeof text === 'string' ? text.trim() : '';
+  let customEmojiId = null;
+  const firstEntity = Array.isArray(entities)
+    ? entities.find((entity) => entity?.type === 'custom_emoji' && Number(entity.offset) === 0)
+    : null;
+
+  if (firstEntity?.custom_emoji_id) {
+    customEmojiId = String(firstEntity.custom_emoji_id);
+    buttonText = buttonText.slice(Number(firstEntity.offset) + Number(firstEntity.length)).trim();
+  } else {
+    const directIdMatch = buttonText.match(/^emoji:id\((\d+)\)\s*/i);
+    const namedMatch = buttonText.match(/^\{([a-z0-9_]+)\}\s*/i);
+    if (directIdMatch) {
+      customEmojiId = directIdMatch[1];
+      buttonText = buttonText.slice(directIdMatch[0].length).trim();
+    } else if (namedMatch && hasCustomEmoji(namedMatch[1])) {
+      customEmojiId = getCustomEmojiId(namedMatch[1]);
+      buttonText = buttonText.slice(namedMatch[0].length).trim();
+    }
+  }
+
+  return {
+    text: buttonText,
+    custom_emoji_id: customEmojiId,
+  };
+}
+
 /**
  * Создать Text Entity для custom emoji (для Telegraf)
  * Используется в ctx.reply с параметром entities
@@ -742,6 +770,7 @@ module.exports = {
   getCustomEmojiId,
   getCustomEmojiFallback,
   formatCustomEmojiButtonText,
+  normalizeCustomEmojiButton,
   createCustomEmojiEntity,
   replyWithCustomEmoji,
   addCustomEmoji,

@@ -1443,7 +1443,7 @@ class ModerationService {
     return true;
   }
 
-  addMenuButton(chatId, title, url, rowIndex = null) {
+  addMenuButton(chatId, title, url, rowIndex = null, customEmojiId = null) {
     const chat = this._getChat(chatId);
     const text = String(title || '').trim();
     const link = String(url || '').trim();
@@ -1463,7 +1463,11 @@ class ModerationService {
     if (!Array.isArray(chat.menu.buttons[rowIndex])) {
       return false;
     }
-    chat.menu.buttons[rowIndex].push({ text, url: link });
+    const button = { text, url: link };
+    if (customEmojiId) {
+      button.custom_emoji_id = String(customEmojiId);
+    }
+    chat.menu.buttons[rowIndex].push(button);
     this._save();
     return true;
   }
@@ -1499,7 +1503,14 @@ class ModerationService {
       return false;
     }
 
-    row[buttonIndex] = { ...button, text, url };
+    row[buttonIndex] = {
+      ...button,
+      text,
+      url,
+      ...(changes.custom_emoji_id
+        ? { custom_emoji_id: String(changes.custom_emoji_id) }
+        : {}),
+    };
     chat.menu.buttons = rows;
     this._save();
     return true;

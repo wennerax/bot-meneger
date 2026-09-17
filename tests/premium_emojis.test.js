@@ -17,6 +17,7 @@ const {
   getCustomEmojiId,
   getCustomEmojiFallback,
   formatCustomEmojiButtonText,
+  normalizeCustomEmojiButton,
   createCustomEmojiEntity,
   replyWithCustomEmoji,
   addCustomEmoji,
@@ -344,6 +345,19 @@ test('formatCustomEmojiButtonText replaces named and direct custom emoji syntax'
     '💜 Правила'
   );
   assert.equal(formatCustomEmojiButtonText('{unknown} Правила'), '{unknown} Правила');
+});
+
+test('normalizeCustomEmojiButton extracts icon id from syntax and Telegram entities', () => {
+  assert.deepEqual(
+    normalizeCustomEmojiButton('emoji:id(5328145443106873128) Правила'),
+    { text: 'Правила', custom_emoji_id: '5328145443106873128' }
+  );
+  assert.deepEqual(
+    normalizeCustomEmojiButton('💜 Правила', [{
+      type: 'custom_emoji', offset: 0, length: 2, custom_emoji_id: '5328145443106873128',
+    }]),
+    { text: 'Правила', custom_emoji_id: '5328145443106873128' }
+  );
 });
 
 // ==================== ТЕСТЫ ДЛЯ ПАРСИНГА emoji:id() ====================
