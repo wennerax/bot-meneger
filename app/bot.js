@@ -11147,7 +11147,7 @@ function createBot() {
       });
       queueBulkModerationSummary(ctx, ctx.from.id, 'Ссылка');
       await deleteMessageSafely(ctx, ctx.message.message_id);
-      await applyAutomaticMute(ctx, ctx.from.id, 24 * 7, 'Ссылка');
+      await applyAutomaticMute(ctx, ctx.from.id, 24, 'Ссылка');
       return;
     }
 
