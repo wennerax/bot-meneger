@@ -193,6 +193,21 @@ function buildMutePermissions(enabled = true) {
   };
 }
 
+function getCaptchaSuccessRestriction(activeMute, now = Math.floor(Date.now() / 1000)) {
+  const untilAt = Number(activeMute?.untilAt);
+  if (activeMute && (!Number.isFinite(untilAt) || untilAt > now)) {
+    return {
+      permissions: buildMutePermissions(false),
+      untilAt: Number.isFinite(untilAt) ? untilAt : null,
+    };
+  }
+
+  return {
+    permissions: buildMutePermissions(true),
+    untilAt: null,
+  };
+}
+
 async function cleanupAgreementMessages(telegram, chatId, messageIds = []) {
   if (!telegram || !chatId || !Array.isArray(messageIds)) {
     return;
@@ -4016,7 +4031,14 @@ function createBot() {
     await cleanupAgreementMessages(telegram, state.chatId, messageIds);
 
     if (accepted) {
-      await telegram.restrictChatMember(state.chatId, state.userId, buildMutePermissions(true));
+      const restriction = getCaptchaSuccessRestriction(
+        database.findActivePunishment(state.chatId, state.userId, 'mute')
+      );
+      const restrictionArgs = [state.chatId, state.userId, restriction.permissions];
+      if (restriction.untilAt !== null) {
+        restrictionArgs.push(restriction.untilAt);
+      }
+      await telegram.restrictChatMember(...restrictionArgs);
       const acceptedMessage = await telegram.sendMessage(state.chatId, `Пользователь ${state.displayName} подтвердил соглашение и получил доступ к чату.`);
       scheduleDeleteMessage(telegram, state.chatId, acceptedMessage?.message_id);
       return;
@@ -4161,7 +4183,14 @@ function createBot() {
         return;
       }
 
-      await ctx.telegram.restrictChatMember(state.chatId, state.userId, buildMutePermissions(true));
+      const restriction = getCaptchaSuccessRestriction(
+        database.findActivePunishment(state.chatId, state.userId, 'mute')
+      );
+      const restrictionArgs = [state.chatId, state.userId, restriction.permissions];
+      if (restriction.untilAt !== null) {
+        restrictionArgs.push(restriction.untilAt);
+      }
+      await ctx.telegram.restrictChatMember(...restrictionArgs);
       const sentGroupMessage = await ctx.telegram.sendMessage(state.chatId, `Пользователь ${state.displayName} прошёл капчу и получил доступ к чату.`);
       scheduleDeleteMessage(ctx.telegram, state.chatId, sentGroupMessage?.message_id);
       scheduleDeleteMessage(ctx.telegram, state.chatId, state.pollMessageId);
@@ -11355,6 +11384,7 @@ module.exports = {
   cleanupAgreementMessages,
   handleAgreementDecision,
   handleAgreementTimeout,
+  getCaptchaSuccessRestriction,
   isPollAnswerForTarget,
   buildReloadStatusMessage,
   parseBotCommandKey,
