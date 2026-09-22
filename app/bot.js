@@ -4326,6 +4326,33 @@ function createBot() {
     }
   }
 
+  async function isTelegramMemberOfChat(ctx, chatId) {
+    const userId = Number(ctx.from?.id);
+    const targetChatId = Number(chatId);
+    if (!Number.isFinite(userId) || !Number.isFinite(targetChatId)) {
+      return false;
+    }
+
+    try {
+      const member = await ctx.telegram.getChatMember(targetChatId, userId);
+      const status = String(member?.status || '').toLowerCase();
+      return status === 'creator'
+        || status === 'administrator'
+        || status === 'member'
+        || (status === 'restricted' && member.is_member !== false);
+    } catch (error) {
+      return false;
+    }
+  }
+
+  async function canAcceptAdminReport(ctx) {
+    if (isBotAdmin(ctx)) {
+      return true;
+    }
+
+    return isTelegramMemberOfChat(ctx, ctx.chat?.id);
+  }
+
   function canReloadBot(ctx) {
     const userId = Number(ctx.from?.id);
     return Number.isFinite(userId) && config.reloadAdminIds.includes(userId);
@@ -8344,7 +8371,10 @@ function createBot() {
       || callbackData.startsWith('punishment:')
       || callbackData.startsWith('stats:clear_history:');
 
-    if (isAdminCallback && !isBotAdmin(ctx)) {
+    const canUseAdminCallback = callbackData.startsWith('admin_report:')
+      ? await canAcceptAdminReport(ctx)
+      : isBotAdmin(ctx);
+    if (isAdminCallback && !canUseAdminCallback) {
       await safeAnswerCbQuery(ctx, 'Эта кнопка доступна только администраторам бота.');
       return;
     }
@@ -9412,7 +9442,7 @@ function createBot() {
       return;
     }
 
-    if (!isBotAdmin(ctx)) {
+    if (!await canAcceptAdminReport(ctx)) {
       await ctx.reply('Эта команда доступна только администраторам.');
       return;
     }
