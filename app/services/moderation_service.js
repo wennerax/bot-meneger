@@ -236,7 +236,7 @@ class ModerationService {
         punishmentMode: ['off', 'warn', 'mute', 'ban'].includes(String(chat.banwordSettings?.punishmentMode || '').toLowerCase())
           ? String(chat.banwordSettings.punishmentMode).toLowerCase()
           : 'off',
-        deleteMessages: chat.banwordSettings?.deleteMessages !== false,
+        deleteMessages: Boolean(chat.banwordSettings?.deleteMessages === true),
       },
       warnSettings: {
         punishmentMode: ['off', 'warn', 'mute', 'ban', 'kick'].includes(String(chat.warnSettings?.punishmentMode || '').toLowerCase())
@@ -277,7 +277,7 @@ class ModerationService {
         return [...new Set(forwardList)];
       })(),
       forwardsSettings: (() => {
-        const defaultSettings = { punishmentMode: 'warn', deleteMessage: true };
+        const defaultSettings = { punishmentMode: 'warn', deleteMessage: false };
         if (!chat.forwardsSettings || typeof chat.forwardsSettings !== 'object') {
           return {
             channels: { ...defaultSettings },
@@ -347,7 +347,7 @@ class ModerationService {
         punishmentMode: ['off', 'kick', 'mute', 'ban'].includes(String(chat.spamProtectionSettings?.punishmentMode || '').toLowerCase())
           ? String(chat.spamProtectionSettings.punishmentMode).toLowerCase() : 'off',
         punishmentDurationHours: 4,
-        deleteMessages: chat.spamProtectionSettings?.deleteMessages !== false,
+        deleteMessages: Boolean(chat.spamProtectionSettings?.deleteMessages === true),
       },
       linkProtectionEnabled: Boolean(chat.linkProtectionEnabled),
       moderatorWarningsEnabled: chat.moderatorWarningsEnabled === undefined ? true : Boolean(chat.moderatorWarningsEnabled),
@@ -358,7 +358,7 @@ class ModerationService {
         punishmentMode: ['off', 'mute', 'ban'].includes(String(chat.floodProtectionSettings?.punishmentMode || '').toLowerCase())
           ? String(chat.floodProtectionSettings.punishmentMode).toLowerCase() : 'off',
         punishmentDurationHours: 4,
-        deleteMessages: chat.floodProtectionSettings?.deleteMessages !== false,
+        deleteMessages: Boolean(chat.floodProtectionSettings?.deleteMessages === true),
       },
       rulesEnabled: chat.rulesEnabled === undefined ? true : Boolean(chat.rulesEnabled),
       streaksEnabled: chat.streaksEnabled === undefined ? true : Boolean(chat.streaksEnabled),
@@ -1189,13 +1189,13 @@ class ModerationService {
 
   getForwardsSettings(chatId, category) {
     const chat = this._getChat(chatId);
-    return chat.forwardsSettings[category] || { punishmentMode: 'warn', deleteMessage: true };
+    return chat.forwardsSettings[category] || { punishmentMode: 'warn', deleteMessage: false };
   }
 
   setForwardsPunishment(chatId, category, punishmentMode) {
     const chat = this._getChat(chatId);
     if (!chat.forwardsSettings[category]) {
-      chat.forwardsSettings[category] = { punishmentMode: 'warn', deleteMessage: true };
+      chat.forwardsSettings[category] = { punishmentMode: 'warn', deleteMessage: false };
     }
     chat.forwardsSettings[category].punishmentMode = punishmentMode;
     this._save();
@@ -1205,7 +1205,7 @@ class ModerationService {
   setForwardsDeleteMessage(chatId, category, deleteMessage) {
     const chat = this._getChat(chatId);
     if (!chat.forwardsSettings[category]) {
-      chat.forwardsSettings[category] = { punishmentMode: 'warn', deleteMessage: true };
+      chat.forwardsSettings[category] = { punishmentMode: 'warn', deleteMessage: false };
     }
     chat.forwardsSettings[category].deleteMessage = Boolean(deleteMessage);
     this._save();
@@ -1648,12 +1648,7 @@ class ModerationService {
   }
 
   getAllowedAnonymousChannels(chatId) {
-    const allowedChannels = this._getChat(chatId).hideAnonymous.allowedAnonymousChannels;
-    if (allowedChannels.length === 0) {
-      allowedChannels.push(...DEFAULT_ALLOWED_ANONYMOUS_CHANNELS);
-      this._save();
-    }
-    return [...new Set(allowedChannels)];
+    return [...new Set(this._getChat(chatId).hideAnonymous.allowedAnonymousChannels)];
   }
 
   addAllowedAnonymousChannel(chatId, channelId) {
@@ -1662,6 +1657,14 @@ class ModerationService {
     if (!normalized || chat.hideAnonymous.allowedAnonymousChannels.includes(normalized)) {
       return false;
     }
+
+    const defaultChannels = new Set(DEFAULT_ALLOWED_ANONYMOUS_CHANNELS);
+    const current = chat.hideAnonymous.allowedAnonymousChannels;
+    const hasOnlyDefaults = current.length > 0 && current.every((value) => defaultChannels.has(String(value)));
+    if (hasOnlyDefaults) {
+      chat.hideAnonymous.allowedAnonymousChannels = [];
+    }
+
     chat.hideAnonymous.allowedAnonymousChannels.push(normalized);
     this._save();
     return true;

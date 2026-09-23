@@ -182,6 +182,15 @@ test('admin notification group resolves linked source chats', () => {
   assert.deepEqual(service.getAdminNotifySourceChats(-1009876543210), [300]);
 });
 
+test('auto-deletion is disabled by default unless explicitly enabled', () => {
+  const service = new ModerationService();
+
+  assert.equal(service.getBanwordDeleteMessages(100), false);
+  assert.equal(service.getSpamProtectionSettings(100).deleteMessages, false);
+  assert.equal(service.getFloodProtectionSettings(100).deleteMessages, false);
+  assert.equal(service.getForwardsSettings(100, 'channels').deleteMessage, false);
+});
+
 test('spam and link protection can be toggled per chat', () => {
   const service = new ModerationService();
 
@@ -528,7 +537,7 @@ test('menu buttons support row layout and persistence', () => {
   assert.equal(service.addMenuRow(100), true);
   assert.equal(service.addMenuButton(100, 'Yandex', 'https://yandex.ru', 1), true);
   assert.deepEqual(service.getMenuButtons(100), [
-    [{ text: 'Google', url: 'https://google.com' }],
+    [{ text: 'Чат', url: 'https://chat.example' }],
     [{ text: 'Yandex', url: 'https://yandex.ru' }],
   ]);
 

@@ -73,10 +73,12 @@ function isChannelPostInGroupMessage(message = {}) {
     return false;
   }
 
+  const hasFromUser = Boolean(message.from && typeof message.from === 'object' && message.from.id);
+  const senderChatType = String(message.sender_chat?.type || '').toLowerCase();
+  const hasSenderChatChannel = senderChatType === 'channel';
   const isAutomaticForwardFromChannel = message.is_automatic_forward === true;
-  // Comments posted by a channel also have `sender_chat.type === 'channel'`.
-  // Only Telegram's automatic forward marks the original discussion post.
-  return isAutomaticForwardFromChannel && !message.reply_to_message;
+
+  return (isAutomaticForwardFromChannel || (hasSenderChatChannel && hasFromUser)) && !message.reply_to_message;
 }
 
 function isChatMemberStillInGroup(member = {}) {
@@ -698,61 +700,25 @@ async function showSettingsTransferOptionsMenu(ctx, targetChatId, sourceChatId) 
 function buildSettingsMainKeyboard(chatId, page = 0) {
   const pages = [
     [
-    [
-      { text: '🧩 Капча', callback_data: `settings:section:captcha:${chatId}` },
-      { text: '🔗 Ссылки', callback_data: `settings:section:links:${chatId}` },
+      [{ text: '🧩 Капча', callback_data: `settings:section:captcha:${chatId}` }, { text: '🔗 Ссылки', callback_data: `settings:section:links:${chatId}` }],
+      [{ text: '🛡️ Антиспам', callback_data: `settings:section:anti:${chatId}` }, { text: '📜 Правила', callback_data: `settings:section:rules:${chatId}` }],
+      [{ text: '🚫 Банворды', callback_data: `settings:section:banwords:${chatId}` }, { text: '⚠️ Варны', callback_data: `settings:section:warns:${chatId}` }],
+      [{ text: '⚙️ Команды', callback_data: `settings:section:commands:${chatId}` }, { text: '🤖 Медиа ИИ', callback_data: `settings:section:media_ai:${chatId}` }],
+      [{ text: '💬 Первый комментарий', callback_data: `settings:open_menu:${chatId}` }, { text: '🚨 @admin', callback_data: `settings:section:admin:${chatId}` }],
+      [{ text: premiumEmojis.getCustomEmojiFallback('series_premium') + ' Серия', callback_data: `settings:section:streaks:${chatId}` }, { text: '😶‍🌫️ Скрытые пользователи', callback_data: `settings:section:anonymous:${chatId}` }],
+      [{ text: '💬 Чат', callback_data: `settings:section:chat:${chatId}` }, { text: '🔔 Упоминание', callback_data: `settings:section:mention:${chatId}` }],
+      [{ text: '👥 Управление участниками', callback_data: `settings:section:members:${chatId}` }, { text: '🤖 Бот Соо', callback_data: `menu:bot_message:${chatId}` }],
+      [{ text: '📋 Логи', callback_data: `settings:section:logs:${chatId}` }],
+      [{ text: 'Вперёд ➡️', callback_data: `settings:page:${chatId}:1` }],
     ],
     [
-      { text: '🛡️ Антиспам', callback_data: `settings:section:anti:${chatId}` },
-      { text: '📜 Правила', callback_data: `settings:section:rules:${chatId}` },
-    ],
-    [
-      { text: '🚫 Банворды', callback_data: `settings:section:banwords:${chatId}` },
-      { text: '⚠️ Варны', callback_data: `settings:section:warns:${chatId}` },
-    ],
-    [
-      { text: '⚙️ Команды', callback_data: `settings:section:commands:${chatId}` },
-      { text: '🤖 Медиа ИИ', callback_data: `settings:section:media_ai:${chatId}` },
-    ],
-    [
-      { text: '💬 Первый комментарий', callback_data: `settings:open_menu:${chatId}` },
-      { text: '🚨 @admin', callback_data: `settings:section:admin:${chatId}` },
-    ],
-    [
-      { text: premiumEmojis.getCustomEmojiFallback('series_premium') + ' Серия', callback_data: `settings:section:streaks:${chatId}` },
-      { text: '😶‍🌫️ Скрытые пользователи', callback_data: `settings:section:anonymous:${chatId}` },
-    ],
-    [
-      { text: '💬 Чат', callback_data: `settings:section:chat:${chatId}` },
-      { text: '🔔 Упоминание', callback_data: `settings:section:mention:${chatId}` },
-    ],
-    [
-      { text: '👥 Управление участниками', callback_data: `settings:section:members:${chatId}` },
-      { text: '🤖 Бот Соо', callback_data: `menu:bot_message:${chatId}` },
-    ],
-    [
-      { text: '📋 Логи', callback_data: `settings:section:logs:${chatId}` },
-    ],
-    ],
-    [
-    [
-      { text: '🛡️ Модерация', callback_data: `settings:section:moderation:${chatId}` },
-      { text: '🎞️ GIF Команды', callback_data: `settings:section:gif_commands:${chatId}` },
-    ],
-    [
-      { text: '📥 Перенос настроек', callback_data: `settings:transfer:${chatId}` },
-    ],
+      [{ text: '🛡️ Модерация', callback_data: `settings:section:moderation:${chatId}` }, { text: '🎞️ GIF Команды', callback_data: `settings:section:gif_commands:${chatId}` }],
+      [{ text: '⬅️ Назад', callback_data: `settings:page:${chatId}:0` }],
     ],
   ];
+
   const selectedPage = Math.max(0, Math.min(Number(page) || 0, pages.length - 1));
-  const navigation = [];
-  if (selectedPage > 0) {
-    navigation.push({ text: '⬅️ Назад', callback_data: `settings:page:${chatId}:${selectedPage - 1}` });
-  }
-  if (selectedPage < pages.length - 1) {
-    navigation.push({ text: 'Вперёд ➡️', callback_data: `settings:page:${chatId}:${selectedPage + 1}` });
-  }
-  return [...pages[selectedPage], navigation];
+  return pages[selectedPage];
 }
 
 function buildSettingsTransferKeyboard(targetChatId, sourceChatId) {
@@ -3589,6 +3555,26 @@ async function buildActivityChartPng(activity = []) {
     .toBuffer();
 }
 
+function isBotAdmin(ctx, configRef = activeConfig, databaseRef = activeDatabase) {
+  const userId = Number(ctx?.from?.id);
+  if (!Number.isFinite(userId)) {
+    return false;
+  }
+
+  const adminIds = Array.isArray(configRef?.adminIds) ? configRef.adminIds : [];
+  if (adminIds.includes(userId)) {
+    return true;
+  }
+
+  const chatId = Number(ctx?.chat?.id);
+  if (!Number.isFinite(chatId)) {
+    return false;
+  }
+
+  const level = databaseRef?.getBotAdminLevel ? databaseRef.getBotAdminLevel(chatId, userId) : null;
+  return Number.isInteger(Number(level)) && Number(level) >= 1 && Number(level) <= 5;
+}
+
 function createBot() {
   const config = loadConfig();
   const bot = new Telegraf(config.botToken || '');
@@ -4283,19 +4269,6 @@ function createBot() {
   }
 
   void initializeScheduledPunishments();
-
-  function isBotAdmin(ctx) {
-    const userId = ctx.from?.id;
-    if (!userId) {
-      return false;
-    }
-    if (config.adminIds.includes(userId)) {
-      return true;
-    }
-
-    const level = database.getBotAdminLevel(ctx.chat.id, userId);
-    return Number.isInteger(Number(level)) && Number(level) >= 1 && Number(level) <= 5;
-  }
 
   function isBotAdminForChat(ctx, chatId) {
     const userId = Number(ctx.from?.id);
@@ -11435,6 +11408,7 @@ module.exports = {
   buildActivityChartSvg,
   buildActivityChartPng,
   isTelegramBotNotMemberChatError,
+  isBotAdmin,
 };
 
 2
