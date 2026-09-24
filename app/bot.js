@@ -68,6 +68,10 @@ function detectForbiddenWord(text) {
   return defaultModerationService.findBanWord(0, text);
 }
 
+function isVoteConfirmationMessage(text) {
+  return /(?:вы\s+проголосовали\s+за\s+(?:группу|чат)|you\s+voted\s+for\s+(?:the\s+)?(?:group|chat))/i.test(String(text || ''));
+}
+
 function isChannelPostInGroupMessage(message = {}) {
   if (!message || typeof message !== 'object') {
     return false;
@@ -10606,6 +10610,11 @@ function createBot() {
       return;
     }
 
+    if (isGroupChat(ctx) && isVoteConfirmationMessage(text)) {
+      await deleteMessageSafely(ctx, message.message_id);
+      return;
+    }
+
     if (isGroupChat(ctx)) {
       const service = activeModerationService || defaultModerationService;
       const chatId = ctx.chat.id;
@@ -11384,6 +11393,7 @@ module.exports = {
   shouldFailClosedForMedia,
   parseSettingsAction,
   detectForbiddenWord,
+  isVoteConfirmationMessage,
   isLinkMessage,
   isAllowedLinkUrl,
   isGroupOwnerMember,

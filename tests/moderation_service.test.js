@@ -182,9 +182,11 @@ test('admin notification group resolves linked source chats', () => {
   assert.deepEqual(service.getAdminNotifySourceChats(-1009876543210), [300]);
 });
 
-test('auto-deletion is disabled by default unless explicitly enabled', () => {
+test('banword auto-deletion is enabled by default and can be disabled explicitly', () => {
   const service = new ModerationService();
 
+  assert.equal(service.getBanwordDeleteMessages(100), true);
+  service.setBanwordDeleteMessages(100, false);
   assert.equal(service.getBanwordDeleteMessages(100), false);
   assert.equal(service.getSpamProtectionSettings(100).deleteMessages, false);
   assert.equal(service.getFloodProtectionSettings(100).deleteMessages, false);
@@ -300,6 +302,12 @@ test('ban words match whole words without matching other word endings', () => {
   assert.equal(service.findBanWord(100, 'cпaйс'), 'спайс');
   assert.equal(service.findBanWord(100, 'метеорит'), null);
   assert.equal(service.findBanWord(100, 'мeтеорит'), null);
+});
+
+test('default ban words include inflected form of наркотики', () => {
+  const service = new ModerationService();
+
+  assert.equal(service.findBanWord(100, 'у нас на работе с наркотиками'), 'наркотиками');
 });
 
 test('link protection exceptions can be managed per user', () => {

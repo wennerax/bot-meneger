@@ -41,7 +41,7 @@ const DEFAULT_BAN_WORDS = readJsonList(path.join(__dirname, '..', 'data', 'ban_w
   'кетамин', 'джанк', 'фетанил', 'псилоцибин', 'опиаты', 'опиат', 'вскроюсь', 'морфий', 'вскрюсь', 'нарко',
   'вздёрнуться', 'вздернусь', 'вздёрнулась', 'самоубийство', 'маму ебал', 'вскрываться',
   'сын шлюхи', 'дочь шалавы', 'петля', 'резать вены', 'порезать вены', 'объебыш',
-  'обьёбыш', 'объебанный', 'наркотики'
+  'обьёбыш', 'объебанный', 'наркотики', 'наркотиками'
 ]);
 
 const DEFAULT_ALLOWED_LINKS = readJsonList(path.join(__dirname, '..', 'data', 'allowed_links.json'), [
@@ -236,7 +236,9 @@ class ModerationService {
         punishmentMode: ['off', 'warn', 'mute', 'ban'].includes(String(chat.banwordSettings?.punishmentMode || '').toLowerCase())
           ? String(chat.banwordSettings.punishmentMode).toLowerCase()
           : 'off',
-        deleteMessages: Boolean(chat.banwordSettings?.deleteMessages === true),
+        deleteMessages: chat.banwordSettings?.deleteMessages === undefined
+          ? true
+          : Boolean(chat.banwordSettings.deleteMessages),
       },
       warnSettings: {
         punishmentMode: ['off', 'warn', 'mute', 'ban', 'kick'].includes(String(chat.warnSettings?.punishmentMode || '').toLowerCase())
