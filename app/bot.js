@@ -373,6 +373,10 @@ function isGroupMemberWithManageRights(member) {
   return true;
 }
 
+function isStoredGroupOwner(database, chatId, userId) {
+  return Number(database?.data?.groups?.[chatId]?.ownerId) === Number(userId);
+}
+
 async function canManageGroupSettings(ctx, targetChatId) {
   const userId = Number(ctx.from?.id);
   const chatId = Number(targetChatId);
@@ -381,6 +385,10 @@ async function canManageGroupSettings(ctx, targetChatId) {
   }
 
   if (Number(ctx.chat?.owner_id) === userId) {
+    return true;
+  }
+
+  if (isStoredGroupOwner(activeDatabase, chatId, userId)) {
     return true;
   }
 
@@ -11397,6 +11405,7 @@ module.exports = {
   isLinkMessage,
   isAllowedLinkUrl,
   isGroupOwnerMember,
+  isStoredGroupOwner,
   isGroupMemberWithProfileChangePermission,
   isGroupMemberWithManageRights,
   getGroupDisplayName,

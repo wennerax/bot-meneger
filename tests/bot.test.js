@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildBulkModerationSummaryMessage, buildFunReply, getTicTacToeWinner, buildTicTacToeKeyboard, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isVoteConfirmationMessage, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildModerationLogsKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildWarningsListText, buildSettingsWarnsListText, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage, shouldFailClosedForMedia, cleanupAgreementMessages, handleAgreementDecision, handleAgreementTimeout, getCaptchaSuccessRestriction, isPollAnswerForTarget, buildBotMediaSend, buildReloadStatusMessage, parseBotCommandKey, isKnownCommandText, formatAdminReportText, formatUserIdentityText, isChatMemberStillInGroup, isChatMemberJoining, buildActivityChartSvg, applyWarnLimitPunishment, isTelegramBotNotMemberChatError, isBotAdmin } = require('../app/bot');
+const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildBulkModerationSummaryMessage, buildFunReply, getTicTacToeWinner, buildTicTacToeKeyboard, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isVoteConfirmationMessage, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildModerationLogsKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildWarningsListText, buildSettingsWarnsListText, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isStoredGroupOwner, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage, shouldFailClosedForMedia, cleanupAgreementMessages, handleAgreementDecision, handleAgreementTimeout, getCaptchaSuccessRestriction, isPollAnswerForTarget, buildBotMediaSend, buildReloadStatusMessage, parseBotCommandKey, isKnownCommandText, formatAdminReportText, formatUserIdentityText, isChatMemberStillInGroup, isChatMemberJoining, buildActivityChartSvg, applyWarnLimitPunishment, isTelegramBotNotMemberChatError, isBotAdmin } = require('../app/bot');
 const { buildAiRequestPayload, normalizeMultimodalInputForResponses } = require('../app/ai');
 const premiumEmojis = require('../app/premium_emojis');
 
@@ -605,6 +605,13 @@ test('isGroupOwnerMember treats creator status as group owner', () => {
   assert.equal(isGroupOwnerMember({ status: 'creator' }), true);
   assert.equal(isGroupOwnerMember({ status: 'administrator' }), false);
   assert.equal(isGroupOwnerMember({ status: 'member' }), false);
+});
+
+test('stored group owner is recognized when Telegram member data is incomplete', () => {
+  const database = { data: { groups: { '-10042': { ownerId: 77 } } } };
+
+  assert.equal(isStoredGroupOwner(database, -10042, 77), true);
+  assert.equal(isStoredGroupOwner(database, -10042, 78), false);
 });
 
 test('buildSettingsChatKeyboard exposes open and restricted write modes', () => {
