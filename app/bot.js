@@ -104,6 +104,10 @@ function isChatMemberJoining(member = {}) {
     || (status === 'restricted' && member.is_member !== false);
 }
 
+function isChatMemberJoiningUpdate(oldMember, newMember) {
+  return isChatMemberJoining(newMember) && !isChatMemberStillInGroup(oldMember);
+}
+
 function isAnonymousSenderMessage(message = {}) {
   if (!message || typeof message !== 'object') {
     return false;
@@ -10378,7 +10382,7 @@ function createBot() {
       return;
     }
 
-    if (isChatMemberJoining(member) && !isChatMemberJoining(ctx.chatMember?.old_chat_member)) {
+    if (isChatMemberJoiningUpdate(ctx.chatMember?.old_chat_member, member)) {
       database.recordUserJoin(ctx.chat.id, userId, member.user?.first_name || member.user?.username, member.user?.username);
       await startCaptchaForUser(ctx, userId, member.user);
       return;
@@ -11424,6 +11428,7 @@ module.exports = {
   formatUserIdentityText,
   isChatMemberStillInGroup,
   isChatMemberJoining,
+  isChatMemberJoiningUpdate,
   buildActivityChartSvg,
   buildActivityChartPng,
   isTelegramBotNotMemberChatError,

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildBulkModerationSummaryMessage, buildFunReply, getTicTacToeWinner, buildTicTacToeKeyboard, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isVoteConfirmationMessage, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildModerationLogsKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildWarningsListText, buildSettingsWarnsListText, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isStoredGroupOwner, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage, shouldFailClosedForMedia, cleanupAgreementMessages, handleAgreementDecision, handleAgreementTimeout, getCaptchaSuccessRestriction, isPollAnswerForTarget, buildBotMediaSend, buildReloadStatusMessage, parseBotCommandKey, isKnownCommandText, formatAdminReportText, formatUserIdentityText, isChatMemberStillInGroup, isChatMemberJoining, buildActivityChartSvg, applyWarnLimitPunishment, isTelegramBotNotMemberChatError, isBotAdmin } = require('../app/bot');
+const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildBulkModerationSummaryMessage, buildFunReply, getTicTacToeWinner, buildTicTacToeKeyboard, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isVoteConfirmationMessage, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildModerationLogsKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildWarningsListText, buildSettingsWarnsListText, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isStoredGroupOwner, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage, shouldFailClosedForMedia, cleanupAgreementMessages, handleAgreementDecision, handleAgreementTimeout, getCaptchaSuccessRestriction, isPollAnswerForTarget, buildBotMediaSend, buildReloadStatusMessage, parseBotCommandKey, isKnownCommandText, formatAdminReportText, formatUserIdentityText, isChatMemberStillInGroup, isChatMemberJoining, isChatMemberJoiningUpdate, buildActivityChartSvg, applyWarnLimitPunishment, isTelegramBotNotMemberChatError, isBotAdmin } = require('../app/bot');
 const { buildAiRequestPayload, normalizeMultimodalInputForResponses } = require('../app/ai');
 const premiumEmojis = require('../app/premium_emojis');
 
@@ -75,6 +75,19 @@ test('isChatMemberJoining ignores restricted users who are not members', () => {
   assert.equal(isChatMemberJoining({ status: 'restricted', is_member: false }), false);
   assert.equal(isChatMemberJoining({ status: 'restricted', is_member: true }), true);
   assert.equal(isChatMemberJoining({ status: 'member' }), true);
+});
+
+test('isChatMemberJoiningUpdate ignores administrator demotions and permission changes', () => {
+  assert.equal(isChatMemberJoiningUpdate(
+    { status: 'administrator', can_delete_messages: true },
+    { status: 'member' }
+  ), false);
+  assert.equal(isChatMemberJoiningUpdate(
+    { status: 'administrator', can_delete_messages: true },
+    { status: 'administrator', can_delete_messages: false }
+  ), false);
+  assert.equal(isChatMemberJoiningUpdate({ status: 'left' }, { status: 'member' }), true);
+  assert.equal(isChatMemberJoiningUpdate(undefined, { status: 'member' }), true);
 });
 
 test('isChannelPostInGroupMessage recognizes channel-authored posts with sender_chat', () => {
