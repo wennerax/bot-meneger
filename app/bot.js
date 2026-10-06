@@ -1803,10 +1803,13 @@ async function showSettingsMainMenu(ctx, chatId, page = 0) {
 function buildSettingsModerationKeyboard(chatId) {
   const service = activeModerationService || defaultModerationService;
   const warningsEnabled = service.areModeratorWarningsEnabled(chatId);
+  const warningPunishmentLabels = { off: 'выкл.', demote: 'понижение', remove: 'снятие' };
   return {
     inline_keyboard: [
       [{ text: warningsEnabled ? '⚠️ Выдать предупреждение админу' : '🔒 Предупреждения модерам выключены', callback_data: `settings:moderation_warn:${chatId}` }],
       [{ text: warningsEnabled ? '🔕 Выключить предупреждения модерам' : '🔔 Включить предупреждения модерам', callback_data: `settings:moderation_warnings:${chatId}:${warningsEnabled ? 'off' : 'on'}` }],
+      [{ text: `Лимит варнов: ${service.getModeratorWarningLimit(chatId)}`, callback_data: `settings:moderation_warn_limit_menu:${chatId}` }],
+      [{ text: `Наказание за лимит: ${warningPunishmentLabels[service.getModeratorWarningPunishment(chatId)]}`, callback_data: `settings:moderation_warn_punishment_menu:${chatId}` }],
       [{ text: '✅ Снять предупреждение', callback_data: `settings:moderation_unwarn:${chatId}` }],
       [{ text: '➖ Снять админа', callback_data: `settings:moderation_remove:${chatId}` }],
       [{ text: '⬆️ Повысить админа', callback_data: `settings:moderation_promote:${chatId}` }],
@@ -1817,9 +1820,56 @@ function buildSettingsModerationKeyboard(chatId) {
   };
 }
 
+function buildModeratorWarningLimitKeyboard(chatId) {
+  const service = activeModerationService || defaultModerationService;
+  const currentLimit = service.getModeratorWarningLimit(chatId);
+  return {
+    inline_keyboard: [
+      [2, 3, 4, 5].map((limit) => ({
+        text: currentLimit === limit ? `✅ ${limit}` : String(limit),
+        callback_data: `settings:moderation_warn_limit:${chatId}:${limit}`,
+      })),
+      [{ text: 'Назад', callback_data: `settings:moderation:${chatId}` }],
+    ],
+  };
+}
+
+function buildModeratorWarningPunishmentKeyboard(chatId) {
+  const service = activeModerationService || defaultModerationService;
+  const currentMode = service.getModeratorWarningPunishment(chatId);
+  const options = [
+    ['remove', 'Снять с должности'],
+    ['demote', 'Понизить на уровень'],
+    ['off', 'Не применять наказание'],
+  ];
+  return {
+    inline_keyboard: [
+      ...options.map(([mode, label]) => [{
+        text: currentMode === mode ? `✅ ${label}` : label,
+        callback_data: `settings:moderation_warn_punishment:${chatId}:${mode}`,
+      }]),
+      [{ text: 'Назад', callback_data: `settings:moderation:${chatId}` }],
+    ],
+  };
+}
+
+async function showModeratorWarningSettingsMenu(ctx, chatId, setting) {
+  if (!(await canManageGroupSettings(ctx, chatId))) {
+    await ctx.reply('У вас нет прав менять настройки этой группы.');
+    return;
+  }
+  const isLimit = setting === 'limit';
+  await safeEditMessageText(ctx, isLimit ? '⚠️ Лимит предупреждений модераторов' : '⚠️ Наказание при достижении лимита', {
+    reply_markup: isLimit
+      ? buildModeratorWarningLimitKeyboard(chatId)
+      : buildModeratorWarningPunishmentKeyboard(chatId),
+  });
+}
+
 function formatModerationStatsText(chatId, adminProfiles = null) {
   const database = activeDatabase;
   const service = activeModerationService || defaultModerationService;
+  const moderatorWarningPunishmentLabels = { off: 'отключено', demote: 'понижение', remove: 'снятие' };
   const punishments = (database?.data?.punishments || []).filter((item) => Number(item.chatId) === Number(chatId));
   const logs = service.getModerationLogs(chatId, 100);
   const actionCounts = logs.reduce((counts, item) => {
@@ -1859,7 +1909,7 @@ function formatModerationStatsText(chatId, adminProfiles = null) {
     '',
     `Предупреждения модерам: ${service.areModeratorWarningsEnabled(chatId) ? 'включены' : 'выключены'}`,
     '',
-    'Три предупреждения снимают вспомогательного администратора с роли.',
+    `Лимит варнов: ${service.getModeratorWarningLimit(chatId)}. Наказание: ${moderatorWarningPunishmentLabels[service.getModeratorWarningPunishment(chatId)]}.`,
   ].join('\n');
 }
 
@@ -3338,7 +3388,7 @@ function stripBotMentionFromCommandText(text) {
 
 function isKnownCommandText(text) {
   const normalizedText = stripBotMentionFromCommandText(text);
-  const slashCommand = /^(?:\/(start|help|bot|id|айди|about|whoami|кто_я|stats|rules|arule|аправила|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|монетка|dice|кубик|fate|вопрос|compliment|комплимент|insult|инсульт|top|топ|admins|админы|banlist|баны|mutelist|муты|setrules|установить_правила|warn|варн|пред|предупреждение|delwarn|warns|warnings|варны|unwarn|снять_предупреждение|анварн|анпред|mute|мут|delmute|unmute|размут|размутить|говори|ban|бан|delban|unban|разбан|разбанить|kick|кик|del|delete|дел|setgreeting|установить_приветствие|addadmin|добавить_админа|removeadmin|снять_админа|promote|повышение|demote|разжалование|clearhistory|сбросистории|сброс_истории|clear_history|miniapp|миниприложение|admincom|ai|modstats|статистика_модерации|ttt|крестики|крестики-нолики|swarn|sdelwarn|smute|sdelmute|sban|sdelban|sunwarn|sunmute|sunban))(\s|$)/i;
+  const slashCommand = /^(?:\/(start|help|bot|id|айди|about|whoami|кто_я|stats|rules|arule|аправила|allowed|links|hug|kiss|slap|poke|fuck|rape|beat|kill|bite|lick|lickup|coin|монетка|dice|кубик|fate|вопрос|compliment|комплимент|insult|инсульт|top|топ|admins|админы|banlist|баны|mutelist|муты|setrules|установить_правила|warn|mwarn|варн|пред|предупреждение|delwarn|warns|warnings|варны|unwarn|снять_предупреждение|анварн|анпред|mute|мут|delmute|unmute|размут|размутить|говори|ban|бан|delban|unban|разбан|разбанить|kick|кик|del|delete|дел|setgreeting|установить_приветствие|addadmin|добавить_админа|removeadmin|снять_админа|promote|повышение|demote|разжалование|clearhistory|сбросистории|сброс_истории|clear_history|miniapp|миниприложение|admincom|ai|modstats|статистика_модерации|ttt|крестики|крестики-нолики|swarn|sdelwarn|smute|sdelmute|sban|sdelban|sunwarn|sunmute|sunban))(\s|$)/i;
   const bangCommand = /^!(delban|delmute|delwarn|начало|помощь|айди|информация|кто\s*я|статистика|правила|аправила|обнять|поцеловать|шлёпнуть|тыкнуть|монетка|кубик|вопрос|комплимент|инсульт|пред|предупреждение|варны|мут|размут|размутить|бан|разбан|разбанить|кик|топ|анпред|анварн|говори|дел|рел)(\s|$)/i;
   const plusMinusCommand = /^(?:\+(?:антиспам|antispam|антифлуд|antiflood|ссылки|links|варн|warn|предупреждение|мут|mute|бан|ban|кик|kick)|[+-](?:размут|размутить|unmute|разбан|разбанить|unban|анварн)|\+описание|\+description|\+rules(?=\s+\S)|\+правила(?=\s+\S)|\+greeting(?=\s+\S)|\+приветствие(?=\s+\S))(\s|$)/i;
   return slashCommand.test(normalizedText) || bangCommand.test(normalizedText) || plusMinusCommand.test(normalizedText);
@@ -4572,7 +4622,7 @@ function createBot() {
 
   function isBotPunishmentCommand(commandKey) {
     return [
-      'warn', 'предупреждение', 'варн', 'пред', 'анварн', 'анпред', 'unwarn',
+      'warn', 'mwarn', 'предупреждение', 'варн', 'пред', 'анварн', 'анпред', 'unwarn',
       'mute', 'мут', 'unmute', 'размут', 'размутить', 'ban', 'бан', 'unban',
       'разбан', 'разбанить', 'kick', 'кик', 'delwarn', 'delmute', 'delban',
     ].includes(String(commandKey || '').toLowerCase());
@@ -5894,10 +5944,28 @@ function createBot() {
       }
 
       if (pending.action === 'moderation_warn') {
-        const result = database.addBotAdminWarning(groupId, targetId);
-        await replyWithAutoDelete(ctx, result.removed
-          ? `⚠️ Администратор ${getMentionText(target)} получил предупреждение 3/3 и снят с роли.`
-          : `⚠️ Администратору ${getMentionText(target)} выдано предупреждение ${result.count}/3.`);
+        const warningLimit = moderationService.getModeratorWarningLimit(groupId);
+        const punishmentMode = moderationService.getModeratorWarningPunishment(groupId);
+        const result = database.addBotAdminWarning(groupId, targetId, { limit: warningLimit, punishmentMode });
+        const punishmentText = result.removed
+          ? ' Снят с должности.'
+          : result.demoted
+            ? ` Понижен с ${result.previousLevel}-го на ${result.currentLevel}-й уровень.`
+            : result.count === warningLimit && punishmentMode === 'demote' && result.previousLevel === 5
+              ? ' Уже имеет минимальный уровень, понизить дальше нельзя.'
+              : '';
+        const outcome = result.removed ? 'removed' : result.demoted ? 'demoted' : 'none';
+        const callbackData = `mwarn:undo:${Number(groupId)}:${targetId}:${result.previousLevel}:${result.count}:${outcome}`;
+        recordModerationLog(groupId, {
+          action: 'moderator_warn',
+          actorId: ctx.from.id,
+          targetId,
+          details: `Выдано предупреждение ${result.count}/${warningLimit}${punishmentText}`,
+        });
+        await replyWithAutoDelete(ctx,
+          `⚠️ Администратор ${getMentionText(target)} получил варн ${result.count}/${warningLimit}.${punishmentText}`,
+          { reply_markup: { inline_keyboard: [[{ text: '↩️ Отменить варн', callback_data: callbackData }]] } },
+          10000);
       } else if (pending.action === 'moderation_unwarn') {
         database.clearBotAdminWarnings(groupId, targetId);
         await replyWithAutoDelete(ctx, `✅ Предупреждения администратора ${getMentionText(target)} сняты.`);
@@ -6559,6 +6627,8 @@ function createBot() {
         '  • 💬 Первый комментарий - текст, кнопки, медиа',
         '  • 🔥 Серия - включить/выключить систему серий, изменить название',
         '/warn, !предупреждение @юз - выдать предупреждение',
+        '/mwarn @модер - выдать предупреждение модератору',
+        '/mwarn @модер - выдать предупреждение модератору',
         '/delwarn, !delwarn <причина> - выдать предупреждение и удалить сообщение (только ответом)',
         '/warnings, !варны [@юз] - показать варны пользователя',
         '/unwarn, !снять предупреждение @юз - снять предупреждения',
@@ -6723,6 +6793,7 @@ function createBot() {
       '',
       '⚠️ Предупреждения:',
       '/warn @юз причина, !предупреждение @юз причина — выдать предупреждение.',
+      '/mwarn @модер — выдать предупреждение модератору или ответить командой на его сообщение.',
       '/delwarn причина, !delwarn причина — ответьте на сообщение: выдать предупреждение и удалить его.',
       '/warnings [@юз], !варны [@юз] — посмотреть количество предупреждений.',
       '/unwarn @юз, !снять предупреждение @юз — снять предупреждения.',
@@ -7184,7 +7255,7 @@ function createBot() {
 
   function getBotAdminActionPermissionLevel(actionName) {
     const normalizedAction = String(actionName || '').toLowerCase();
-    if (['warn', 'unwarn', 'delwarn', 'mute', 'unmute', 'delmute', 'kick'].includes(normalizedAction)) {
+    if (['warn', 'unwarn', 'delwarn', 'mwarn', 'mute', 'unmute', 'delmute', 'kick'].includes(normalizedAction)) {
       return 5;
     }
     if (['ban', 'unban', 'delban'].includes(normalizedAction)) {
@@ -7449,6 +7520,63 @@ function createBot() {
     if (deleteTargetMessage) {
       await deleteMessageSafely(ctx, ctx.message.reply_to_message.message_id);
     }
+  }
+
+  async function moderatorWarnCommand(ctx, args) {
+    ensureGroup(ctx);
+    scheduleDeleteForContext(ctx, ctx.message?.message_id);
+    if (!isGroupChat(ctx)) {
+      await replyWithAutoDelete(ctx, 'Команда доступна только в группе.');
+      return;
+    }
+    if (!isBotAdmin(ctx)) {
+      await replyWithAutoDelete(ctx, 'Эта команда доступна только администраторам бота.');
+      return;
+    }
+    if (!moderationService.areModeratorWarningsEnabled(ctx.chat.id)) {
+      await replyWithAutoDelete(ctx, 'Предупреждения модераторам выключены в настройках.');
+      return;
+    }
+    if (!ensureBotAdminCanUsePunishmentCommand(ctx, 'mwarn')) {
+      return;
+    }
+
+    const targetData = await resolveCommandTarget(ctx, args, '/mwarn @модератор');
+    if (!targetData) {
+      return;
+    }
+    const targetId = Number(targetData.target.id);
+    if (!database.isBotAdmin(ctx.chat.id, targetId)) {
+      await replyWithAutoDelete(ctx, 'Команда /mwarn работает только с администраторами бота.');
+      return;
+    }
+    if (!database.canPunishBotAdmin(ctx.chat.id, ctx.from.id, targetId)) {
+      await replyWithAutoDelete(ctx, 'Нельзя выдать варн себе или админу своего либо более высокого уровня.');
+      return;
+    }
+
+    const limit = moderationService.getModeratorWarningLimit(ctx.chat.id);
+    const punishmentMode = moderationService.getModeratorWarningPunishment(ctx.chat.id);
+    const result = database.addBotAdminWarning(ctx.chat.id, targetId, { limit, punishmentMode });
+    const targetLabel = getMentionText(targetData.target);
+    const punishmentText = result.removed
+      ? ' Снят с должности.'
+      : result.demoted
+        ? ` Понижен с ${result.previousLevel}-го на ${result.currentLevel}-й уровень.`
+        : result.count === limit && punishmentMode === 'demote' && result.previousLevel === 5
+          ? ' Уже имеет минимальный уровень, понизить дальше нельзя.'
+          : '';
+    const outcome = result.removed ? 'removed' : result.demoted ? 'demoted' : 'none';
+    const callbackData = `mwarn:undo:${Number(ctx.chat.id)}:${targetId}:${result.previousLevel}:${result.count}:${outcome}`;
+    recordModerationLog(ctx.chat.id, {
+      action: 'moderator_warn',
+      actorId: ctx.from.id,
+      targetId,
+      details: `Выдано предупреждение ${result.count}/${limit}${punishmentText}`,
+    });
+    await replyWithAutoDelete(ctx, `⚠️ Администратор ${targetLabel} получил варн ${result.count}/${limit}.${punishmentText}`, {
+      reply_markup: { inline_keyboard: [[{ text: '↩️ Отменить варн', callback_data: callbackData }]] },
+    }, 10000);
   }
 
   async function warningsCommand(ctx, args = '') {
@@ -8357,6 +8485,7 @@ function createBot() {
     }
     const isAdminCallback = callbackData.startsWith('admin_report:')
       || callbackData.startsWith('warn:')
+      || callbackData.startsWith('mwarn:')
       || callbackData.startsWith('punishment:')
       || callbackData.startsWith('stats:clear_history:');
 
@@ -8594,6 +8723,38 @@ function createBot() {
         service.disableModeratorWarnings(chatId);
       }
       await showSettingsModerationMenu(ctx, chatId);
+      return;
+    }
+
+    if (parsed.target === 'moderation_warn_limit_menu') {
+      await showModeratorWarningSettingsMenu(ctx, chatId, 'limit');
+      return;
+    }
+
+    if (parsed.target === 'moderation_warn_punishment_menu') {
+      await showModeratorWarningSettingsMenu(ctx, chatId, 'punishment');
+      return;
+    }
+
+    if (parsed.target === 'moderation_warn_limit') {
+      const service = activeModerationService || defaultModerationService;
+      if (service.setModeratorWarningLimit(chatId, parsed.value)) {
+        await safeAnswerCbQuery(ctx, `Лимит установлен: ${parsed.value}`);
+      } else {
+        await safeAnswerCbQuery(ctx, 'Неверный лимит. Доступно от 2 до 5.');
+      }
+      await showModeratorWarningSettingsMenu(ctx, chatId, 'limit');
+      return;
+    }
+
+    if (parsed.target === 'moderation_warn_punishment') {
+      const service = activeModerationService || defaultModerationService;
+      if (service.setModeratorWarningPunishment(chatId, parsed.value)) {
+        await safeAnswerCbQuery(ctx, 'Наказание обновлено.');
+      } else {
+        await safeAnswerCbQuery(ctx, 'Неизвестный вариант наказания.');
+      }
+      await showModeratorWarningSettingsMenu(ctx, chatId, 'punishment');
       return;
     }
 
@@ -9529,6 +9690,46 @@ function createBot() {
     const targetLabel = profile.displayName || profile.username || userId;
     await safeAnswerCbQuery(ctx, `Предупреждение отменено. Осталось: ${nextWarnings}.`);
     await safeEditMessageText(ctx, `⚠️ Предупреждение отменено для ${targetLabel}. Осталось: ${nextWarnings}.`);
+  });
+
+  bot.action(/^mwarn:undo:(-?\d+):(\d+):(\d+):(\d+):(removed|demoted|none)$/, async (ctx) => {
+    const chatId = Number(ctx.match[1]);
+    const userId = Number(ctx.match[2]);
+    const previousLevel = Number(ctx.match[3]);
+    const issuedCount = Number(ctx.match[4]);
+    const outcome = ctx.match[5];
+    if (!isGroupChat(ctx) || Number(ctx.chat?.id) !== chatId) {
+      await safeAnswerCbQuery(ctx, 'Варн можно отменить только в исходной группе.');
+      return;
+    }
+    const actorLevel = database.isPrimaryBotAdmin(chatId, ctx.from.id)
+      ? 1
+      : database.getBotAdminLevel(chatId, ctx.from.id);
+    if (Number(ctx.from.id) === userId || !actorLevel || Number(actorLevel) >= previousLevel) {
+      await safeAnswerCbQuery(ctx, 'Нельзя снять варн себе или админу своего либо более высокого уровня.');
+      return;
+    }
+    const currentWarnings = database.getBotAdminWarnings(chatId, userId);
+    if (currentWarnings !== issuedCount) {
+      await safeAnswerCbQuery(ctx, 'Этот варн уже отменён или предупреждения изменились.');
+      return;
+    }
+    if (outcome === 'removed' && !database.isBotAdmin(chatId, userId)) {
+      database.addBotAdmin(chatId, userId, previousLevel);
+    } else if (outcome === 'demoted' && database.getBotAdminLevel(chatId, userId) === previousLevel + 1) {
+      database.addBotAdmin(chatId, userId, previousLevel);
+    }
+    const remaining = database.decrementBotAdminWarning(chatId, userId);
+    const profile = database.getUserProfile(chatId, userId);
+    const targetLabel = profile.displayName || profile.username || userId;
+    recordModerationLog(chatId, {
+      action: 'moderator_unwarn',
+      actorId: ctx.from.id,
+      targetId: userId,
+      details: `Варн отменён кнопкой. Осталось предупреждений: ${remaining}`,
+    });
+    await safeAnswerCbQuery(ctx, `Варн отменён. Осталось: ${remaining}.`);
+    await safeEditMessageText(ctx, `✅ Варн отменён для администратора ${targetLabel}. Осталось предупреждений: ${remaining}.`);
   });
 
   bot.action(/^punishment:undo:(mute|ban):(-?\d+):(\d+)$/, async (ctx) => {
@@ -10496,6 +10697,10 @@ function createBot() {
 
   bot.command(['warn', 'варн', 'пред', 'предупреждение'], async (ctx) => {
     await warnCommand(ctx, ctx.message.text.replace(/^\/(?:warn|варн|пред|предупреждение)\s*/i, ''));
+  });
+
+  bot.command('mwarn', async (ctx) => {
+    await moderatorWarnCommand(ctx, ctx.message.text.replace(/^\/mwarn(?:@[\w_]+)?\s*/i, ''));
   });
 
   bot.command(['swarn', 'скрытый_варн'], async (ctx) => {

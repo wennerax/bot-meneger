@@ -353,6 +353,13 @@ class ModerationService {
       },
       linkProtectionEnabled: Boolean(chat.linkProtectionEnabled),
       moderatorWarningsEnabled: chat.moderatorWarningsEnabled === undefined ? true : Boolean(chat.moderatorWarningsEnabled),
+      moderatorWarningLimit: (() => {
+        const limit = Number(chat.moderatorWarningLimit);
+        return Number.isInteger(limit) && limit >= 2 && limit <= 5 ? limit : 3;
+      })(),
+      moderatorWarningPunishment: ['off', 'demote', 'remove'].includes(String(chat.moderatorWarningPunishment || '').toLowerCase())
+        ? String(chat.moderatorWarningPunishment).toLowerCase()
+        : 'remove',
       floodProtectionEnabled: Boolean(chat.floodProtectionEnabled),
       floodProtectionSettings: {
         characterLimit: [5, 10, 15, 20, 25, 30, 35].includes(Number(chat.floodProtectionSettings?.characterLimit))
@@ -604,6 +611,34 @@ class ModerationService {
 
   areModeratorWarningsEnabled(chatId) {
     return this._getChat(chatId).moderatorWarningsEnabled !== false;
+  }
+
+  getModeratorWarningLimit(chatId) {
+    return this._getChat(chatId).moderatorWarningLimit || 3;
+  }
+
+  setModeratorWarningLimit(chatId, limit) {
+    const normalized = Number(limit);
+    if (!Number.isInteger(normalized) || normalized < 2 || normalized > 5) {
+      return false;
+    }
+    this._getChat(chatId).moderatorWarningLimit = normalized;
+    this._save();
+    return true;
+  }
+
+  getModeratorWarningPunishment(chatId) {
+    return this._getChat(chatId).moderatorWarningPunishment || 'remove';
+  }
+
+  setModeratorWarningPunishment(chatId, mode) {
+    const normalized = String(mode || '').trim().toLowerCase();
+    if (!['off', 'demote', 'remove'].includes(normalized)) {
+      return false;
+    }
+    this._getChat(chatId).moderatorWarningPunishment = normalized;
+    this._save();
+    return true;
   }
 
   resetWarnings(chatId, userId) {

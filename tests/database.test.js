@@ -65,15 +65,15 @@ test('owner becomes primary bot admin and can add auxiliary bot admins', () => {
   db.close();
 });
 
-test('bot admin warnings remove an auxiliary admin at three warnings', () => {
+test('bot admin warnings remove an auxiliary admin at the configured limit', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-meneger-'));
   const db = new Database(path.join(dir, 'bot.json'));
 
   db.ensureGroup(301, 'Warnings', 10);
   db.addBotAdmin(301, 20, 3);
-  assert.deepEqual(db.addBotAdminWarning(301, 20), { count: 1, removed: false });
-  assert.deepEqual(db.addBotAdminWarning(301, 20), { count: 2, removed: false });
-  assert.deepEqual(db.addBotAdminWarning(301, 20), { count: 3, removed: true });
+  assert.deepEqual(db.addBotAdminWarning(301, 20), { count: 1, removed: false, demoted: false, previousLevel: 3, currentLevel: 3 });
+  assert.deepEqual(db.addBotAdminWarning(301, 20), { count: 2, removed: false, demoted: false, previousLevel: 3, currentLevel: 3 });
+  assert.deepEqual(db.addBotAdminWarning(301, 20), { count: 3, removed: true, demoted: false, previousLevel: 3, currentLevel: null });
   assert.equal(db.isBotAdmin(301, 20), false);
   assert.equal(db.getBotAdminWarnings(301, 20), 3);
 
@@ -85,8 +85,34 @@ test('bot admin warning reset preserves the primary admin', () => {
   const db = new Database(path.join(dir, 'bot.json'));
 
   db.ensureGroup(302, 'Owner warnings', 10);
-  assert.deepEqual(db.addBotAdminWarning(302, 10), { count: 0, removed: false });
+  assert.deepEqual(db.addBotAdminWarning(302, 10), { count: 0, removed: false, demoted: false, previousLevel: 1, currentLevel: 1 });
   assert.equal(db.isBotAdmin(302, 10), true);
+
+  db.close();
+});
+
+test('bot admin warnings can demote at a configurable limit or leave rank unchanged', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-meneger-'));
+  const db = new Database(path.join(dir, 'bot.json'));
+
+  db.ensureGroup(303, 'Moderator warning settings', 10);
+  db.addBotAdmin(303, 20, 3);
+  db.addBotAdminWarning(303, 20, { limit: 2, punishmentMode: 'demote' });
+  const demoted = db.addBotAdminWarning(303, 20, { limit: 2, punishmentMode: 'demote' });
+  assert.equal(demoted.demoted, true);
+  assert.equal(demoted.previousLevel, 3);
+  assert.equal(demoted.currentLevel, 4);
+  assert.equal(db.getBotAdminWarnings(303, 20), 2);
+  const laterWarning = db.addBotAdminWarning(303, 20, { limit: 2, punishmentMode: 'demote' });
+  assert.equal(laterWarning.demoted, false);
+  assert.equal(laterWarning.currentLevel, 4);
+
+  db.addBotAdmin(303, 30, 4);
+  db.addBotAdminWarning(303, 30, { limit: 2, punishmentMode: 'off' });
+  db.addBotAdminWarning(303, 30, { limit: 2, punishmentMode: 'off' });
+  assert.equal(db.isBotAdmin(303, 30), true);
+  assert.equal(db.getBotAdminLevel(303, 30), 4);
+  assert.equal(db.decrementBotAdminWarning(303, 30), 1);
 
   db.close();
 });

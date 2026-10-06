@@ -64,6 +64,11 @@ test('parseBotCommandKey recognizes plus and minus punishment commands', () => {
   assert.equal(isKnownCommandText('/анпред @alice'), true);
 });
 
+test('/mwarn is recognized as a moderator punishment command', () => {
+  assert.equal(parseBotCommandKey('/mwarn @alice'), 'mwarn');
+  assert.equal(isKnownCommandText('/mwarn @alice'), true);
+});
+
 test('isChatMemberStillInGroup recognizes active chat membership states', () => {
   assert.equal(isChatMemberStillInGroup({ status: 'member' }), true);
   assert.equal(isChatMemberStillInGroup({ status: 'restricted' }), true);

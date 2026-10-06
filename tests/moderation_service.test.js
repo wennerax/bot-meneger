@@ -222,6 +222,19 @@ test('moderator warnings can be enabled and disabled per chat', () => {
   assert.equal(service.areModeratorWarningsEnabled(100), true);
 });
 
+test('moderator warning limit and threshold punishment can be configured per chat', () => {
+  const service = new ModerationService();
+
+  assert.equal(service.getModeratorWarningLimit(100), 3);
+  assert.equal(service.getModeratorWarningPunishment(100), 'remove');
+  assert.equal(service.setModeratorWarningLimit(100, 5), true);
+  assert.equal(service.getModeratorWarningLimit(100), 5);
+  assert.equal(service.setModeratorWarningLimit(100, 5.5), false);
+  assert.equal(service.setModeratorWarningPunishment(100, 'demote'), true);
+  assert.equal(service.getModeratorWarningPunishment(100), 'demote');
+  assert.equal(service.setModeratorWarningPunishment(100, 'unknown'), false);
+});
+
 test('flood protection can be toggled per chat', () => {
   const service = new ModerationService();
 

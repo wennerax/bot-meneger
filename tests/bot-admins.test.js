@@ -44,8 +44,12 @@ test('higher-priority admins cannot be punished by lower-priority admins and low
   db.addBotAdmin(700, 20, 2);
   db.addBotAdmin(700, 30, 3);
   db.addBotAdmin(700, 40, 4);
+  db.addBotAdmin(700, 50, 3);
 
   assert.equal(db.canPunishBotAdmin(700, 20, 30), true);
+  assert.equal(db.canPunishBotAdmin(700, 10, 20), true);
+  assert.equal(db.canPunishBotAdmin(700, 30, 30), false);
+  assert.equal(db.canPunishBotAdmin(700, 30, 50), false);
   assert.equal(db.canPunishBotAdmin(700, 30, 20), false);
   assert.equal(db.canPunishBotAdmin(700, 40, 30), false);
   assert.equal(db.canManageBotAdmin(700, 30, 40), true);

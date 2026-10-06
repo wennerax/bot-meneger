@@ -322,11 +322,15 @@ class Database {
     return Number(this.data.botAdminWarnings?.[String(Number(chatId))]?.[String(Number(userId))] || 0);
   }
 
-  addBotAdminWarning(chatId, userId) {
+  addBotAdminWarning(chatId, userId, { limit = 3, punishmentMode = 'remove' } = {}) {
     const chatKey = String(Number(chatId));
     const userKey = String(Number(userId));
+    const previousLevel = this.getBotAdminLevel(chatId, userId);
     if (this.isPrimaryBotAdmin(chatId, userId)) {
-      return { count: 0, removed: false };
+      return { count: 0, removed: false, demoted: false, previousLevel: 1, currentLevel: 1 };
+    }
+    if (previousLevel === null || previousLevel === undefined) {
+      return { count: this.getBotAdminWarnings(chatId, userId), removed: false, demoted: false, previousLevel: null, currentLevel: null };
     }
     if (!this.data.botAdminWarnings[chatKey]) {
       this.data.botAdminWarnings[chatKey] = {};
@@ -334,12 +338,47 @@ class Database {
     const count = this.getBotAdminWarnings(chatId, userId) + 1;
     this.data.botAdminWarnings[chatKey][userKey] = count;
     let removed = false;
-    if (count >= 3) {
+    let demoted = false;
+    const normalizedLimit = Number.isInteger(Number(limit)) && Number(limit) >= 2 && Number(limit) <= 5 ? Number(limit) : 3;
+    const normalizedMode = ['off', 'demote', 'remove'].includes(String(punishmentMode).toLowerCase())
+      ? String(punishmentMode).toLowerCase()
+      : 'remove';
+    if (count === normalizedLimit && normalizedMode === 'remove') {
       removed = this.removeBotAdmin(chatId, userId);
+    } else if (count === normalizedLimit && normalizedMode === 'demote' && Number(previousLevel) < 5) {
+      this.data.botAdmins[chatKey][userKey] = Number(previousLevel) + 1;
+      demoted = true;
+      this._save();
     } else {
       this._save();
     }
-    return { count, removed };
+    return {
+      count,
+      removed,
+      demoted,
+      previousLevel: Number(previousLevel),
+      currentLevel: removed ? null : this.getBotAdminLevel(chatId, userId),
+    };
+  }
+
+  decrementBotAdminWarning(chatId, userId, amount = 1) {
+    const chatKey = String(Number(chatId));
+    const userKey = String(Number(userId));
+    const current = this.getBotAdminWarnings(chatId, userId);
+    const next = Math.max(0, current - Math.max(1, Number(amount) || 1));
+    if (next === 0) {
+      delete this.data.botAdminWarnings[chatKey]?.[userKey];
+      if (this.data.botAdminWarnings[chatKey] && !Object.keys(this.data.botAdminWarnings[chatKey]).length) {
+        delete this.data.botAdminWarnings[chatKey];
+      }
+    } else {
+      if (!this.data.botAdminWarnings[chatKey]) {
+        this.data.botAdminWarnings[chatKey] = {};
+      }
+      this.data.botAdminWarnings[chatKey][userKey] = next;
+    }
+    this._save();
+    return next;
   }
 
   clearBotAdminWarnings(chatId, userId = null) {
