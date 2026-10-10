@@ -7588,7 +7588,7 @@ function createBot() {
       return;
     }
 
-    if (!args || !args.trim()) {
+    if ((!args || !args.trim()) && !ctx.message.reply_to_message?.from) {
       await warnsListCommand(ctx);
       return;
     }
@@ -7639,6 +7639,20 @@ function createBot() {
     }
 
     if (!ensureBotAdminCanPunishTarget(ctx, targetData.target.id, 'unwarn')) {
+      return;
+    }
+
+    const moderatorWarnings = database.getBotAdminWarnings(ctx.chat.id, targetData.target.id);
+    if (moderatorWarnings > 0) {
+      const remainingWarnings = database.decrementBotAdminWarning(ctx.chat.id, targetData.target.id, 1);
+      recordModerationLog(ctx.chat.id, {
+        action: 'moderator_unwarn',
+        actorId: ctx.from.id,
+        targetId: targetData.target.id,
+        reason: 'Снятие одного предупреждения модератору',
+        details: `Предупреждение модератора снижено с ${moderatorWarnings} до ${remainingWarnings}`,
+      });
+      await replyWithAutoDelete(ctx, `Снят 1 варн модератора у ${targetData.target.first_name || targetData.target.username || targetData.target.id}. Осталось: ${remainingWarnings}.`);
       return;
     }
 

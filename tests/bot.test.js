@@ -1,8 +1,75 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const { createBot, parsePunishmentDetails, buildPunishmentNotification, buildModerationAlertMessage, buildBulkModerationSummaryMessage, buildFunReply, getTicTacToeWinner, buildTicTacToeKeyboard, parsePageNumber, buildPunishmentListMessage, buildBotAdminListMessage, detectForbiddenWord, isVoteConfirmationMessage, isLinkMessage, isAllowedLinkUrl, buildSettingsMainKeyboard, buildModerationLogsKeyboard, buildSettingsChatKeyboard, buildSettingsWarnsKeyboard, buildWarningsListText, buildSettingsWarnsListText, buildSettingsCommandRightsKeyboard, buildSettingsFirstMessageKeyboard, buildSettingsRulesMenuText, buildMembersManagementKeyboard, buildMenuKeyboard, canSelfClearPunishmentHistory, parseSettingsAction, isGroupOwnerMember, isStoredGroupOwner, isGroupMemberWithProfileChangePermission, isGroupMemberWithManageRights, getGroupDisplayName, buildCaptchaChallenge, generateCaptchaPollOptions, shouldStartCaptchaForChat, isAnonymousSenderMessage, isChannelPostInGroupMessage, shouldFailClosedForMedia, cleanupAgreementMessages, handleAgreementDecision, handleAgreementTimeout, getCaptchaSuccessRestriction, isPollAnswerForTarget, buildBotMediaSend, buildReloadStatusMessage, parseBotCommandKey, isKnownCommandText, formatAdminReportText, formatUserIdentityText, isChatMemberStillInGroup, isChatMemberJoining, isChatMemberJoiningUpdate, buildActivityChartSvg, applyWarnLimitPunishment, isTelegramBotNotMemberChatError, isBotAdmin } = require('../app/bot');
 const { buildAiRequestPayload, normalizeMultimodalInputForResponses } = require('../app/ai');
 const premiumEmojis = require('../app/premium_emojis');
+
+async function createCommandTestBot(t) {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-meneger-command-'));
+  const originalDatabasePath = process.env.DATABASE_PATH;
+  process.env.DATABASE_PATH = path.join(tempDir, 'bot.json');
+  const state = createBot();
+  if (originalDatabasePath === undefined) {
+    delete process.env.DATABASE_PATH;
+  } else {
+    process.env.DATABASE_PATH = originalDatabasePath;
+  }
+
+  const sentMessages = [];
+  const callApi = async (method, payload = {}) => {
+    if (method === 'sendMessage') {
+      sentMessages.push(payload);
+      return { message_id: sentMessages.length + 100, date: 1, chat: { id: payload.chat_id, type: 'supergroup' } };
+    }
+    if (method === 'deleteMessage') {
+      return true;
+    }
+    if (method === 'getChatMember') {
+      return { status: 'administrator', user: { id: 999 }, can_delete_messages: true };
+    }
+    return {};
+  };
+  state.bot.botInfo = { id: 999, is_bot: true, first_name: 'Test bot', username: 'testbot' };
+  const BaseContext = state.bot.options.contextType;
+  state.bot.options.contextType = class extends BaseContext {
+    constructor(update, telegram, botInfo) {
+      super(update, telegram, botInfo);
+      telegram.callApi = callApi;
+    }
+  };
+
+  t.after(() => {
+    state.database.close();
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  return { state, sentMessages };
+}
+
+async function dispatchGroupCommand(state, text, replyUser = null) {
+  const command = text.split(/\s/, 1)[0];
+  const message = {
+    message_id: 1,
+    date: 1,
+    chat: { id: -100001, type: 'supergroup', title: 'Test group' },
+    from: { id: 7, first_name: 'Moderator', is_bot: false },
+    text,
+    entities: [{ type: 'bot_command', offset: 0, length: command.length }],
+  };
+  if (replyUser) {
+    message.reply_to_message = {
+      message_id: 2,
+      date: 1,
+      chat: message.chat,
+      from: replyUser,
+      text: 'Message from target',
+    };
+  }
+  await state.bot.handleUpdate({ update_id: 1, message });
+}
 
 test('isBotAdmin ignores updates without sender info like poll_answer', () => {
   const config = { adminIds: [42] };
@@ -10,6 +77,35 @@ test('isBotAdmin ignores updates without sender info like poll_answer', () => {
 
   assert.equal(isBotAdmin({ chat: { id: -1001 }, from: undefined, config, database }), false);
   assert.equal(isBotAdmin({ chat: { id: -1001 }, from: null, config, database }), false);
+});
+
+test('/warns shows the replied-to user warning status', async (t) => {
+  const { state, sentMessages } = await createCommandTestBot(t);
+  const chatId = -100001;
+  state.database.ensureGroup(chatId, 'Test group');
+  state.database.addBotAdmin(chatId, 7, 1);
+  state.moderationService.addWarning(chatId, 20);
+  state.moderationService.addWarning(chatId, 20);
+
+  await dispatchGroupCommand(state, '/warns', { id: 20, first_name: 'Alice', is_bot: false });
+
+  assert.match(sentMessages[0].text, /Alice.*2\/3/);
+  assert.equal(sentMessages[0].reply_markup.inline_keyboard[0][0].callback_data, 'warn:adjust:-100001:20:-1');
+});
+
+test('/unwarn decrements a moderator warning instead of the regular warning count', async (t) => {
+  const { state, sentMessages } = await createCommandTestBot(t);
+  const chatId = -100001;
+  state.database.ensureGroup(chatId, 'Test group');
+  state.database.addBotAdmin(chatId, 7, 1);
+  state.database.addBotAdmin(chatId, 20, 3);
+  state.database.addBotAdminWarning(chatId, 20);
+
+  await dispatchGroupCommand(state, '/unwarn', { id: 20, first_name: 'Alice', is_bot: false });
+
+  assert.equal(state.database.getBotAdminWarnings(chatId, 20), 0);
+  assert.equal(state.moderationService.getWarnings(chatId, 20), 0);
+  assert.match(sentMessages[0].text, /Снят 1 варн модератора у Alice/);
 });
 
 test('isBotAdmin ignores updates without sender info like poll_answer', () => {
