@@ -168,6 +168,7 @@ test('/mwarn is recognized as a moderator punishment command', () => {
 test('isChatMemberStillInGroup recognizes active chat membership states', () => {
   assert.equal(isChatMemberStillInGroup({ status: 'member' }), true);
   assert.equal(isChatMemberStillInGroup({ status: 'restricted' }), true);
+  assert.equal(isChatMemberStillInGroup({ status: 'restricted', is_member: false }), false);
   assert.equal(isChatMemberStillInGroup({ status: 'left' }), false);
   assert.equal(isChatMemberStillInGroup({ status: 'kicked' }), false);
 });
@@ -189,6 +190,10 @@ test('isChatMemberJoiningUpdate ignores administrator demotions and permission c
   ), false);
   assert.equal(isChatMemberJoiningUpdate({ status: 'left' }, { status: 'member' }), true);
   assert.equal(isChatMemberJoiningUpdate(undefined, { status: 'member' }), true);
+  assert.equal(isChatMemberJoiningUpdate(
+    { status: 'restricted', is_member: false },
+    { status: 'restricted', is_member: true }
+  ), true);
 });
 
 test('isChannelPostInGroupMessage recognizes channel-authored posts with sender_chat', () => {

@@ -91,7 +91,10 @@ function isChatMemberStillInGroup(member = {}) {
   }
 
   const status = String(member.status || '').toLowerCase();
-  return ['creator', 'administrator', 'member', 'restricted'].includes(status);
+  if (status === 'restricted') {
+    return member.is_member !== false;
+  }
+  return ['creator', 'administrator', 'member'].includes(status);
 }
 
 function isChatMemberJoining(member = {}) {
@@ -10615,7 +10618,9 @@ function createBot() {
     console.info('[Captcha] chat_member update received', {
       chatId: ctx.chat?.id,
       oldStatus: ctx.chatMember?.old_chat_member?.status,
+      oldIsMember: ctx.chatMember?.old_chat_member?.is_member,
       newStatus: member?.status,
+      newIsMember: member?.is_member,
       userId: member?.user?.id,
     });
     if (!member || !ctx.chat) {
