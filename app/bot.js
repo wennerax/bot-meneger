@@ -3950,6 +3950,7 @@ function createBot() {
     const hasActiveCaptcha = [...captchaStates.values(), ...agreementStates.values()]
       .some((state) => Number(state.chatId) === chatId && Number(state.userId) === Number(userId));
     if (hasActiveCaptcha || captchaStartsInProgress.has(captchaKey)) {
+      console.info('[Captcha] Start skipped: already active', { chatId, userId });
       return;
     }
 
@@ -3958,9 +3959,11 @@ function createBot() {
     const displayName = memberUser?.first_name || memberUser?.username || 'пользователь';
     const moderationService = activeModerationService || defaultModerationService;
     if (!shouldStartCaptchaForChat(chatId, moderationService)) {
+      console.info('[Captcha] Start skipped: disabled for chat', { chatId, userId });
       captchaStartsInProgress.delete(captchaKey);
       return;
     }
+    console.info('[Captcha] Starting challenge', { chatId, userId });
     const mode = moderationService.getCaptchaMode(chatId);
     const challenge = buildCaptchaChallenge(mode, displayName);
     const shuffledOptions = generateCaptchaPollOptions(challenge);
@@ -3981,7 +3984,16 @@ function createBot() {
         }
       );
     } catch (error) {
-      await ctx.telegram.sendMessage(chatId, `Не удалось создать капчу в группе для пользователя ${displayName}. Пожалуйста, проверьте права бота.`);
+      console.error('[Captcha] sendPoll failed', {
+        chatId,
+        userId,
+        error: error?.response?.description || error?.message || error,
+      });
+      try {
+        await ctx.telegram.sendMessage(chatId, `Не удалось создать капчу в группе для пользователя ${displayName}. Пожалуйста, проверьте права бота.`);
+      } catch (messageError) {
+        console.error('[Captcha] Could not send failure notice', messageError?.response?.description || messageError?.message || messageError);
+      }
       captchaStartsInProgress.delete(captchaKey);
       cancelledCaptchaStarts.delete(captchaKey);
       return;
@@ -4003,10 +4015,27 @@ function createBot() {
       return;
     }
 
-    await ctx.telegram.restrictChatMember(chatId, userId, buildMutePermissions(false));
-    const instructionMessage = await ctx.telegram.sendMessage(chatId, `Пользователь ${displayName} должен пройти капчу в этом чате, чтобы писать сообщения.`, {
-      disable_notification: true,
-    });
+    let instructionMessage;
+    try {
+      await ctx.telegram.restrictChatMember(chatId, userId, buildMutePermissions(false));
+      instructionMessage = await ctx.telegram.sendMessage(chatId, `Пользователь ${displayName} должен пройти капчу в этом чате, чтобы писать сообщения.`, {
+        disable_notification: true,
+      });
+    } catch (error) {
+      console.error('[Captcha] Could not restrict joining user or send instructions', {
+        chatId,
+        userId,
+        error: error?.response?.description || error?.message || error,
+      });
+      try {
+        await cleanupAgreementMessages(ctx.telegram, chatId, [pollMessageId]);
+      } catch (cleanupError) {
+        console.warn('[Captcha] Could not clean up failed challenge', cleanupError?.response?.description || cleanupError?.message || cleanupError);
+      }
+      captchaStartsInProgress.delete(captchaKey);
+      cancelledCaptchaStarts.delete(captchaKey);
+      return;
+    }
     scheduleDeleteMessage(ctx.telegram, chatId, instructionMessage?.message_id);
 
     captchaStates.set(pollId, {
@@ -10583,6 +10612,12 @@ function createBot() {
 
   bot.on('chat_member', async (ctx) => {
     const member = ctx.chatMember?.new_chat_member;
+    console.info('[Captcha] chat_member update received', {
+      chatId: ctx.chat?.id,
+      oldStatus: ctx.chatMember?.old_chat_member?.status,
+      newStatus: member?.status,
+      userId: member?.user?.id,
+    });
     if (!member || !ctx.chat) {
       return;
     }
@@ -10629,6 +10664,10 @@ function createBot() {
 
   bot.on('new_chat_members', async (ctx) => {
     const newMembers = ctx.message?.new_chat_members;
+    console.info('[Captcha] new_chat_members update received', {
+      chatId: ctx.chat?.id,
+      memberCount: Array.isArray(newMembers) ? newMembers.length : 0,
+    });
     if (!Array.isArray(newMembers) || !ctx.chat) {
       return;
     }
